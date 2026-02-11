@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crosswalk Safety Dashboard</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- CSS -->
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <!-- Scripts -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-brand">Casisang Crosswalk</div>
+            <button class="sidebar-toggle" id="sidebar-toggle">☰</button>
+        </div>
+        <div class="sidebar-nav">
+            <a href="#live" class="nav-item active">
+                <span class="nav-icon">📹</span>
+                <span class="nav-label">Live View</span>
+            </a>
+            <a href="#logs" class="nav-item">
+                <span class="nav-icon">📋</span>
+                <span class="nav-label">Logs</span>
+            </a>
+            <a href="#analytics" class="nav-item">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">Analytics</span>
+            </a>
+            <a href="#reports" class="nav-item">
+                <span class="nav-icon">📄</span>
+                <span class="nav-label">Reports</span>
+            </a>
+            <a href="#settings" class="nav-item">
+                <span class="nav-icon">⚙️</span>
+                <span class="nav-label">Settings</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Topbar -->
+        <header class="topbar">
+            <div class="topbar-left">Dashboard</div>
+            <div class="topbar-right">
+                <div class="status-chip mock" id="connection-chip">
+                    <div class="status-indicator"></div> Offline (Mock)
+                </div>
+                <button class="btn btn-primary" id="mock-toggle">Mock Mode: ON</button>
+                <small id="last-update" class="text-muted">Last Update: ---</small>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <div class="content-area">
+
+            <!-- Info Banner -->
+            <div class="info-banner">
+                <strong>System Notice:</strong> This system uses visual classification to detect pedestrians appearing
+                to be school-age children. It does <strong>not</strong> use facial recognition, plate recognition, or
+                estimate biological age.
+                <br>Warning Device is <strong>Visual Only</strong> (LED Beacon). No Audio. No SMS.
+            </div>
+
+            <!-- LIVE VIEW SECTION -->
+            <section id="live-section" class="page-section active">
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <div class="card-title">Child In ROI</div>
+                        <div class="card-value" id="live-child">NO</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Warning Device</div>
+                        <div class="card-value" id="live-warning">OFF</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Confidence</div>
+                        <div class="card-value" id="live-conf">0.00</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">ROI Status</div>
+                        <div class="card-value" id="live-roi">OUTSIDE</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Latency</div>
+                        <div class="card-value" id="live-latency">24ms</div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="card" style="grid-column: span 2;">
+                        <h3>Live Event Feed</h3>
+                        <div id="event-feed" style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
+                            <!-- Feed items -->
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>Power System</h3>
+                        <div class="row mt-4">
+                            <div class="flex-col">
+                                <small>Solar Status</small>
+                                <strong>Charging (24.1V)</strong>
+                            </div>
+                            <div class="flex-col mt-4">
+                                <small>Battery Level</small>
+                                <div style="background:#eee; height:10px; border-radius:5px; width:100%;">
+                                    <div style="background:#4CAF50; height:10px; border-radius:5px; width:85%;"></div>
+                                </div>
+                                <small>85%</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- LOGS SECTION -->
+            <section id="logs-section" class="page-section">
+                <div class="filter-bar">
+                    <input type="text" placeholder="Search logs..." class="form-control">
+                    <label style="display:flex; align-items:center; gap:5px;">
+                        <input type="checkbox" id="filter-warning"> Warning ON Only
+                    </label>
+                    <label style="display:flex; align-items:center; gap:5px;">
+                        <input type="checkbox" id="filter-roi"> In ROI Only
+                    </label>
+                    <button class="btn btn-outline" onclick="App.renderLogs()">Apply Filters</button>
+                    <button class="btn btn-outline" onclick="App.exportCSV()">Export CSV</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Child Detected</th>
+                                <th>In ROI</th>
+                                <th>Warning</th>
+                                <th>Confidence</th>
+                                <th>Latency</th>
+                                <th>Scenario</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-body">
+                            <!-- Logs here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ANALYTICS SECTION -->
+            <section id="analytics-section" class="page-section">
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <div class="card-title">Total Warnings (Today)</div>
+                        <div class="card-value" id="kpi-warnings">0</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Total Detections</div>
+                        <div class="card-value" id="kpi-detections">0</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Avg Latency</div>
+                        <div class="card-value" id="kpi-avg-latency">34ms</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Warnings Over Time</h3>
+                    <div style="height: 300px;">
+                        <canvas id="warningsChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- REPORTS SECTION -->
+            <section id="reports-section" class="page-section">
+                <div class="report-paper">
+                    <h2 class="mb-4">System Summary Report</h2>
+                    <p><strong>Location:</strong> Casisang Central School Crosswalk</p>
+                    <p><strong>Date:</strong> <span id="report-date">Today</span></p>
+                    <hr class="mt-4 mb-4" style="border:0; border-top:1px solid #ddd;">
+
+                    <h3>Performance Metrics</h3>
+                    <p>System Uptime: 99.8%</p>
+                    <p>Total Warnings Triggered: <span id="rep-warnings">--</span></p>
+
+                    <h3 class="mt-4">Privacy & Compliance</h3>
+                    <p>No images stored. No facial recognition active. All local processing.</p>
+
+                    <div class="mt-4 text-right">
+                        <button class="btn btn-primary" onclick="window.print()">Print Report</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SETTINGS SECTION -->
+            <section id="settings-section" class="page-section">
+                <div class="card">
+                    <h3>ROI Configuration</h3>
+                    <p class="mb-4">Draw the Region of Interest (ROI) on the camera view. Access limited to Admin.</p>
+                    <div class="canvas-wrapper">
+                        <canvas id="roi-canvas" width="400" height="300"></canvas>
+                    </div>
+                    <div class="mt-4">
+                        <button class="btn btn-primary" id="save-roi">Save ROI Settings</button>
+                        <button class="btn btn-outline">Reset</button>
+                    </div>
+                </div>
+                <div class="card mt-4">
+                    <h3>Role Access</h3>
+                    <p><strong>Current View:</strong> TMC Officer / Admin (Prototype Mode)</p>
+                    <p>System controls are restricted to authorized personnel only.</p>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+
+</html>
