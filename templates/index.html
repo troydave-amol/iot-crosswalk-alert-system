@@ -96,6 +96,48 @@
                     </div>
                 </div>
 
+                <!-- Live Camera Feed -->
+                <div class="camera-grid">
+                    <div class="card">
+                        <div class="card-title">Live Camera View</div>
+                        <div class="video-wrapper">
+                            <video id="liveCam" autoplay playsinline muted></video>
+                            <div id="camPlaceholder" class="cam-placeholder">
+                                <div style="font-size: 2rem; margin-bottom: 10px;">📷</div>
+                                <p><strong>Camera is OFF.</strong><br>Click Start Camera to preview.</p>
+                                <p style="font-size: 0.8rem; margin-top: 10px; color: #888;">Runs locally in the
+                                    browser. No audio, no recording, no uploads.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Camera Controls</div>
+                        <div class="cam-controls">
+                            <div class="control-group">
+                                <div class="control-label">Actions</div>
+                                <button id="btnStartCam" class="btn btn-primary">Start Camera</button>
+                                <button id="btnStopCam" class="btn btn-secondary">Stop Camera</button>
+                            </div>
+
+                            <div class="control-group" id="camSelectGroup" style="display:none;">
+                                <div class="control-label">Source</div>
+                                <select id="camDeviceSelect" class="form-control"></select>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">Status</div>
+                                <div class="status-chip mock" id="camStatusChip">
+                                    <div class="status-indicator"></div> OFF
+                                </div>
+                                <div class="status-chip connected" id="camSourceChip"
+                                    style="background-color: #e3f2fd; color: #0d47a1; display:none;">
+                                    <div class="status-indicator" style="background-color: #1976d2;"></div> Webcam
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="dashboard-grid">
                     <div class="card" style="grid-column: span 2;">
                         <h3>Live Event Feed</h3>

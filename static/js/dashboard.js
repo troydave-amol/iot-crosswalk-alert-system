@@ -14,6 +14,10 @@ const App = {
             warning_on: false,
             confidence: 0.0,
             roi_status: 'OUTSIDE'
+        },
+        camera: {
+            stream: null,
+            selectedId: null
         }
     },
 
@@ -24,12 +28,13 @@ const App = {
         this.setupCharts();
         this.renderLogs();
         this.setupROI();
+        this.initCamera();
         this.updateTime();
-        
+
         // Mobile sidebar toggle
         document.getElementById('sidebar-toggle').addEventListener('click', () => {
-             document.querySelector('.sidebar').classList.toggle('collapsed');
-             document.querySelector('.main-content').classList.toggle('expanded');
+            document.querySelector('.sidebar').classList.toggle('collapsed');
+            document.querySelector('.main-content').classList.toggle('expanded');
         });
 
         // Mock mode toggle
@@ -45,7 +50,7 @@ const App = {
         const handleHashChange = () => {
             const hash = window.location.hash.slice(1) || 'live';
             this.state.currentSection = hash;
-            
+
             // Update active nav item
             document.querySelectorAll('.nav-item').forEach(el => {
                 el.classList.toggle('active', el.getAttribute('href') === `#${hash}`);
@@ -60,6 +65,11 @@ const App = {
             if (hash === 'analytics' && this.state.charts.warnings) {
                 this.state.charts.warnings.resize();
             }
+
+            // Stop camera if leaving live
+            if (hash !== 'live') {
+                this.stopCamera();
+            }
         };
 
         window.addEventListener('hashchange', handleHashChange);
@@ -69,7 +79,7 @@ const App = {
     setupSocket() {
         try {
             const socket = io();
-            
+
             socket.on('connect', () => {
                 this.state.isConnected = true;
                 this.updateConnectionStatus();
@@ -143,14 +153,14 @@ const App = {
     updateLiveView() {
         document.getElementById('live-child').textContent = this.state.systemState.child_in_roi ? 'YES' : 'NO';
         document.getElementById('live-child').className = `card-value ${this.state.systemState.child_in_roi ? 'critical' : ''}`;
-        
+
         document.getElementById('live-warning').textContent = this.state.systemState.warning_on ? 'ON' : 'OFF';
         document.getElementById('live-warning').className = `card-value ${this.state.systemState.warning_on ? 'critical' : ''}`;
-        
+
         document.getElementById('live-conf').textContent = (this.state.systemState.confidence || 0).toFixed(2);
-        
+
         document.getElementById('live-roi').textContent = this.state.systemState.roi_status;
-        
+
         // Mock latency display
         document.getElementById('live-latency').textContent = `${Math.floor(Math.random() * 30) + 20}ms`;
 
@@ -252,24 +262,24 @@ const App = {
         const img = new Image();
         img.src = '/static/img/sample.jpg'; // Placeholder or upload
         // Draw logic would go here. For prototypte, we just show coords.
-        
+
         img.onload = () => {
-             ctx.drawImage(img, 0, 0, 400, 300);
-             ctx.strokeStyle = 'red';
-             ctx.lineWidth = 2;
-             ctx.strokeRect(this.state.roi.x, this.state.roi.y, this.state.roi.w, this.state.roi.h);
+            ctx.drawImage(img, 0, 0, 400, 300);
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(this.state.roi.x, this.state.roi.y, this.state.roi.w, this.state.roi.h);
         };
-        
+
         // Mock save
         document.getElementById('save-roi').addEventListener('click', () => {
-             localStorage.setItem('roi_settings', JSON.stringify(this.state.roi));
-             alert('ROI Settings Saved to LocalStorage');
+            localStorage.setItem('roi_settings', JSON.stringify(this.state.roi));
+            alert('ROI Settings Saved to LocalStorage');
         });
     },
 
     exportCSV() {
         const headers = ["Timestamp,Child Detected,In ROI,Warning,Confidence,Latency,Scenario\n"];
-        const rows = this.state.logs.map(log => 
+        const rows = this.state.logs.map(log =>
             `${log.timestamp},${log.child_detected},${log.in_roi},${log.warning},${log.confidence.toFixed(2)},${log.latency},${log.scenario}`
         );
         const csvContent = "data:text/csv;charset=utf-8," + headers.concat(rows).join("\n");
@@ -280,6 +290,118 @@ const App = {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    },
+
+    // Camera Logic
+    initCamera() {
+        // Buttons
+        document.getElementById('btnStartCam')?.addEventListener('click', () => this.startCamera());
+        document.getElementById('btnStopCam')?.addEventListener('click', () => this.stopCamera());
+
+        // Device Select
+        const select = document.getElementById('camDeviceSelect');
+        if (select) {
+            select.addEventListener('change', (e) => {
+                this.state.camera.selectedId = e.target.value;
+                // If running, restart with new device
+                if (this.state.camera.stream) {
+                    this.stopCamera();
+                    this.startCamera();
+                }
+            });
+        }
+
+        // populate devices
+        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+            navigator.mediaDevices.enumerateDevices().then(devices => {
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                const selectGroup = document.getElementById('camSelectGroup');
+
+                if (videoDevices.length > 0) {
+                    select.innerHTML = videoDevices.map(device =>
+                        `<option value="${device.deviceId}">${device.label || `Camera ${select.length + 1}`}</option>`
+                    ).join('');
+
+                    // Show select if multiple cameras (optional, simplified to always show if available/requested)
+                    // The prompt asked for "If only one device, hide the dropdown".
+                    if (videoDevices.length > 1) {
+                        selectGroup.style.display = 'block';
+                    }
+                    this.state.camera.selectedId = videoDevices[0].deviceId;
+                }
+            }).catch(err => {
+                console.warn('Camera enumeration failed:', err);
+            });
+        }
+    },
+
+    startCamera() {
+        if (this.state.camera.stream) return; // already running
+
+        const constraints = {
+            video: this.state.camera.selectedId ? { deviceId: { exact: this.state.camera.selectedId } } : true,
+            audio: false
+        };
+
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(stream => {
+                this.state.camera.stream = stream;
+                const video = document.getElementById('liveCam');
+                video.srcObject = stream;
+
+                document.getElementById('camPlaceholder').style.display = 'none';
+
+                // Update UI
+                const chip = document.getElementById('camStatusChip');
+                chip.className = 'status-chip connected'; // reusing green style
+                chip.innerHTML = '<div class="status-indicator"></div> ON';
+                chip.style.backgroundColor = 'rgba(76, 175, 80, 0.1)';
+                chip.style.color = '#2e7d32';
+
+                // Source chip
+                const sourceChip = document.getElementById('camSourceChip');
+                sourceChip.style.display = 'flex';
+                sourceChip.innerHTML = '<div class="status-indicator" style="background-color: #1976d2;"></div> Live Cam';
+
+            })
+            .catch(err => {
+                console.error("Camera error:", err);
+                const ph = document.getElementById('camPlaceholder');
+                ph.innerHTML = `<p style="color:red">Error: ${err.message || 'Permission denied'}</p>`;
+                ph.style.display = 'flex';
+            });
+    },
+
+    stopCamera() {
+        if (this.state.camera.stream) {
+            this.state.camera.stream.getTracks().forEach(track => track.stop());
+            this.state.camera.stream = null;
+        }
+
+        const video = document.getElementById('liveCam');
+        if (video) video.srcObject = null;
+
+        const ph = document.getElementById('camPlaceholder');
+        if (ph) {
+            ph.style.display = 'flex';
+            ph.innerHTML = `
+                <div style="font-size: 2rem; margin-bottom: 10px;">📷</div>
+                <p><strong>Camera is OFF.</strong><br>Click Start Camera to preview.</p>
+                <p style="font-size: 0.8rem; margin-top: 10px; color: #888;">Runs locally in the browser. No audio, no recording, no uploads.</p>
+            `;
+        }
+
+        // Update UI
+        const chip = document.getElementById('camStatusChip');
+        if (chip) {
+            chip.className = 'status-chip mock';
+            chip.innerHTML = '<div class="status-indicator"></div> OFF';
+            chip.style.backgroundColor = '#eee';
+            chip.style.color = '#666';
+        }
+
+        const sourceChip = document.getElementById('camSourceChip');
+        if (sourceChip) sourceChip.style.display = 'none';
     }
 };
 
