@@ -1,48 +1,48 @@
 // Dashboard Application Logic
 
+// ---------------------------------------------------------
+// GLOBAL STORE (Single Source of Truth)
+// ---------------------------------------------------------
+window.EventStore = {
+    events: [],       // All events (Logs/Analytics)
+    systemStatus: {   // Detection Status
+        child_in_roi: false,
+        warning_on: false,
+        confidence: 0.0,
+        roi_status: 'OUTSIDE',
+        latency_ms: 0,
+        last_update_str: '---',
+        connection_status: 'Offline (Mock)',
+        // Warning logic helpers
+        switch_enabled: true
+    },
+    powerStatus: {    // Power System
+        solar_status: 'Charging',
+        solar_voltage: 24.1,
+        battery_percent: 85,
+        led_driver: 'Ready'
+    }
+};
+
 const App = {
     // ---------------------------------------------------------
-    // 1. Central State & Event Store
+    // 1. Central State
     // ---------------------------------------------------------
     // ---------------------------------------------------------
-    // 1. Central State & Event Store
+    // 1. Central State
     // ---------------------------------------------------------
     state: {
         // App Flags
         mockMode: true,
         isConnected: false,
-        lastSocketUpdate: 0, // Timestamp of last real data
+        lastSocketUpdate: 0,
 
         // System Configuration
         roi: JSON.parse(localStorage.getItem('roi_settings')) || { x: 50, y: 50, w: 100, h: 100 },
 
-        // Single Source of Truth
-        systemStatus: {
-            // Detection
-            child_in_roi: false,
-            warning_on: false,
-            confidence: 0.0,
-            roi_status: 'OUTSIDE',
-            latency_ms: 0,
-
-            // Power
-            solar_status: 'Charging',
-            solar_voltage: 24.1,
-            battery_percent: 85,
-            switch_enabled: true, // Manual override switch on the pole
-            led_driver: 'Ready',
-
-            // Meta
-            last_update_str: '---',
-            connection_status: 'Offline (Mock)'
-        },
-
-        // Event Log (Last 300)
-        logs: [],
-
         // Logs Page Filter State
         logsFilter: {
-            range: 'today',      // '15m', '1h', 'today', 'all'
+            range: 'today',
             searchText: '',
             warningOnly: false,
             inRoiOnly: false,
@@ -53,7 +53,7 @@ const App = {
             totalPages: 1
         },
 
-        // Mock Engine State (internal variables for simulation)
+        // Mock Engine State
         mockEngine: {
             crossingActive: false,
             crossingTimer: 0,
@@ -62,10 +62,14 @@ const App = {
         },
 
         camera: { stream: null, selectedId: null },
-        charts: {}, // Will hold: warnings, detections, confidence, scenario
+        charts: {},
         analytics: {
             range: 'today',
             lastUpdate: 0
+        },
+        reports: {
+            range: 'today',
+            lastSummary: null
         }
     },
 
@@ -136,13 +140,15 @@ const App = {
 
             // Auto-refresh Logs if valid
             if (window.location.hash === '#logs') {
-                this.renderLogsTable(true);
+                this.renderLogsTable(true); // pass true to indicate auto-refresh if needed
             }
 
             // Analytics Live Update (Throttle to every 2s)
-            if (window.location.hash === '#analytics' && now - this.state.analytics.lastUpdate > 2000) {
-                this.updateAnalyticsUI();
-                this.state.analytics.lastUpdate = now;
+            if (window.location.hash === '#analytics') {
+                if (now - this.state.analytics.lastUpdate > 2000) {
+                    this.updateAnalyticsUI();
+                    this.state.analytics.lastUpdate = now;
+                }
             }
 
         }, 1000);
@@ -150,69 +156,59 @@ const App = {
 
     updateMockData(now) {
         const engine = this.state.mockEngine;
-        const status = this.state.systemStatus;
+        const status = window.EventStore.systemStatus;
+        const power = window.EventStore.powerStatus;
 
         // A) Burst Generator Logic
-        // Decide if we should start a crossing burst
         if (!engine.crossingActive && now > engine.nextBurstTime) {
-            // 20% chance to start a burst every second if enough time passed
             if (Math.random() < 0.2) {
                 engine.crossingActive = true;
-                const duration = 3000 + Math.random() * 5000; // 3-8 seconds
+                const duration = 3000 + Math.random() * 5000;
                 engine.crossingTimer = now + duration;
             } else {
-                // Try again in 2 seconds
                 engine.nextBurstTime = now + 2000;
             }
         }
 
-        // Turning off burst
         if (engine.crossingActive && now > engine.crossingTimer) {
             engine.crossingActive = false;
-            engine.nextBurstTime = now + 5000 + Math.random() * 10000; // Cooldown 5-15s
+            engine.nextBurstTime = now + 5000 + Math.random() * 10000;
         }
 
-        // B) Update Core Status based on Burst
-        // If crossing active, high chance of child detection.
-        // If not active, low chance (occasional noise).
+        // B) Update Core Status
         let detected = false;
         if (engine.crossingActive) {
-            detected = Math.random() > 0.1; // 90% steady detection during burst
+            detected = Math.random() > 0.1;
         } else {
-            detected = Math.random() > 0.98; // 2% false positive noise
+            detected = Math.random() > 0.98;
         }
 
         status.child_in_roi = detected;
         status.roi_status = detected ? 'INSIDE' : 'OUTSIDE';
 
-        // CRITICAL: Warning Logic
-        // warning_on must ONLY be true when child_in_roi is true.
-        status.warning_on = status.child_in_roi;
+        // CRITICAL: Warning Logic -> warning_on && switch_enabled
+        // (If switch is passed as true in mock usually)
+        status.warning_on = status.child_in_roi && status.switch_enabled;
 
-        // C) Confidence & Latency Simulation
+        // C) Confidence & Latency
         if (status.child_in_roi) {
-            status.confidence = 0.75 + (Math.random() * 0.23); // 0.75 - 0.98
-            status.latency_ms = 20 + Math.floor(Math.random() * 40); // 20-60ms
+            status.confidence = 0.75 + (Math.random() * 0.23);
+            status.latency_ms = 20 + Math.floor(Math.random() * 40);
         } else {
-            status.confidence = 0.05 + (Math.random() * 0.20); // 0.05 - 0.25
-            status.latency_ms = 0; // No detection = no latency usually, or low idle
+            status.confidence = 0.05 + (Math.random() * 0.20);
+            status.latency_ms = 0;
         }
 
-        // D) Power System Simulation
-        // Slowly drain battery, recharge if "daytime" (simulated by minutes)
+        // D) Power System
         if (now > engine.powerDrainTimer) {
-            // vary battery slightly
-            const change = (Math.random() - 0.5) * 0.5; // slow drift
-            status.battery_percent = Math.max(0, Math.min(100, status.battery_percent + change));
+            const change = (Math.random() - 0.5) * 0.5;
+            power.battery_percent = Math.max(0, Math.min(100, power.battery_percent + change));
             engine.powerDrainTimer = now + 5000;
-
-            // Solar voltage fluctuation
-            status.solar_voltage = 23.5 + (Math.random() * 1.5);
+            power.solar_voltage = 23.5 + (Math.random() * 1.5);
         }
 
         // E) Log Generation
         if (status.child_in_roi || Math.random() > 0.7) {
-            // Determine scenario based on engine or random to fill dropdowns
             let scenario = engine.crossingActive ? "Crowded" : "Low activity";
             if (Math.random() > 0.8) scenario = "Rain";
             if (Math.random() > 0.9) scenario = "Night";
@@ -247,14 +243,18 @@ const App = {
     },
 
     handleSocketData(data) {
-        if (this.state.mockMode) return; // Ignore if in mock mode
+        if (this.state.mockMode) return;
 
         this.state.isConnected = true;
         this.state.lastSocketUpdate = Date.now();
 
-        // Map incoming data to SystemStatus
-        const status = this.state.systemStatus;
+        const status = window.EventStore.systemStatus;
+        const power = window.EventStore.powerStatus;
+
         status.child_in_roi = data.child_in_roi;
+        // Server might send warning_on, or we derive it? 
+        // For now take server value, but ensure it respects switch locally just in case?
+        // Actually, if server controls it, we trust server.
         status.warning_on = data.warning_on;
         status.confidence = data.confidence;
         status.roi_status = data.child_in_roi ? 'INSIDE' : 'OUTSIDE';
@@ -262,30 +262,80 @@ const App = {
         status.last_update_str = new Date().toLocaleTimeString();
         status.connection_status = "Connected";
 
-        // Power data might be missing in simple socket packet, keep mock/last values or defaults
-        if (data.battery) status.battery_percent = data.battery;
+        if (data.battery) power.battery_percent = data.battery;
+        // If solar data comes in
+        if (data.solar_voltage) power.solar_voltage = data.solar_voltage;
 
         this.logEvent(status, data.scenario || "Live Feed");
         this.updateUI();
     },
 
     logEvent(status, scenario) {
+        // Ensure ISO timestamp for persistent sorting
+        const now = new Date();
         const event = {
             id: Date.now(),
-            rawTimestamp: Date.now(), // Store raw for date filtering
-            timestamp: new Date().toLocaleTimeString(),
-            message: status.child_in_roi ? 'Child Detected' : 'No Detection',
+            rawTimestamp: Date.now(),
+            timestamp: now.toLocaleTimeString(),
+            timestamp_iso: now.toISOString(), // Critical for Analytics
+            message: status.child_in_roi ? 'Child-class Detected' : 'No Detection',
             child_in_roi: status.child_in_roi,
             warning_on: status.warning_on,
             confidence: status.confidence,
             roi_status: status.roi_status,
             latency_ms: status.latency_ms,
             scenario: scenario,
-            false_warning: status.warning_on && !status.child_in_roi // Should be false by rule
+            false_warning: status.warning_on && !status.child_in_roi
         };
 
-        this.state.logs.unshift(event);
-        if (this.state.logs.length > 500) this.state.logs.pop(); // Increased limit slightly
+        window.EventStore.events.unshift(event);
+        if (window.EventStore.events.length > 1000) window.EventStore.events.pop();
+    },
+
+    updateUI() {
+        const status = window.EventStore.systemStatus;
+        const power = window.EventStore.powerStatus;
+
+        // Topbar
+        const connChip = document.getElementById('connection-chip');
+        if (connChip) {
+            connChip.innerHTML = `<div class="status-indicator"></div> ${status.connection_status}`;
+            connChip.className = `status-chip ${this.state.isConnected ? 'connected' : 'mock'}`;
+        }
+        document.getElementById('last-update').textContent = `Last Update: ${status.last_update_str}`;
+
+        // Live View Cards
+        document.getElementById('live-child').textContent = status.child_in_roi ? 'YES' : 'NO';
+        document.getElementById('live-warning').textContent = status.warning_on ? 'ON' : 'OFF';
+
+        document.getElementById('live-child').style.color = status.child_in_roi ? '#d32f2f' : 'inherit';
+        document.getElementById('live-warning').style.color = status.warning_on ? '#d32f2f' : '#2e7d32';
+
+        document.getElementById('live-conf').textContent = status.confidence.toFixed(2);
+        document.getElementById('live-roi').textContent = status.roi_status;
+        document.getElementById('live-roi').className = `card-value ${status.roi_status === 'INSIDE' ? 'text-danger' : ''}`;
+
+        document.getElementById('live-latency').textContent = status.latency_ms + 'ms';
+
+        // Power System
+        document.getElementById('power-solar-status').textContent = `${power.solar_status} (${power.solar_voltage.toFixed(1)}V)`;
+        document.getElementById('power-battery-bar').style.width = `${power.battery_percent}%`;
+        document.getElementById('power-battery-text').textContent = `${Math.round(power.battery_percent)}%`;
+
+        this.renderLiveFeed();
+    },
+
+    renderLiveFeed() {
+        const feed = document.getElementById('event-feed');
+        if (!feed) return;
+        const recent = window.EventStore.events.slice(0, 10);
+        feed.innerHTML = recent.map(e => `
+            <div class="feed-item" style="border-bottom:1px solid #eee; padding:8px 0; font-size:0.9rem;">
+                <span class="text-muted" style="font-size:0.8rem;">${e.timestamp}</span>
+                <strong>${e.message}</strong>
+                <div style="font-size:0.8rem; color:#666;">Conf: ${e.confidence.toFixed(2)} | Latency: ${e.latency_ms}ms</div>
+            </div>
+        `).join('');
     },
 
     // ---------------------------------------------------------
@@ -422,7 +472,7 @@ const App = {
         }
         else if (filters.range === 'all') startTime = 0;
 
-        return this.state.logs.filter(log => {
+        return window.EventStore.events.filter(log => {
             // Date Check
             // Note: log.rawTimestamp is needed. If existing logs don't have it, we use mock default.
             // But we just added rawTimestamp to logEvent. For old logs in session they might miss it.
@@ -616,7 +666,11 @@ const App = {
             document.querySelectorAll('.page-section').forEach(el => {
                 el.classList.toggle('active', el.id === `${hash}-section`);
             });
-            if (hash === 'analytics' && this.state.charts.warnings) this.state.charts.warnings.resize();
+
+            if (hash === 'analytics') {
+                if (this.state.charts.warnings) this.state.charts.warnings.resize();
+                this.updateAnalyticsUI();
+            }
             if (hash !== 'live') this.stopCamera();
         };
         window.addEventListener('hashchange', handleHashChange);
@@ -734,6 +788,31 @@ const App = {
 
     updateAnalyticsUI() {
         const events = this.getAnalyticsEvents();
+
+        // Empty State Check
+        const chartGrid = document.querySelector('#analytics-section .charts-grid');
+        if (chartGrid) {
+            if (events.length === 0) {
+                chartGrid.style.display = 'none';
+                let emptyMsg = document.getElementById('ana-empty-msg');
+                if (!emptyMsg) {
+                    emptyMsg = document.createElement('div');
+                    emptyMsg.id = 'ana-empty-msg';
+                    emptyMsg.style.textAlign = 'center';
+                    emptyMsg.style.padding = '40px';
+                    emptyMsg.style.color = '#666';
+                    emptyMsg.innerHTML = '<i class="fa-solid fa-chart-simple" style="font-size:3rem; margin-bottom:10px; opacity:0.3;"></i><p>No analytics data for this period.</p>';
+                    chartGrid.parentNode.insertBefore(emptyMsg, chartGrid);
+                } else {
+                    emptyMsg.style.display = 'block';
+                }
+            } else {
+                chartGrid.style.display = 'grid';
+                const emptyMsg = document.getElementById('ana-empty-msg');
+                if (emptyMsg) emptyMsg.style.display = 'none';
+            }
+        }
+
         this.computeKPIs(events);
         this.updateCharts(events);
     },
@@ -752,7 +831,7 @@ const App = {
         // 'all' = 0
 
         // Filter and Sort (Oldest first for Charts, usually)
-        return this.state.logs
+        return window.EventStore.events
             .filter(log => (log.rawTimestamp || log.id) >= startTime)
             .sort((a, b) => (a.rawTimestamp || a.id) - (b.rawTimestamp || b.id));
     },
@@ -941,7 +1020,7 @@ const App = {
         }
         // 'all' = 0
 
-        return this.state.logs.filter(log => (log.rawTimestamp || log.id) >= startTime);
+        return window.EventStore.events.filter(log => (log.rawTimestamp || log.id) >= startTime);
     },
 
     generateReport() {

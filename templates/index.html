@@ -22,7 +22,7 @@
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="sidebar-brand">
-                <i class="fa-solid fa-person-walking"></i> Casisang CW
+                <i class="fa-solid fa-person-walking"></i> Crosswalk Alert Analytics
             </div>
             <button class="sidebar-toggle" id="btnHamburger" aria-label="Toggle sidebar" aria-expanded="false"
                 aria-controls="sidebar">
@@ -72,17 +72,18 @@
 
             <!-- Info Banner -->
             <div class="info-banner">
-                <strong>System Notice:</strong> This system uses visual classification to detect pedestrians appearing
-                to be school-age children. It does <strong>not</strong> use facial recognition, plate recognition, or
-                estimate biological age.
-                <br>Warning Device is <strong>Visual Only</strong> (LED Beacon). No Audio. No SMS.
+                <strong>System Notice:</strong> This system does not estimate biological age. It classifies pedestrians
+                as children based on visual features commonly associated with school-age learners (body size,
+                proportions, and school-age appearance).
+                <br>Visual warning only (LED Beacon). No audio. No SMS.
+                <br><strong>Privacy:</strong> No facial recognition. No plate recognition.
             </div>
 
             <!-- LIVE VIEW SECTION -->
             <section id="live-section" class="page-section active">
                 <div class="dashboard-grid">
                     <div class="card">
-                        <div class="card-title">Child In ROI</div>
+                        <div class="card-title">Child-class in ROI</div>
                         <div class="card-value" id="live-child">NO</div>
                     </div>
                     <div class="card">
