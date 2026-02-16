@@ -921,3 +921,280 @@ td {
         grid-template-columns: 1fr;
     }
 }
+
+/* =========================================
+   REFACTORED INLINE STYLES
+   ========================================= */
+
+/* Power System Bar */
+.power-bar-track {
+    background-color: #eee;
+    height: 10px;
+    border-radius: 5px;
+    width: 100%;
+    overflow: hidden;
+}
+
+.power-bar-fill {
+    background-color: #4CAF50;
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.3s ease;
+}
+
+/* Evaluation Chips */
+.status-chip.eval-chip {
+    background-color: #e3f2fd;
+    color: #0d47a1;
+    font-size: 1rem;
+    padding: 8px 16px;
+}
+
+/* Note Boxes */
+.note-box {
+    margin-top: 15px;
+    padding: 12px;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.report-note-box {
+    border: 2px solid #eee;
+    padding: 20px;
+    border-radius: 8px;
+    background-color: #fafafa;
+    page-break-inside: avoid;
+}
+
+/* Compliance Note */
+.compliance-note {
+    background-color: #fff3e0;
+    border: 1px solid #ffe0b2;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: #e65100;
+}
+
+
+/* =========================================
+   DARK MODE THEME
+   ========================================= */
+body.dark-mode {
+    --bg-dominant: #121212;
+    --white: #1e1e1e;
+    --deep-text: #e0e0e0;
+    --text-muted: #a0a0a0;
+    --border-color: #333333;
+}
+
+body.dark-mode .sidebar {
+    background-color: #1e1e1e;
+    border-right: 1px solid #333333;
+}
+
+body.dark-mode .sidebar-header {
+    border-bottom-color: #333333;
+}
+
+body.dark-mode .nav-item:hover {
+    background-color: #2d2d2d;
+    color: #ffffff;
+}
+
+body.dark-mode .nav-item.active {
+    background-color: rgba(255, 146, 128, 0.15);
+    color: #FF9280;
+}
+
+body.dark-mode .topbar {
+    background-color: #1e1e1e;
+    border-bottom: 1px solid #333333;
+}
+
+body.dark-mode .card,
+body.dark-mode .table-container,
+body.dark-mode .filter-wrapper,
+body.dark-mode .report-paper,
+body.dark-mode .roi-coords-panel {
+    background-color: #1e1e1e;
+    border-color: #333333;
+    color: #e0e0e0;
+}
+
+body.dark-mode .card {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+body.dark-mode .card-title,
+body.dark-mode .control-label,
+body.dark-mode th {
+    color: #b0b0b0;
+}
+
+body.dark-mode .card-value {
+    color: #ffffff;
+}
+
+body.dark-mode .card-value.critical {
+    color: var(--critical-alert);
+}
+
+body.dark-mode .video-wrapper,
+body.dark-mode .cam-placeholder {
+    background-color: #121212;
+    border-color: #333;
+    color: #888;
+}
+
+body.dark-mode .status-chip.mock {
+    background-color: #333;
+    color: #bbb;
+}
+
+body.dark-mode .status-chip.connected,
+body.dark-mode .status-chip.eval-chip {
+    background-color: #1a3246;
+    color: #64b5f6;
+}
+
+body.dark-mode .status-chip.critical {
+    background-color: rgba(255, 36, 0, 0.15);
+    color: var(--critical-alert);
+}
+
+body.dark-mode .power-bar-track {
+    background-color: #333;
+}
+
+body.dark-mode .note-box {
+    background-color: #2d2d2d;
+    color: #ccc;
+}
+
+body.dark-mode .report-note-box {
+    background-color: #1a1a1a;
+    border-color: #333;
+}
+
+body.dark-mode .compliance-note {
+    background-color: #3e2723;
+    border-color: #5d4037;
+    color: #ffcc80;
+}
+
+body.dark-mode .form-control {
+    background-color: #2d2d2d;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+body.dark-mode .form-control::placeholder {
+    color: #777;
+}
+
+body.dark-mode .btn-outline {
+    border-color: #555;
+    color: #e0e0e0;
+}
+
+body.dark-mode .btn-outline:hover {
+    background-color: #333;
+    border-color: #777;
+}
+
+body.dark-mode .btn-secondary {
+    background-color: #333;
+    color: #e0e0e0;
+}
+
+body.dark-mode .btn-secondary:hover {
+    background-color: #444;
+}
+
+body.dark-mode .btn-preset.active {
+    background-color: #333;
+    color: #fff;
+    border: 1px solid #666;
+}
+
+body.dark-mode .btn-preset:hover:not(.active) {
+    background-color: #2d2d2d;
+    color: #ccc;
+}
+
+body.dark-mode .btn-group {
+    background-color: #2d2d2d;
+}
+
+body.dark-mode th,
+body.dark-mode td {
+    border-bottom-color: #333;
+}
+
+body.dark-mode .feed-item {
+    border-bottom-color: #333 !important;
+}
+
+body.dark-mode .badge-neutral {
+    background-color: #333;
+    color: #ccc;
+}
+
+body.dark-mode .roi-canvas-wrapper {
+    background-color: #121212;
+    border-color: #444;
+}
+
+body.dark-mode .roi-overlay-text {
+    color: #666;
+}
+
+body.dark-mode .coord-item {
+    background-color: #2d2d2d;
+    border-color: #444;
+}
+
+body.dark-mode .coord-item .val {
+    color: #fff;
+}
+
+/* Scrollbar for dark mode */
+body.dark-mode ::-webkit-scrollbar {
+    width: 10px;
+}
+
+body.dark-mode ::-webkit-scrollbar-track {
+    background: #1e1e1e;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 5px;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Feed Items */
+.feed-item {
+    border-bottom: 1px solid #eee;
+    padding: 8px 0;
+    font-size: 0.9rem;
+}
+
+.feed-meta {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+body.dark-mode .feed-item {
+    border-bottom-color: #333;
+}
+
+body.dark-mode .feed-meta {
+    color: #a0a0a0;
+}

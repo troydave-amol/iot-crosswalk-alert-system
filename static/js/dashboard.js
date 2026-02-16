@@ -49,6 +49,7 @@ const App = {
         lastSocketUpdate: 0,
 
         // System Configuration
+        theme: localStorage.getItem('theme') || 'light',
         roi: JSON.parse(localStorage.getItem('roi_settings')) || { x: 50, y: 50, w: 100, h: 100 },
 
         // Logs Page Filter State
@@ -88,6 +89,7 @@ const App = {
     // 2. Initialization
     // ---------------------------------------------------------
     init() {
+        this.initTheme();
         this.setupNavigation();
         this.setupSocket();
         this.setupMockEngine(); // Starts the 1s loop
@@ -341,10 +343,10 @@ const App = {
         if (!feed) return;
         const recent = window.EventStore.events.slice(0, 10);
         feed.innerHTML = recent.map(e => `
-            <div class="feed-item" style="border-bottom:1px solid #eee; padding:8px 0; font-size:0.9rem;">
+            <div class="feed-item">
                 <span class="text-muted" style="font-size:0.8rem;">${e.timestamp}</span>
                 <strong>${e.message}</strong>
-                <div style="font-size:0.8rem; color:#666;">Conf: ${e.confidence.toFixed(2)} | Latency: ${e.latency_ms}ms</div>
+                <div class="feed-meta">Conf: ${e.confidence.toFixed(2)} | Latency: ${e.latency_ms}ms</div>
             </div>
         `).join('');
     },
@@ -685,12 +687,22 @@ const App = {
 
             // Camera Persistence Logic
             if (hash === 'live') {
-                // Return to Live View: Re-attach if valid stream exists
-                if (window.CameraController.isOn && window.CameraController.stream) {
-                    this.attachStreamToVideo(window.CameraController.stream);
+                // Return to Live View: Verify & Re-attach
+                const cam = window.CameraController;
+                // Check if we have an active stream logic
+                if (cam.isOn && cam.stream) {
+                    // Double check stream effectively
+                    if (cam.stream.active || (cam.stream.getTracks().length > 0 && cam.stream.getTracks()[0].readyState === 'live')) {
+                        console.log("Restoring active camera stream...");
+                        this.attachStreamToVideo(cam.stream);
+                    } else {
+                        console.warn("Stream inactive on return. stopping.");
+                        this.stopCamera();
+                    }
                 }
             } else {
-                // Navigate away: Do NOT stop camera, just hide UI (handled by CSS/Page sections)
+                // Navigate away: Camera stays ON (tracks active).
+                // UI is hidden by CSS. We do nothing here to stop it.
             }
         };
         window.addEventListener('hashchange', handleHashChange);
@@ -700,14 +712,27 @@ const App = {
     setupAnalytics() {
         // 1. Chart Init
         // Common Chart Options
+        // 1. Chart Init
+        const isDark = this.state.theme === 'dark';
+        const gridColor = isDark ? '#333333' : '#f0f0f0';
+        const textColor = isDark ? '#a0a0a0' : '#666';
+
+        // Common Chart Options
         const commonOptions = {
             responsive: true,
             maintainAspectRatio: false,
             animation: { duration: 800 },
             plugins: { legend: { display: false } },
             scales: {
-                x: { grid: { display: false } },
-                y: { beginAtZero: true, grid: { color: '#f0f0f0' } }
+                x: {
+                    grid: { display: false },
+                    ticks: { color: textColor }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: gridColor },
+                    ticks: { color: textColor }
+                }
             }
         };
 
@@ -1459,6 +1484,7 @@ const App = {
 
     // Camera Logic
     initCamera() {
+        // Button Listeners
         document.getElementById('btnStartCam')?.addEventListener('click', () => this.startCamera());
         document.getElementById('btnStopCam')?.addEventListener('click', () => this.stopCamera());
 
@@ -1466,13 +1492,15 @@ const App = {
         if (select) {
             select.addEventListener('change', (e) => {
                 const newId = e.target.value;
+                if (window.CameraController.selectedDeviceId === newId) return; // No change
+
                 window.CameraController.selectedDeviceId = newId;
                 localStorage.setItem('camDeviceId', newId);
 
                 // If camera is already ON, restart with new device
                 if (window.CameraController.isOn) {
-                    this.stopCamera();
-                    setTimeout(() => this.startCamera(), 200);
+                    this.stopCamera(); // Stop current
+                    setTimeout(() => this.startCamera(), 300); // Restart
                 }
             });
         }
@@ -1483,35 +1511,40 @@ const App = {
                 const videoDevices = devices.filter(device => device.kind === 'videoinput');
                 const selectGroup = document.getElementById('camSelectGroup');
 
-                if (videoDevices.length > 0) {
-                    select.innerHTML = videoDevices.map(device =>
-                        `<option value="${device.deviceId}">${device.label || `Camera ${select.length + 1}`}</option>`
-                    ).join('');
+                if (select) {
+                    if (videoDevices.length > 0) {
+                        select.innerHTML = videoDevices.map(device =>
+                            `<option value="${device.deviceId}">${device.label || `Camera ${select.length + 1}`}</option>`
+                        ).join('');
 
-                    if (videoDevices.length > 1) selectGroup.style.display = 'block';
+                        if (videoDevices.length > 1) selectGroup.style.display = 'block';
 
-                    // Restore selection or default
-                    const savedId = window.CameraController.selectedDeviceId;
-                    if (savedId && videoDevices.find(d => d.deviceId === savedId)) {
-                        select.value = savedId;
+                        // Restore selection or default
+                        const savedId = window.CameraController.selectedDeviceId;
+                        if (savedId && videoDevices.some(d => d.deviceId === savedId)) {
+                            select.value = savedId;
+                        } else {
+                            // Default to first
+                            window.CameraController.selectedDeviceId = videoDevices[0].deviceId;
+                        }
                     } else {
-                        // Default to first
-                        window.CameraController.selectedDeviceId = videoDevices[0].deviceId;
+                        // No devices
+                        select.innerHTML = '<option disabled>No cameras found</option>';
                     }
                 }
-            }).catch(e => console.warn(e));
+            }).catch(e => console.warn("Camera enum error:", e));
         }
 
-        // Check if we should re-attach on load (if SPA navigation preservation, though full reload clears window)
-        // Ensure UI matches state if somehow preserved
-        if (window.CameraController.isOn) {
+        // On Load Persistence Check
+        // If the implementation supports hot-reloading or we want to be safe:
+        if (window.CameraController.isOn && window.CameraController.stream) {
             this.attachStreamToVideo(window.CameraController.stream);
         }
     },
 
     startCamera() {
-        // If already on and valid, just re-attach
-        if (window.CameraController.isOn && window.CameraController.stream) {
+        if (window.CameraController.isOn && window.CameraController.stream && window.CameraController.stream.active) {
+            // Already running, just ensure attached
             this.attachStreamToVideo(window.CameraController.stream);
             return;
         }
@@ -1529,17 +1562,15 @@ const App = {
             window.CameraController.lastError = null;
 
             // Handle stream ended unexpectedly
-            stream.getTracks().forEach(track => {
+            if (stream.getTracks().length > 0) {
+                const track = stream.getTracks()[0];
                 track.onended = () => {
-                    console.log("Stream ended unexpectedly.");
+                    console.log("Stream track ended.");
+                    // Only stop if we really are done.
+                    // This creates a robust check.
                     this.stopCamera();
-                    const ph = document.getElementById('camPlaceholder');
-                    if (ph) {
-                        ph.innerHTML = `<p style="color:orange">Camera stream ended. Click Start to resume.</p>`;
-                        ph.style.display = 'flex';
-                    }
                 };
-            });
+            }
 
             this.attachStreamToVideo(stream);
 
@@ -1547,9 +1578,13 @@ const App = {
             console.error("Camera error:", err);
             window.CameraController.isOn = false;
             window.CameraController.lastError = err;
+            window.CameraController.stream = null;
+
             const ph = document.getElementById('camPlaceholder');
-            ph.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
-            ph.style.display = 'flex';
+            if (ph) {
+                ph.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
+                ph.style.display = 'flex';
+            }
         });
     },
 
@@ -1557,22 +1592,35 @@ const App = {
         const video = document.getElementById('liveCam');
         if (!video) return;
 
-        video.srcObject = stream;
-        video.play().catch(e => console.error("Play error:", e));
+        try {
+            // Don't re-set if already same (avoids flicker)
+            if (video.srcObject !== stream) {
+                video.srcObject = stream;
+            }
 
-        // Update UI
-        document.getElementById('camPlaceholder').style.display = 'none';
+            // Allow play
+            video.play().catch(e => {
+                if (e.name !== 'AbortError') console.warn("Video play interrupted:", e);
+            });
 
-        const chip = document.getElementById('camStatusChip');
-        if (chip) {
-            chip.className = 'status-chip connected';
-            chip.innerHTML = '<div class="status-indicator"></div> ON';
-            chip.style.backgroundColor = 'rgba(76, 175, 80, 0.1)';
-            chip.style.color = '#2e7d32';
+            // UI
+            const ph = document.getElementById('camPlaceholder');
+            if (ph) ph.style.display = 'none';
+
+            const chip = document.getElementById('camStatusChip');
+            if (chip) {
+                chip.className = 'status-chip connected';
+                chip.innerHTML = '<div class="status-indicator"></div> ON';
+                chip.style.backgroundColor = 'rgba(76, 175, 80, 0.1)';
+                chip.style.color = '#2e7d32';
+            }
+
+            const sourceChip = document.getElementById('camSourceChip');
+            if (sourceChip) sourceChip.style.display = 'flex';
+
+        } catch (e) {
+            console.error("Attach error:", e);
         }
-
-        const sourceChip = document.getElementById('camSourceChip');
-        if (sourceChip) sourceChip.style.display = 'flex';
     },
 
     stopCamera() {
@@ -1585,7 +1633,10 @@ const App = {
 
         // UI Reset
         const video = document.getElementById('liveCam');
-        if (video) video.srcObject = null;
+        if (video) {
+            video.pause();
+            video.srcObject = null;
+        }
 
         const ph = document.getElementById('camPlaceholder');
         if (ph) {
@@ -1608,6 +1659,62 @@ const App = {
         }
         const sourceChip = document.getElementById('camSourceChip');
         if (sourceChip) sourceChip.style.display = 'none';
+    },
+
+    // ---------------------------------------------------------
+    // 8. Theme Management
+    // ---------------------------------------------------------
+    initTheme() {
+        // Initial Apply
+        this.setTheme(this.state.theme, false);
+
+        // Listener
+        document.getElementById('theme-toggle')?.addEventListener('click', () => {
+            const newTheme = this.state.theme === 'light' ? 'dark' : 'light';
+            this.setTheme(newTheme, true);
+        });
+    },
+
+    setTheme(theme, updateCharts = true) {
+        this.state.theme = theme;
+        localStorage.setItem('theme', theme);
+
+        // Body Class
+        if (theme === 'dark') document.body.classList.add('dark-mode');
+        else document.body.classList.remove('dark-mode');
+
+        // Button Icon/Title
+        const btn = document.getElementById('theme-toggle');
+        if (btn) {
+            btn.innerHTML = theme === 'dark' ?
+                '<i class="fa-solid fa-sun"></i>' :
+                '<i class="fa-solid fa-moon"></i>';
+            btn.title = theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode";
+
+            // Adjust button class for visibility if needed, but outline/primary works in CSS
+        }
+
+        // Update Charts
+        if (updateCharts) this.updateChartsTheme();
+    },
+
+    updateChartsTheme() {
+        const isDark = this.state.theme === 'dark';
+        const gridColor = isDark ? '#333333' : '#f0f0f0';
+        const textColor = isDark ? '#a0a0a0' : '#666';
+
+        Object.values(this.state.charts).forEach(chart => {
+            if (!chart) return;
+
+            if (chart.options.scales.x) {
+                chart.options.scales.x.ticks.color = textColor;
+            }
+            if (chart.options.scales.y) {
+                chart.options.scales.y.grid.color = gridColor;
+                chart.options.scales.y.ticks.color = textColor;
+            }
+            chart.update();
+        });
     }
 };
 

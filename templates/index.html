@@ -64,6 +64,9 @@
                     <div class="status-indicator"></div> Offline (Mock)
                 </div>
                 <button class="btn btn-primary" id="mock-toggle">Mock Mode: ON</button>
+                <button class="btn btn-outline" id="theme-toggle" title="Toggle Dark/Light Mode">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
                 <small id="last-update" class="text-muted">Last Update: ---</small>
             </div>
         </header>
@@ -133,9 +136,8 @@
                                 <div class="status-chip mock" id="camStatusChip">
                                     <div class="status-indicator"></div> OFF
                                 </div>
-                                <div class="status-chip connected" id="camSourceChip"
-                                    style="background-color: #e3f2fd; color: #0d47a1; display:none;">
-                                    <div class="status-indicator" style="background-color: #1976d2;"></div> Webcam
+                                <div class="status-chip connected" id="camSourceChip" style="display:none;">
+                                    <div class="status-indicator"></div> Webcam
                                 </div>
                             </div>
                         </div>
@@ -158,9 +160,8 @@
                             </div>
                             <div class="flex-col mt-4">
                                 <small>Battery Level</small>
-                                <div style="background:#eee; height:10px; border-radius:5px; width:100%;">
-                                    <div id="power-battery-bar"
-                                        style="background:#4CAF50; height:10px; border-radius:5px; width:85%;"></div>
+                                <div class="power-bar-track">
+                                    <div id="power-battery-bar" class="power-bar-fill"></div>
                                 </div>
                                 <small id="power-battery-text">85%</small>
                             </div>
@@ -346,21 +347,17 @@
                 <div class="card">
                     <div class="card-title" style="margin-bottom: 15px;">Evaluation Snapshot (Prototype)</div>
                     <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
-                        <div class="status-chip connected"
-                            style="background-color: #e3f2fd; color: #0d47a1; font-size: 1rem; padding: 8px 16px;">
+                        <div class="status-chip eval-chip">
                             Precision: <strong>0.90</strong>
                         </div>
-                        <div class="status-chip connected"
-                            style="background-color: #e3f2fd; color: #0d47a1; font-size: 1rem; padding: 8px 16px;">
+                        <div class="status-chip eval-chip">
                             Recall: <strong>0.88</strong>
                         </div>
-                        <div class="status-chip connected"
-                            style="background-color: #e3f2fd; color: #0d47a1; font-size: 1rem; padding: 8px 16px;">
+                        <div class="status-chip eval-chip">
                             F1 Score: <strong>0.89</strong>
                         </div>
                     </div>
-                    <div
-                        style="margin-top: 15px; padding: 12px; background-color: #f5f5f5; border-radius: 8px; font-size: 0.9rem; color: #666;">
+                    <div class="note-box">
                         <i class="fa-solid fa-circle-info" style="margin-right: 6px;"></i>
                         <strong>Note:</strong> Prototype evaluation sample: metrics are based on controlled tests and
                         labeled review samples. The system does not estimate biological age; it classifies pedestrians
@@ -449,8 +446,7 @@
                     </ul>
 
                     <!-- Notes -->
-                    <div
-                        style="border: 2px solid #eee; padding: 20px; border-radius: 8px; background-color: #fafafa; page-break-inside: avoid;">
+                    <div class="report-note-box">
                         <h5 style="margin-bottom: 10px; color: #444;">Notes & Limitations</h5>
                         <ul style="font-size: 0.9rem; color: #666; padding-left: 20px; margin: 0;">
                             <li style="margin-bottom: 6px;"><strong>Prototype Summary:</strong> Metrics are based on
@@ -550,8 +546,7 @@
                     </div>
 
                     <!-- Compliance Note -->
-                    <div class="compliance-note mt-4"
-                        style="background:#fff3e0; border:1px solid #ffe0b2; padding:12px; border-radius:8px; font-size:0.85rem; color:#e65100;">
+                    <div class="compliance-note mt-4">
                         <strong><i class="fa-solid fa-shield-halved"></i> Privacy & Compliance:</strong><br>
                         • The system classifies pedestrians based on visual features (size, proportions) associated with
                         school-age children.<br>
