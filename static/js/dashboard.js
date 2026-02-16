@@ -16,6 +16,8 @@ window.EventStore = {
         // Warning logic helpers
         switch_enabled: true
     },
+    latestPayload: null,      // RAW Contract Payload (from Backend/Socket)
+    contractValidation: null, // Validation Result
     powerStatus: {    // Power System
         solar_status: 'Charging',
         solar_voltage: 24.1,
@@ -237,17 +239,26 @@ const App = {
     // 4. Data Management & Socket
     // ---------------------------------------------------------
     setupSocket() {
+        if (this.socket) return; // Prevent duplicate listeners
+
         try {
-            const socket = io();
-            socket.on('connect', () => {
+            this.socket = io();
+            this.socket.on('connect', () => {
                 this.state.isConnected = true;
                 this.updateConnectionStatus();
             });
-            socket.on('disconnect', () => {
+            this.socket.on('disconnect', () => {
                 this.state.isConnected = false;
                 this.updateConnectionStatus();
+
+                // Fallback for Contract Preview
+                const badge = document.getElementById('contract-valid-badge');
+                if (badge) {
+                    badge.textContent = "Disconnected";
+                    badge.className = "status-chip mock";
+                }
             });
-            socket.on('status_update', (data) => {
+            this.socket.on('status_update', (data) => {
                 this.handleSocketData(data);
             });
         } catch (e) {
@@ -256,6 +267,22 @@ const App = {
     },
 
     handleSocketData(data) {
+        // 1. Always process Contract Preview (DEV TOOL) - Updates 'Settings' page even in Mock Mode
+        try {
+            // Normalize & Validate
+            const payload = DataContract.normalizeStatusUpdate(data);
+            const validation = DataContract.validateStatusUpdate(payload);
+
+            // Store for Preview
+            window.EventStore.latestPayload = payload;
+            window.EventStore.contractValidation = validation;
+
+            // Update UI if on Settings page
+            this.updateContractPreview();
+        } catch (e) {
+            console.error("Contract Preview Error:", e);
+        }
+
         if (this.state.mockMode) return;
 
         this.state.isConnected = true;
@@ -281,6 +308,45 @@ const App = {
 
         this.logEvent(status, data.scenario || "Live Feed");
         this.updateUI();
+    },
+
+    updateContractPreview() {
+        const previewBox = document.getElementById('contract-json-preview');
+        const validBadge = document.getElementById('contract-valid-badge');
+        const errorList = document.getElementById('contract-errors-list');
+
+        // Null-safe check: only update if elements exist (User is on Settings page)
+        if (!previewBox || !validBadge) return;
+
+        const payload = window.EventStore.latestPayload;
+        const validation = window.EventStore.contractValidation;
+
+        if (!payload) {
+            previewBox.textContent = "Waiting for data...";
+            validBadge.className = "status-chip mock";
+            validBadge.textContent = "Waiting...";
+            return;
+        }
+
+        // Update JSON
+        previewBox.textContent = JSON.stringify(payload, null, 2);
+
+        // Update Badge
+        if (validation && validation.ok) {
+            validBadge.className = "status-chip connected";
+            validBadge.textContent = "VALID";
+            validBadge.style.backgroundColor = "";
+            if (errorList) errorList.innerHTML = "";
+        } else {
+            validBadge.className = "status-chip";
+            validBadge.textContent = "INVALID";
+            validBadge.style.backgroundColor = "#d32f2f";
+            validBadge.style.color = "white";
+
+            if (errorList && validation) {
+                errorList.innerHTML = validation.errors.map(e => `<li>${e}</li>`).join('');
+            }
+        }
     },
 
     logEvent(status, scenario) {
