@@ -560,12 +560,34 @@
                     <p><strong>Current View:</strong> TMC Officer / Admin (Prototype Mode)</p>
                     <p>System controls are restricted to authorized personnel only.</p>
                 </div>
+
+                <!-- Data Contract Preview (DEV ONLY) -->
+                <div class="card mt-4" style="border-left: 4px solid #6200ea;">
+                    <div class="card-title" style="margin-bottom: 15px; color: #6200ea;">
+                        <i class="fa-solid fa-code"></i> Data Contract Preview <span
+                            class="badge badge-neutral">DEV</span>
+                    </div>
+                    <div style="display: flex; gap: 20px; align-items: start; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 300px;">
+                            <h5 style="margin-bottom: 8px;">Latest Status Payload</h5>
+                            <pre id="contract-json-preview"
+                                style="background: #f4f4f4; padding: 10px; border-radius: 6px; font-size: 0.8rem; overflow-x: auto; max-height: 250px; color: #333; border: 1px solid #ddd;">No data yet...</pre>
+                        </div>
+                        <div style="flex: 1; min-width: 250px;">
+                            <h5 style="margin-bottom: 8px;">Validation Status</h5>
+                            <div id="contract-valid-badge" class="status-chip mock">Waiting...</div>
+                            <ul id="contract-errors-list"
+                                style="margin-top: 10px; color: #d32f2f; font-size: 0.85rem; padding-left: 20px;"></ul>
+                        </div>
+                    </div>
+                </div>
             </section>
 
         </div>
     </main>
 
     <div id="sidebarBackdrop" class="backdrop"></div>
+    <script src="/static/js/contract.js"></script>
     <script src="/static/js/dashboard.js"></script>
 </body>
 
