@@ -1290,8 +1290,37 @@ const App = {
         this.updateAnalyticsUI();
     },
 
+    // ---------------------------------------------------------
+    // Helper: Boolean Normalizer
+    // ---------------------------------------------------------
+    isOn(val) {
+        if (typeof val === 'string') {
+            const low = val.toLowerCase();
+            return low === '1' || low === 'true' || low === 'on';
+        }
+        return val === 1 || val === true;
+    },
+
+    normalizeEvent(e) {
+        // Shallow copy to avoid mutating original store
+        const n = { ...e };
+
+        // Canonical warning_device_on
+        if (n.warning_device_on === undefined) {
+            n.warning_device_on = n.warning_on;
+        }
+
+        // Ensure we rely on isOn() checks later, but here we can't easily force it back to boolean 
+        // without mutating if source was string. 
+        // We just ensure the KEY exists. The comsumer uses isOn(n.warning_device_on).
+
+        return n;
+    },
+
     updateAnalyticsUI() {
-        const events = this.getAnalyticsEvents();
+        const rawEvents = this.getAnalyticsEvents();
+        // Normalize for consistent keys
+        const events = rawEvents.map(e => this.normalizeEvent(e));
 
         // Empty State Check
         const chartGrid = document.querySelector('#analytics-section .charts-grid');
@@ -1335,7 +1364,6 @@ const App = {
         // 'all' = 0
 
         // Filter and Sort (Oldest first for Charts, usually)
-        // Filter and Sort (Oldest first for Charts, usually)
         if (this.state.dbMode) {
             // Use DB rows
             return (window.EventStore.analyticsRows || [])
@@ -1361,11 +1389,17 @@ const App = {
         const hoursMap = {};
 
         events.forEach(e => {
-            if (e.warning_on) totalWarnings++;
-            if (e.child_in_roi) totalDetections++;
-            if (e.false_warning) falseWarnings++;
-            if (e.latency_ms > 0) {
-                totalLatency += e.latency_ms;
+            // Use canonical keys with isOn()
+            const isWarn = this.isOn(e.warning_device_on);
+            const isDet = this.isOn(e.child_in_roi);
+
+            if (isWarn) totalWarnings++;
+            if (isDet) totalDetections++;
+            if (e.false_warning) falseWarnings++; // Keep existing or use (isWarn && !isDet)? existing log logic populates this.
+
+            const lat = parseFloat(e.latency_ms);
+            if (lat > 0) {
+                totalLatency += lat;
                 latencyCount++;
             }
 
@@ -1378,6 +1412,11 @@ const App = {
             const h = d.getHours();
             hoursMap[h] = (hoursMap[h] || 0) + 1;
         });
+
+        // Debug Log (Adviser req)
+        if (this.state.dbMode) {
+            console.debug(`[Analytics Fix] Rows: ${events.length}, Warnings: ${totalWarnings}`);
+        }
 
         // Peak Calc
         let peakHour = '--';
@@ -1422,12 +1461,14 @@ const App = {
             }
             const binKey = Math.floor(ts / binSize) * binSize;
             if (!bins[binKey]) bins[binKey] = { warnings: 0, detections: 0 };
-            if (e.warning_on) bins[binKey].warnings++;
-            if (e.child_in_roi) bins[binKey].detections++;
+
+            // Use isOn logic
+            if (this.isOn(e.warning_device_on)) bins[binKey].warnings++;
+            if (this.isOn(e.child_in_roi)) bins[binKey].detections++;
 
             // Confidence (only if detection)
-            if (e.child_in_roi) {
-                const c = e.confidence;
+            if (this.isOn(e.child_in_roi)) {
+                const c = parseFloat(e.confidence) || 0;
                 if (c < 0.2) confBins[0]++;
                 else if (c < 0.4) confBins[1]++;
                 else if (c < 0.6) confBins[2]++;
