@@ -60,6 +60,19 @@ const App = {
         theme: localStorage.getItem('theme') || 'light',
         roi: JSON.parse(localStorage.getItem('roi_settings')) || { x: 50, y: 50, w: 100, h: 100 },
 
+        // Helper for DB Timestamps
+        parseTimestamp(isoStr) {
+            if (!isoStr) return null;
+            // Fix MySQL strings "YYYY-MM-DD HH:MM:SS" -> "YYYY-MM-DDTHH:MM:SSZ"
+            let s = isoStr.toString();
+            if (s.includes(' ') && !s.includes('T')) s = s.replace(' ', 'T');
+            if (s.length === 19) s += 'Z'; // e.g. 2023-01-01T12:00:00 -> ...Z
+            else if (!s.endsWith('Z') && !s.includes('+') && !s.includes('-')) s += 'Z'; // simplistic UTC assumption
+
+            const d = new Date(s);
+            return isNaN(d.getTime()) ? null : d;
+        },
+
         // Logs Page Filter State
         logsPollingTimer: null,
         logsDbError: false,
@@ -914,9 +927,21 @@ const App = {
         if (displayLogs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:#888;">No logs found.</td></tr>';
         } else {
-            tbody.innerHTML = displayLogs.map(log => `
+            tbody.innerHTML = displayLogs.map(log => {
+                // Time Display Logic
+                let timeStr = log.timestamp; // Default to existing if valid
+                if (this.state.dbMode) {
+                    const d = this.state.parseTimestamp(log.timestamp_iso);
+                    if (d) timeStr = d.toLocaleTimeString();
+                    else timeStr = log.timestamp_iso || "Invalid Date";
+                } else {
+                    // Session fallback
+                    if (!timeStr && log.rawTimestamp) timeStr = new Date(log.rawTimestamp).toLocaleTimeString();
+                }
+
+                return `
                 <tr>
-                    <td>${log.timestamp || new Date(log.rawTimestamp).toLocaleTimeString()}</td>
+                    <td>${timeStr}</td>
                     <td><span class="badge ${log.child_in_roi ? 'badge-warning' : 'badge-neutral'}">${log.child_in_roi ? 'YES' : 'NO'}</span></td>
                     <td><span style="font-size:0.85em; color:${log.roi_status === 'INSIDE' ? '#d32f2f' : '#999'}">${log.roi_status}</span></td>
                     <td><span class="badge ${log.warning_on ? 'badge-warning' : 'badge-success'}">${log.warning_on ? 'ON' : 'OFF'}</span></td>
@@ -925,7 +950,7 @@ const App = {
                     <td>${log.scenario}</td>
                     <td>${log.false_warning ? '<span style="color:red">YES</span>' : 'NO'}</td>
                 </tr>
-            `).join('');
+            `}).join('');
         }
 
         // Calculate range text
@@ -1314,7 +1339,11 @@ const App = {
         if (this.state.dbMode) {
             // Use DB rows
             return (window.EventStore.analyticsRows || [])
-                .sort((a, b) => (a.rawTimestamp || a.id) - (b.rawTimestamp || b.id));
+                .sort((a, b) => {
+                    const tA = this.state.parseTimestamp(a.timestamp_iso)?.getTime() || 0;
+                    const tB = this.state.parseTimestamp(b.timestamp_iso)?.getTime() || 0;
+                    return tA - tB;
+                });
         } else {
             // Use Session events
             return window.EventStore.events
@@ -1341,7 +1370,11 @@ const App = {
             }
 
             // Peak Hour
-            const d = new Date(e.rawTimestamp || e.id);
+            let d = new Date(e.rawTimestamp || e.id);
+            if (this.state.dbMode && e.timestamp_iso) {
+                const parsed = this.state.parseTimestamp(e.timestamp_iso);
+                if (parsed) d = parsed;
+            }
             const h = d.getHours();
             hoursMap[h] = (hoursMap[h] || 0) + 1;
         });
@@ -1382,7 +1415,11 @@ const App = {
 
         events.forEach(e => {
             // Time Bins
-            const ts = e.rawTimestamp || e.id;
+            let ts = e.rawTimestamp || e.id;
+            if (this.state.dbMode && e.timestamp_iso) {
+                const parsed = this.state.parseTimestamp(e.timestamp_iso);
+                if (parsed) ts = parsed.getTime();
+            }
             const binKey = Math.floor(ts / binSize) * binSize;
             if (!bins[binKey]) bins[binKey] = { warnings: 0, detections: 0 };
             if (e.warning_on) bins[binKey].warnings++;
