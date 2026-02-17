@@ -48,6 +48,7 @@ const App = {
         // App Flags
         mockMode: true,
         isConnected: false,
+        dbMode: localStorage.getItem('db_mode_enabled') === 'true', // DB Mode State
         lastSocketUpdate: 0,
 
         // System Configuration
@@ -115,6 +116,17 @@ const App = {
         document.getElementById('mock-toggle').addEventListener('click', (e) => {
             this.setMockMode(!this.state.mockMode);
         });
+
+        // DB Mode Init
+        const dbToggle = document.getElementById('toggleDbMode');
+        if (dbToggle) {
+            // Sync UI to initial state
+            this.setDbMode(this.state.dbMode);
+
+            dbToggle.addEventListener('change', (e) => {
+                this.setDbMode(e.target.checked);
+            });
+        }
     },
 
     // ... (Existing setMockMode, setupMockEngine, updateMockData, setupSocket, handleSocketData methods remain unchanged in this block) ...
@@ -128,6 +140,101 @@ const App = {
 
         // If turning OFF, we wait for socket. If no socket data comes in 3s, watchdog will handle it.
         this.updateConnectionStatus();
+    },
+
+    // ---------------------------------------------------------
+    // DB Mode Logic (Refined UI/UX)
+    // ---------------------------------------------------------
+    setDbMode(enabled) {
+        // 1. Update State & Storage
+        this.state.dbMode = enabled;
+        localStorage.setItem('db_mode_enabled', enabled);
+
+        // 2. Update Toggle UI
+        const toggle = document.getElementById('toggleDbMode');
+        const label = document.getElementById('dbModeStateLabel');
+        const warning = document.getElementById('dbModeWarning');
+
+        if (toggle) {
+            toggle.checked = enabled;
+            // Prevent infinite loop if triggered programmatically
+        }
+
+        if (label) label.textContent = enabled ? 'Enabled' : 'Disabled';
+
+        // 3. Status Chip Logic
+        const badge = document.getElementById('dbHubStatus');
+
+        if (enabled) {
+            // Turning ON
+            if (badge) {
+                badge.className = 'status-chip mock'; // Grey/Neutral
+                badge.textContent = 'Checking...';
+                badge.style.display = 'inline-flex';
+                badge.style.backgroundColor = ''; // Reset inline styles
+                badge.style.color = '';
+            }
+            if (warning) warning.style.display = 'none'; // Hide warning initially
+
+            this.checkBackendHealth();
+        } else {
+            // Turning OFF
+            if (badge) {
+                badge.className = 'status-chip neutral';
+                badge.textContent = 'Session';
+                badge.style.display = 'inline-flex';
+                badge.style.backgroundColor = '';
+                badge.style.color = '';
+            }
+            if (warning) warning.style.display = 'none';
+        }
+    },
+
+    async checkBackendHealth() {
+        const badge = document.getElementById('dbHubStatus');
+        const warning = document.getElementById('dbModeWarning');
+
+        try {
+            const res = await fetch('/api/health');
+            if (res.ok) {
+                // Success: Online
+                if (badge) {
+                    badge.className = 'status-chip connected';
+                    badge.textContent = 'Online';
+                    badge.style.backgroundColor = ''; // Use CSS class color
+                }
+            } else {
+                throw new Error("Backend Returned Error");
+            }
+        } catch (e) {
+            console.warn("DB Mode Health Check Failed:", e);
+
+            // Failure: Offline -> Auto-Revert
+            if (badge) {
+                // Briefly show error if you want, or just revert?
+                // User wants "Show warning... Auto-switch back to OFF"
+                badge.className = 'status-chip neutral'; // Revert to Session style?
+                badge.textContent = 'Session';
+            }
+
+            // Show Warning
+            if (warning) {
+                warning.style.display = 'block';
+                // Optional: Hide warning after 5s? 
+                // "Backend offline — staying in session mode" implies persistent message until user tries again?
+                // Or maybe just let it sit there.
+            }
+
+            // Auto-Revert Toggle Logic
+            this.state.dbMode = false;
+            localStorage.setItem('db_mode_enabled', 'false');
+
+            const toggle = document.getElementById('toggleDbMode');
+            const label = document.getElementById('dbModeStateLabel');
+
+            if (toggle) toggle.checked = false;
+            if (label) label.textContent = 'Disabled';
+        }
     },
 
     // ---------------------------------------------------------

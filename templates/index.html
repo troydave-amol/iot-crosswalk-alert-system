@@ -555,6 +555,33 @@
                         • <strong>Privacy:</strong> No facial recognition, no license plate recognition.
                     </div>
                 </div>
+                <div class="card mt-4 db-mode-card">
+                    <div class="db-mode-row">
+                        <!-- Left Column: Info -->
+                        <div class="db-mode-info">
+                            <h3>DB Mode</h3>
+                            <p class="subtitle">Use MySQL for Logs history (persists after refresh).</p>
+                            <small class="text-muted">Default: <strong>OFF</strong> (session logs only).</small>
+                            <div id="dbModeWarning" class="db-warning-text" style="display: none;">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Backend offline — staying in session
+                                mode.
+                            </div>
+                        </div>
+
+                        <!-- Right Column: Control -->
+                        <div class="db-mode-control">
+                            <div class="switch-wrapper">
+                                <span id="dbModeStateLabel" class="switch-label">Disabled</span>
+                                <label class="switch">
+                                    <input type="checkbox" id="toggleDbMode">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div id="dbHubStatus" class="status-chip neutral">Session</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card mt-4">
                     <h3>Role Access</h3>
                     <p><strong>Current View:</strong> TMC Officer / Admin (Prototype Mode)</p>

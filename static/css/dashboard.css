@@ -1198,3 +1198,143 @@ body.dark-mode .feed-item {
 body.dark-mode .feed-meta {
     color: #a0a0a0;
 }
+
+
+/* =========================================
+   DB MODE TOGGLE STYLES
+   ========================================= */
+
+.db-mode-card {
+    border-left: 4px solid var(--border-color);
+}
+
+.db-mode-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.db-mode-info h3 {
+    margin: 0 0 6px 0;
+    font-size: 1.1rem;
+    color: var(--deep-text);
+}
+
+.db-mode-info .subtitle {
+    margin: 0 0 6px 0;
+    font-size: 0.95rem;
+    color: var(--deep-text);
+}
+
+.db-warning-text {
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--critical-alert);
+    font-weight: 600;
+    animation: fadeIn 0.3s ease;
+}
+
+.db-mode-control {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+    min-width: 140px;
+}
+
+.switch-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.switch-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+/* Switch Component */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 52px;
+    height: 28px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 34px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked+.slider {
+    background-color: var(--primary-accent);
+    /* Using theme primary */
+}
+
+input:focus+.slider {
+    box-shadow: 0 0 1px var(--primary-accent);
+}
+
+input:checked+.slider:before {
+    transform: translateX(24px);
+}
+
+/* Status Chips Variants */
+.status-chip.neutral {
+    background-color: #e0e0e0;
+    color: #444;
+}
+
+/* Dark Mode Overrides */
+body.dark-mode .db-mode-card {
+    border-left-color: #444;
+}
+
+body.dark-mode .db-mode-info h3,
+body.dark-mode .db-mode-info .subtitle {
+    color: #e0e0e0;
+}
+
+body.dark-mode .switch-label {
+    color: #bbb;
+}
+
+body.dark-mode .slider {
+    background-color: #444;
+}
+
+body.dark-mode input:checked+.slider {
+    background-color: var(--primary-accent);
+}
+
+body.dark-mode .status-chip.neutral {
+    background-color: #333;
+    color: #aaa;
+}
