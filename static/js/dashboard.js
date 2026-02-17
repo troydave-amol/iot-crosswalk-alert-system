@@ -26,7 +26,9 @@ window.EventStore = {
     },
     // DB Mode Store
     logsRows: [],     // Paginated DB results
-    dbTotal: 0        // Total matching DB rows
+    dbTotal: 0,       // Total matching DB rows
+    analyticsRows: [], // Range-based DB results for Analytics/Reports
+    analyticsTotal: 0  // Optional total count
 }
     ;
 
@@ -198,10 +200,39 @@ const App = {
             if (warning) warning.style.display = 'none';
         }
 
-        // Refresh Logs if on Logs page
-        if (window.location.hash === '#logs') {
-            if (enabled) this.loadLogsFromDB();
-            else this.renderLogsTable();
+        // 4. Polling & View Logic
+        const hash = window.location.hash;
+
+        // Logs Polling
+        if (hash === '#logs') {
+            if (enabled) {
+                this.loadLogsFromDB();
+                if (this.state.logsPollingTimer) clearInterval(this.state.logsPollingTimer);
+                this.state.logsPollingTimer = setInterval(() => this.loadLogsFromDB(), 10000);
+            } else {
+                if (this.state.logsPollingTimer) {
+                    clearInterval(this.state.logsPollingTimer);
+                    this.state.logsPollingTimer = null;
+                }
+                this.renderLogsTable();
+            }
+        }
+
+        // Analytics Polling
+        if (hash === '#analytics') {
+            if (enabled) {
+                this.loadAnalyticsFromDB(this.state.analytics.range).then(() => this.updateAnalyticsUI());
+                if (this.state.analyticsPollingTimer) clearInterval(this.state.analyticsPollingTimer);
+                this.state.analyticsPollingTimer = setInterval(() => {
+                    this.loadAnalyticsFromDB(this.state.analytics.range).then(() => this.updateAnalyticsUI());
+                }, 30000);
+            } else {
+                if (this.state.analyticsPollingTimer) {
+                    clearInterval(this.state.analyticsPollingTimer);
+                    this.state.analyticsPollingTimer = null;
+                }
+                this.updateAnalyticsUI();
+            }
         }
     },
 
@@ -280,11 +311,25 @@ const App = {
                 this.renderLogsTable(true); // pass true to indicate auto-refresh if needed
             }
 
-            // Analytics Live Update (Throttle to every 2s)
+            // Analytics Live Update
+            // Prompt: "If DB Mode ON -> refresh every 30s", "If OFF -> existing behavior"
             if (window.location.hash === '#analytics') {
-                if (now - this.state.analytics.lastUpdate > 2000) {
-                    this.updateAnalyticsUI();
-                    this.state.analytics.lastUpdate = now;
+                if (this.state.dbMode) {
+                    // DB Mode Polling (30s)
+                    // We handle this in setupNavigation/setInterval actually, 
+                    // but we could also do it here if we want a single loop. 
+                    // However, Prompt said: "Stop polling when leaving Analytics tab".
+                    // It's cleaner to use a separate interval in setupNavigation 
+                    // OR use this central loop with a checks.
+
+                    // Let's use the setupNavigation approach for the 30s DB poll to be cleaner and explicit.
+                    // This block here is for MOCK/Session mode live updates (approx every 2s).
+                } else {
+                    // Session/Mock Mode: Update every 2s
+                    if (now - this.state.analytics.lastUpdate > 2000) {
+                        this.updateAnalyticsUI();
+                        this.state.analytics.lastUpdate = now;
+                    }
                 }
             }
 
@@ -560,12 +605,33 @@ const App = {
         if (f.scenario !== 'All') params.append('scenario', f.scenario);
         if (f.searchText) params.append('search', f.searchText);
 
+        // UI Loading State (optional but good)
+        const tbody = document.getElementById('logsTableBody');
+        if (tbody && f.currentPage === 1 && !this.state.logsPollingTimer) {
+            // Only show explicit loading on first load or manual filter change, not every poll
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> Loading DB logs...</td></tr>';
+        }
+
         try {
             const res = await fetch(`/api/events?${params.toString()}`);
             if (res.ok) {
                 const data = await res.json();
-                window.EventStore.logsRows = data.events;
-                window.EventStore.dbTotal = data.total;
+
+                // Mismatch Guard
+                if (data.total > 0 && (!data.rows || data.rows.length === 0)) {
+                    console.error("DATA MISMATCH: Backend reports total > 0 but returned no rows.", data);
+                    // Fallback to empty to avoid render errors
+                    window.EventStore.logsRows = [];
+                    window.EventStore.dbTotal = 0;
+                } else {
+                    window.EventStore.logsRows = data.rows; // Backend sends "rows"
+                    window.EventStore.dbTotal = data.total;
+
+                    // Debug Logs
+                    console.debug(`[DB-LOGS] Fetched ${data.rows.length} rows (Total: ${data.total})`);
+                    if (data.rows.length > 0) console.debug("[DB-LOGS] Sample:", data.rows[0]);
+                }
+
                 this.state.logsDbError = false;
                 this.renderLogsTable();
             } else {
@@ -576,6 +642,58 @@ const App = {
             this.state.logsDbError = true;
             this.renderLogsTable(); // Will fallback to session
         }
+    },
+
+    async loadAnalyticsFromDB(range) {
+        if (!this.state.dbMode) return false;
+
+        // Adviser: explicit mapping (ensure backend receives these exact strings)
+        // Frontend uses: 15m, 1h, today, all
+        // Backend handles these.
+
+        const params = new URLSearchParams({
+            range: range,
+            limit: 500, // Fixed limit
+            offset: 0
+        });
+
+        try {
+            const res = await fetch(`/api/events?${params.toString()}`);
+            if (res.ok) {
+                const data = await res.json();
+
+                // Mismatch Guard
+                if (data.total > 0 && (!data.rows || data.rows.length === 0)) {
+                    console.error("DATA MISMATCH (Analytics): Total > 0 but rows empty.", data);
+                    window.EventStore.analyticsRows = [];
+                    window.EventStore.analyticsTotal = 0;
+                } else {
+                    window.EventStore.analyticsRows = data.rows;
+                    window.EventStore.analyticsTotal = data.total;
+                }
+
+                // Hide Warning if it was showing
+                this.toggleAnalyticsWarning(false);
+                return true;
+            } else {
+                throw new Error("Analytics DB Fetch Failed");
+            }
+        } catch (e) {
+            console.warn("Analytics fetch error:", e);
+            this.toggleAnalyticsWarning(true);
+            return false;
+        }
+    },
+
+    toggleAnalyticsWarning(show) {
+        // We'll implement a shared warning ID for Analytics & Reports or separate?
+        // Plan said: "Add a hidden warning alert div in the Analytics and Reports sections"
+        // Let's assume IDs: 'anaDbWarning' and 'repDbWarning'
+        const anaWarn = document.getElementById('anaDbWarning');
+        const repWarn = document.getElementById('repDbWarning');
+
+        if (anaWarn) anaWarn.style.display = show ? 'block' : 'none';
+        if (repWarn) repWarn.style.display = show ? 'block' : 'none';
     },
 
     setupLogEvents() {
@@ -771,9 +889,6 @@ const App = {
             const allFiltered = this.getFilteredLogs();
             total = allFiltered.length;
 
-            // Should pagination be applied for session data? YES.
-            // ...but current implementation did slicing inside renderLogsTable.
-            // So we need to emulate that.
             // Recalc pages for session data
             const f = this.state.logsFilter;
             f.totalPages = Math.ceil(total / f.pageSize) || 1;
@@ -791,32 +906,41 @@ const App = {
         const f = this.state.logsFilter;
         // If DB Source, pages are calc based on Total
         if (isDbSource) {
+            // Logic: Backend handles slicing, we just need to know total pages
             f.totalPages = Math.ceil(total / f.pageSize) || 1;
-            // Ensure currentPage is valid logic? 
-            // BE handles offset, we just trust it calls back with rows.
-            // But we need to update total pages for UI.
         }
 
         // Render Rows
-        tbody.innerHTML = displayLogs.map(log => `
-            <tr>
-                <td>${log.timestamp}</td>
-                <td><span class="badge ${log.child_in_roi ? 'badge-warning' : 'badge-neutral'}">${log.child_in_roi ? 'YES' : 'NO'}</span></td>
-                <td><span style="font-size:0.85em; color:${log.roi_status === 'INSIDE' ? '#d32f2f' : '#999'}">${log.roi_status}</span></td>
-                <td><span class="badge ${log.warning_on ? 'badge-warning' : 'badge-success'}">${log.warning_on ? 'ON' : 'OFF'}</span></td>
-                <td>${(log.confidence || 0).toFixed(2)}</td>
-                <td>${log.latency_ms}ms</td>
-                <td>${log.scenario}</td>
-                <td>${log.false_warning ? '<span style="color:red">YES</span>' : 'NO'}</td>
-            </tr>
-        `).join('');
+        if (displayLogs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:#888;">No logs found.</td></tr>';
+        } else {
+            tbody.innerHTML = displayLogs.map(log => `
+                <tr>
+                    <td>${log.timestamp || new Date(log.rawTimestamp).toLocaleTimeString()}</td>
+                    <td><span class="badge ${log.child_in_roi ? 'badge-warning' : 'badge-neutral'}">${log.child_in_roi ? 'YES' : 'NO'}</span></td>
+                    <td><span style="font-size:0.85em; color:${log.roi_status === 'INSIDE' ? '#d32f2f' : '#999'}">${log.roi_status}</span></td>
+                    <td><span class="badge ${log.warning_on ? 'badge-warning' : 'badge-success'}">${log.warning_on ? 'ON' : 'OFF'}</span></td>
+                    <td>${(log.confidence || 0).toFixed(2)}</td>
+                    <td>${log.latency_ms}ms</td>
+                    <td>${log.scenario}</td>
+                    <td>${log.false_warning ? '<span style="color:red">YES</span>' : 'NO'}</td>
+                </tr>
+            `).join('');
+        }
 
         // Calculate range text
         const startIdx = (f.currentPage - 1) * f.pageSize;
         const currentCount = displayLogs.length;
-        const rangeText = total > 0
-            ? `Showing ${startIdx + 1}-${startIdx + currentCount} of ${total} ${isDbSource ? 'persistent' : 'filtered'} events`
-            : `Showing 0 of 0 events`;
+
+        // Fix: "Showing 0-0 of 0" logic
+        let rangeText = "";
+        if (total === 0) {
+            rangeText = "Showing 0 of 0 events";
+        } else {
+            const endRange = startIdx + currentCount;
+            // Guard against weird math if backend returns weirdness
+            rangeText = `Showing ${startIdx + 1}–${endRange} of ${total} ${isDbSource ? 'persistent' : 'filtered'} events`;
+        }
 
         // Update Controls
         document.getElementById('resultCount').textContent = rangeText;
@@ -962,7 +1086,30 @@ const App = {
 
             if (hash === 'analytics') {
                 if (this.state.charts.warnings) this.state.charts.warnings.resize();
-                this.updateAnalyticsUI();
+
+                // Clear any old poll
+                if (this.state.analyticsPollingTimer) {
+                    clearInterval(this.state.analyticsPollingTimer);
+                    this.state.analyticsPollingTimer = null;
+                }
+
+                if (this.state.dbMode) {
+                    // 1. Initial Load
+                    this.loadAnalyticsFromDB(this.state.analytics.range).then(() => this.updateAnalyticsUI());
+
+                    // 2. Start Polling (30s)
+                    this.state.analyticsPollingTimer = setInterval(() => {
+                        this.loadAnalyticsFromDB(this.state.analytics.range).then(() => this.updateAnalyticsUI());
+                    }, 30000);
+                } else {
+                    this.updateAnalyticsUI();
+                }
+            } else {
+                // Leaving Analytics
+                if (this.state.analyticsPollingTimer) {
+                    clearInterval(this.state.analyticsPollingTimer);
+                    this.state.analyticsPollingTimer = null;
+                }
             }
 
             // Camera Persistence Logic
@@ -1102,8 +1249,15 @@ const App = {
                 e.target.classList.add('active');
 
                 // State Update
-                this.state.analytics.range = e.target.getAttribute('data-ana-range');
-                this.updateAnalyticsUI();
+                const newRange = e.target.getAttribute('data-ana-range');
+                this.state.analytics.range = newRange;
+
+                // Load Data
+                if (this.state.dbMode) {
+                    this.loadAnalyticsFromDB(newRange).then(() => this.updateAnalyticsUI());
+                } else {
+                    this.updateAnalyticsUI();
+                }
             });
         });
 
@@ -1156,9 +1310,17 @@ const App = {
         // 'all' = 0
 
         // Filter and Sort (Oldest first for Charts, usually)
-        return window.EventStore.events
-            .filter(log => (log.rawTimestamp || log.id) >= startTime)
-            .sort((a, b) => (a.rawTimestamp || a.id) - (b.rawTimestamp || b.id));
+        // Filter and Sort (Oldest first for Charts, usually)
+        if (this.state.dbMode) {
+            // Use DB rows
+            return (window.EventStore.analyticsRows || [])
+                .sort((a, b) => (a.rawTimestamp || a.id) - (b.rawTimestamp || b.id));
+        } else {
+            // Use Session events
+            return window.EventStore.events
+                .filter(log => (log.rawTimestamp || log.id) >= startTime)
+                .sort((a, b) => (a.rawTimestamp || a.id) - (b.rawTimestamp || b.id));
+        }
     },
 
     computeKPIs(events) {
@@ -1301,14 +1463,22 @@ const App = {
 
                 // State
                 this.state.reports.range = e.target.getAttribute('data-rep-range');
-                // Auto-regenerate on preset change for better UX
-                this.generateReport();
+                // Auto-regenerate on preset change
+                if (this.state.dbMode) {
+                    this.loadAnalyticsFromDB(this.state.reports.range).then(() => this.generateReport());
+                } else {
+                    this.generateReport();
+                }
             });
         });
 
         // 2. Actions
         document.getElementById('btnGenerateReport')?.addEventListener('click', () => {
-            this.generateReport();
+            if (this.state.dbMode) {
+                this.loadAnalyticsFromDB(this.state.reports.range).then(() => this.generateReport());
+            } else {
+                this.generateReport();
+            }
         });
 
         document.getElementById('btnPrintReport')?.addEventListener('click', () => {
@@ -1328,31 +1498,47 @@ const App = {
         });
 
         // Initial Generation
-        // Delay slightly to ensure logs are populated
-        setTimeout(() => this.generateReport(), 500);
-    },
+        if (!this.state.dbMode) {
+            setTimeout(() => this.generateReport(), 500);
+        } else {
+            // If DB Mode, we likely want to show default report
+            setTimeout(() => {
+                // Try reuse if Analytics already has data, else fetch
+                const anaRange = this.state.analytics.range;
+                const repRange = this.state.reports.range;
 
-    getReportEvents() {
-        const range = this.state.reports.range;
-        const now = Date.now();
-        let startTime = 0;
-
-        if (range === '15m') startTime = now - (15 * 60 * 1000);
-        else if (range === '1h') startTime = now - (60 * 60 * 1000);
-        else if (range === 'today') {
-            const t = new Date(); t.setHours(0, 0, 0, 0);
-            startTime = t.getTime();
+                // If analytics has 'today' data and we need 'today', reuse it
+                if (anaRange === repRange && window.EventStore.analyticsRows.length > 0) {
+                    this.generateReport();
+                } else {
+                    this.loadAnalyticsFromDB(repRange).then(() => this.generateReport());
+                }
+            }, 500);
         }
-        // 'all' = 0
-
-        return window.EventStore.events.filter(log => (log.rawTimestamp || log.id) >= startTime);
     },
 
-    generateReport() {
+    async generateReport() {
+        // DB Mode: Ensure we have data for the REPORT range
+        if (this.state.dbMode) {
+            const range = this.state.reports.range;
+            // Check if we already have this data loaded in Analytics (optimization)
+            // Only reuse if the analytics range matches report range.
+            // Otherwise we MUST fetch new data.
+            if (this.state.analytics.range !== range || !window.EventStore.analyticsRows) {
+                // Fetch dedicated report dataset (re-using loadAnalyticsFromDB helper for now as it fills same store)
+                // NOTE: reusing loadAnalyticsFromDB overwrites analyticsRows. This is okay as they are usually same page 
+                // BUT if user switches tabs quickly it might be confusing. 
+                // Ideally reports should have own store, but for "Wire Analytics to DB" scope, sharing is acceptable
+                // provided we accept the overwrite.
+                await this.loadAnalyticsFromDB(range);
+            }
+        }
+
         const events = this.getReportEvents();
         const range = this.state.reports.range;
 
-        // Compute metrics
+        // ... rest of logic uses 'events' which is now populated from DB store if logic holds
+
         let totalWarnings = 0;
         let totalDetections = 0;
         let falseWarnings = 0;
