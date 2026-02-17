@@ -3,11 +3,11 @@ import random
 from datetime import datetime, timezone
 from threading import Thread
 
-from flask import Flask, render_template
+from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO
 
 # DB Imports
-from db import init_db, insert_event
+from db import init_db, insert_event, fetch_events
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "dev-secret"
@@ -203,6 +203,68 @@ def handle_connect():
     print("Client connected")
     payload = build_status_payload()
     socketio.emit("status_update", payload)
+
+    socketio.emit("status_update", payload)
+
+# --------------------------------------------------------------------------------
+# API Routes
+# --------------------------------------------------------------------------------
+
+@app.route("/api/health")
+def api_health():
+    """
+    Simple health check.
+    Returns 200 OK if server is running.
+    """
+    return jsonify({"ok": True})
+
+@app.route("/api/events")
+def api_events_route():
+    """
+    Get historical events from DB.
+    Returns 503 if DB is unavailable.
+    """
+    try:
+        # Parse Query Params
+        range_arg = request.args.get("range", "all")
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+        
+        # Boolean flags usually come as strings "true"/"false" or just present
+        # Here we assume "true" string for True, anything else False for safety
+        warning_only = request.args.get("warning_only", "false").lower() == "true"
+        in_roi_only = request.args.get("in_roi_only", "false").lower() == "true"
+        
+        min_conf = float(request.args.get("min_conf", 0.0))
+        scenario = request.args.get("scenario", None)
+        search = request.args.get("search", None)
+
+        # Enforce max limit
+        if limit > 500:
+            limit = 500
+
+        data = fetch_events(
+            limit=limit,
+            offset=offset,
+            time_range=range_arg,
+            warning_only=warning_only,
+            in_roi_only=in_roi_only,
+            min_conf=min_conf,
+            scenario=scenario,
+            search=search
+        )
+        
+        response = {
+            "ok": True,
+            "total": data["total"],
+            "rows": data["rows"]
+        }
+        return jsonify(response)
+
+    except Exception as e:
+        print(f"API EVENTS ERROR: {e}")
+        # Return 503 Service Unavailable if DB fails
+        return jsonify({"ok": False, "error": "db_unavailable"}), 503
 
 # --------------------------------------------------------------------------------
 # Entry Point
