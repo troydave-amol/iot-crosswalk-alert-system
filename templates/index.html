@@ -236,6 +236,12 @@
                 </div>
 
                 <div class="table-container mt-4">
+                    <!-- DB Fallback Warning -->
+                    <div id="logsDbWarning" class="alert alert-warning"
+                        style="display:none; margin-bottom: 15px; padding: 10px; border-radius: 6px; background-color: #fff3cd; color: #856404; font-size: 0.9rem;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> DB unavailable — showing session logs
+                    </div>
+
                     <table id="logsTable">
                         <thead>
                             <tr>

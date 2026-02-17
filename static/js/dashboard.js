@@ -23,7 +23,10 @@ window.EventStore = {
         solar_voltage: 24.1,
         battery_percent: 85,
         led_driver: 'Ready'
-    }
+    },
+    // DB Mode Store
+    logsRows: [],     // Paginated DB results
+    dbTotal: 0        // Total matching DB rows
 }
     ;
 
@@ -56,6 +59,8 @@ const App = {
         roi: JSON.parse(localStorage.getItem('roi_settings')) || { x: 50, y: 50, w: 100, h: 100 },
 
         // Logs Page Filter State
+        logsPollingTimer: null,
+        logsDbError: false,
         logsFilter: {
             range: 'today',
             searchText: '',
@@ -117,6 +122,11 @@ const App = {
             this.setMockMode(!this.state.mockMode);
         });
 
+        // Initial Load for Logs if starting there
+        if (window.location.hash === '#logs' && this.state.dbMode) {
+            this.loadLogsFromDB();
+        }
+
         // DB Mode Init
         const dbToggle = document.getElementById('toggleDbMode');
         if (dbToggle) {
@@ -157,7 +167,6 @@ const App = {
 
         if (toggle) {
             toggle.checked = enabled;
-            // Prevent infinite loop if triggered programmatically
         }
 
         if (label) label.textContent = enabled ? 'Enabled' : 'Disabled';
@@ -171,10 +180,10 @@ const App = {
                 badge.className = 'status-chip mock'; // Grey/Neutral
                 badge.textContent = 'Checking...';
                 badge.style.display = 'inline-flex';
-                badge.style.backgroundColor = ''; // Reset inline styles
+                badge.style.backgroundColor = '';
                 badge.style.color = '';
             }
-            if (warning) warning.style.display = 'none'; // Hide warning initially
+            if (warning) warning.style.display = 'none';
 
             this.checkBackendHealth();
         } else {
@@ -187,6 +196,12 @@ const App = {
                 badge.style.color = '';
             }
             if (warning) warning.style.display = 'none';
+        }
+
+        // Refresh Logs if on Logs page
+        if (window.location.hash === '#logs') {
+            if (enabled) this.loadLogsFromDB();
+            else this.renderLogsTable();
         }
     },
 
@@ -527,6 +542,42 @@ const App = {
     // ---------------------------------------------------------
     // 6. Logs Logic: Sorting, Filtering, Pagination
     // ---------------------------------------------------------
+
+    async loadLogsFromDB() {
+        if (!this.state.dbMode) return;
+
+        const f = this.state.logsFilter;
+        // Build Query Params
+        const params = new URLSearchParams({
+            limit: f.pageSize,
+            offset: (f.currentPage - 1) * f.pageSize,
+            range: f.range
+        });
+
+        if (f.warningOnly) params.append('warning_only', '1');
+        if (f.inRoiOnly) params.append('in_roi_only', '1');
+        if (f.minConf > 0) params.append('min_conf', f.minConf);
+        if (f.scenario !== 'All') params.append('scenario', f.scenario);
+        if (f.searchText) params.append('search', f.searchText);
+
+        try {
+            const res = await fetch(`/api/events?${params.toString()}`);
+            if (res.ok) {
+                const data = await res.json();
+                window.EventStore.logsRows = data.events;
+                window.EventStore.dbTotal = data.total;
+                this.state.logsDbError = false;
+                this.renderLogsTable();
+            } else {
+                throw new Error("DB Fetch Failed");
+            }
+        } catch (e) {
+            console.warn("Logs fetch error:", e);
+            this.state.logsDbError = true;
+            this.renderLogsTable(); // Will fallback to session
+        }
+    },
+
     setupLogEvents() {
         const filters = this.state.logsFilter;
 
@@ -539,7 +590,8 @@ const App = {
                 debounceTimer = setTimeout(() => {
                     filters.searchText = e.target.value;
                     filters.currentPage = 1;
-                    this.renderLogsTable();
+                    if (this.state.dbMode) this.loadLogsFromDB();
+                    else this.renderLogsTable();
                 }, 250);
             });
         }
@@ -554,7 +606,8 @@ const App = {
                 // Update State
                 filters.range = e.target.getAttribute('data-range');
                 filters.currentPage = 1;
-                this.renderLogsTable();
+                if (this.state.dbMode) this.loadLogsFromDB();
+                else this.renderLogsTable();
             });
         });
 
@@ -593,7 +646,8 @@ const App = {
         document.getElementById('btnApplyLogsFilters')?.addEventListener('click', () => {
             // Re-read current DOM state just to be sure or just render based on bound state (bound state is better)
             filters.currentPage = 1;
-            this.renderLogsTable();
+            if (this.state.dbMode) this.loadLogsFromDB();
+            else this.renderLogsTable();
         });
 
         document.getElementById('btnResetLogsFilters')?.addEventListener('click', () => {
@@ -615,27 +669,35 @@ const App = {
             const labelMin = document.getElementById('filterMinConfLabel'); if (labelMin) labelMin.textContent = "0.00";
             const selScen = document.getElementById('filterScenario'); if (selScen) selScen.value = 'All';
 
-            this.renderLogsTable();
+            this.renderLogsTable(); // Reset always renders session logs initially properly, but if in DB mode?
+            // If DB Mode, we should probably fetch from DB with reset params?
+            // "If DB Mode ON -> loadLogsFromDB()"
+            if (this.state.dbMode) this.loadLogsFromDB();
+            else this.renderLogsTable();
         });
 
         // Pagination
         document.getElementById('pageSizeSelect')?.addEventListener('change', (e) => {
             filters.pageSize = parseInt(e.target.value);
+            filters.pageSize = parseInt(e.target.value);
             filters.currentPage = 1;
-            this.renderLogsTable();
+            if (this.state.dbMode) this.loadLogsFromDB();
+            else this.renderLogsTable();
         });
 
         document.getElementById('pagePrev')?.addEventListener('click', () => {
             if (filters.currentPage > 1) {
                 filters.currentPage--;
-                this.renderLogsTable();
+                if (this.state.dbMode) this.loadLogsFromDB();
+                else this.renderLogsTable();
             }
         });
 
         document.getElementById('pageNext')?.addEventListener('click', () => {
             if (filters.currentPage < filters.totalPages) {
                 filters.currentPage++;
-                this.renderLogsTable();
+                if (this.state.dbMode) this.loadLogsFromDB();
+                else this.renderLogsTable();
             }
         });
 
@@ -691,30 +753,52 @@ const App = {
 
     renderLogsTable(isAutoRefresh = false) {
         const tbody = document.getElementById('logsTableBody');
+        const warningEl = document.getElementById('logsDbWarning');
         if (!tbody) return;
 
-        // Don't refresh if user is interacting with filters? 
-        // Logic says "preserve current filters". We do that.
-        // "preserve current page". We do that.
+        // 1. Determine Source
+        let displayLogs = [];
+        let total = 0;
+        let isDbSource = this.state.dbMode && !this.state.logsDbError;
 
-        const allFiltered = this.getFilteredLogs();
-        const total = allFiltered.length;
+        if (isDbSource) {
+            // Use DB Data
+            displayLogs = window.EventStore.logsRows || [];
+            total = window.EventStore.dbTotal || 0;
+            if (warningEl) warningEl.style.display = 'none';
+        } else {
+            // Use Session Data
+            const allFiltered = this.getFilteredLogs();
+            total = allFiltered.length;
+
+            // Should pagination be applied for session data? YES.
+            // ...but current implementation did slicing inside renderLogsTable.
+            // So we need to emulate that.
+            // Recalc pages for session data
+            const f = this.state.logsFilter;
+            f.totalPages = Math.ceil(total / f.pageSize) || 1;
+            if (f.currentPage > f.totalPages) f.currentPage = f.totalPages;
+            if (f.currentPage < 1) f.currentPage = 1;
+
+            const start = (f.currentPage - 1) * f.pageSize;
+            const end = start + f.pageSize;
+            displayLogs = allFiltered.slice(start, end);
+
+            // Show warning only if DB mode was intended but failed
+            if (warningEl) warningEl.style.display = this.state.dbMode && this.state.logsDbError ? 'block' : 'none';
+        }
+
         const f = this.state.logsFilter;
-
-        // Calc Pagination
-        f.totalPages = Math.ceil(total / f.pageSize) || 1;
-
-        // Fix page if out of bounds
-        if (f.currentPage > f.totalPages) f.currentPage = f.totalPages;
-        if (f.currentPage < 1) f.currentPage = 1;
-
-        // Slice
-        const start = (f.currentPage - 1) * f.pageSize;
-        const end = start + f.pageSize;
-        const pageItems = allFiltered.slice(start, end);
+        // If DB Source, pages are calc based on Total
+        if (isDbSource) {
+            f.totalPages = Math.ceil(total / f.pageSize) || 1;
+            // Ensure currentPage is valid logic? 
+            // BE handles offset, we just trust it calls back with rows.
+            // But we need to update total pages for UI.
+        }
 
         // Render Rows
-        tbody.innerHTML = pageItems.map(log => `
+        tbody.innerHTML = displayLogs.map(log => `
             <tr>
                 <td>${log.timestamp}</td>
                 <td><span class="badge ${log.child_in_roi ? 'badge-warning' : 'badge-neutral'}">${log.child_in_roi ? 'YES' : 'NO'}</span></td>
@@ -727,8 +811,15 @@ const App = {
             </tr>
         `).join('');
 
+        // Calculate range text
+        const startIdx = (f.currentPage - 1) * f.pageSize;
+        const currentCount = displayLogs.length;
+        const rangeText = total > 0
+            ? `Showing ${startIdx + 1}-${startIdx + currentCount} of ${total} ${isDbSource ? 'persistent' : 'filtered'} events`
+            : `Showing 0 of 0 events`;
+
         // Update Controls
-        document.getElementById('resultCount').textContent = `Showing ${Math.min(end, total) - start > 0 ? start + 1 : 0}-${Math.min(end, total)} of ${total} filtered events`;
+        document.getElementById('resultCount').textContent = rangeText;
         document.getElementById('pageIndicator').textContent = `Page ${f.currentPage} of ${f.totalPages}`;
         document.getElementById('pagePrev').disabled = (f.currentPage <= 1);
         document.getElementById('pageNext').disabled = (f.currentPage >= f.totalPages);
@@ -852,6 +943,22 @@ const App = {
             document.querySelectorAll('.page-section').forEach(el => {
                 el.classList.toggle('active', el.id === `${hash}-section`);
             });
+
+            // Logs Polling Logic
+            if (hash === 'logs') {
+                if (this.state.dbMode) {
+                    this.loadLogsFromDB();
+                    // Start Polling (10s)
+                    if (this.state.logsPollingTimer) clearInterval(this.state.logsPollingTimer);
+                    this.state.logsPollingTimer = setInterval(() => this.loadLogsFromDB(), 10000);
+                }
+            } else {
+                // Leaving Logs
+                if (this.state.logsPollingTimer) {
+                    clearInterval(this.state.logsPollingTimer);
+                    this.state.logsPollingTimer = null;
+                }
+            }
 
             if (hash === 'analytics') {
                 if (this.state.charts.warnings) this.state.charts.warnings.resize();
