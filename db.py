@@ -287,6 +287,14 @@ def fetch_events(
                 # datetime -> ISO string
                 if isinstance(new_row["timestamp_iso"], datetime):
                     new_row["timestamp_iso"] = new_row["timestamp_iso"].strftime("%Y-%m-%dT%H:%M:%SZ")
+                elif isinstance(new_row["timestamp_iso"], str):
+                    # Ensure string format is also strict ISO with Z
+                    # Typical MySQL string: "2023-10-27 10:00:00"
+                    if " " in new_row["timestamp_iso"] and "T" not in new_row["timestamp_iso"]:
+                        new_row["timestamp_iso"] = new_row["timestamp_iso"].replace(" ", "T")
+                    
+                    if not new_row["timestamp_iso"].endswith("Z"):
+                         new_row["timestamp_iso"] += "Z"
                 
                 # Decimal -> float (if using Decimal cursor, but here using standard float in table)
                 # Just in case pymysql returns Decimal for FLOAT columns sometimes
