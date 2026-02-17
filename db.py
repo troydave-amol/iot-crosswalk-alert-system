@@ -179,3 +179,131 @@ def insert_event(payload):
     finally:
         if conn:
             conn.close()
+
+def fetch_events(
+    limit=50, 
+    offset=0, 
+    time_range="all", 
+    warning_only=False, 
+    in_roi_only=False, 
+    min_conf=0.0, 
+    scenario=None, 
+    search=None
+):
+    """
+    Fetches events from the database with filtering and pagination.
+    Returns strings/floats/ints (JSON safe).
+    Raises exception on DB error.
+    """
+    conn = None
+    try:
+        # Connect to DB
+        conn = pymysql.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            user=os.getenv("DB_USER", "root"),
+            password=os.getenv("DB_PASS", ""),
+            database=os.getenv("DB_NAME", "crosswalk_db"),
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor
+        )
+
+        # Build WHERE clause
+        conditions = []
+        params = []
+
+        # 1. Time Range
+        if time_range == "15m":
+            conditions.append("timestamp_iso >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)")
+        elif time_range == "1h":
+            conditions.append("timestamp_iso >= DATE_SUB(NOW(), INTERVAL 1 HOUR)")
+        elif time_range == "today":
+            conditions.append("timestamp_iso >= UTC_DATE()") # User required UTC_DATE()
+        # "all" adds no condition
+
+        # 2. Boolean Flags
+        if warning_only:
+            conditions.append("warning_device_on = 1")
+        
+        if in_roi_only:
+            conditions.append("child_in_roi = 1")
+
+        # 3. Minimum Confidence
+        if min_conf > 0:
+            conditions.append("confidence >= %s")
+            params.append(min_conf)
+
+        # 4. Scenario (Exact Match)
+        if scenario:
+            conditions.append("scenario = %s")
+            params.append(scenario)
+
+        # 5. Search (Flexible)
+        if search:
+            # Search across source, scenario, roi_status
+            search_clause = "(source LIKE %s OR scenario LIKE %s OR roi_status LIKE %s)"
+            conditions.append(search_clause)
+            search_pattern = f"%{search}%"
+            params.extend([search_pattern, search_pattern, search_pattern])
+
+        where_sql = ""
+        if conditions:
+            where_sql = "WHERE " + " AND ".join(conditions)
+
+        with conn.cursor() as cursor:
+            # A. Get Total Count (for pagination)
+            count_sql = f"SELECT COUNT(*) as total FROM events {where_sql}"
+            cursor.execute(count_sql, params)
+            total_rows = cursor.fetchone()["total"]
+
+            # B. Fetch Data
+            # Explicit columns only
+            fields = [
+                "id", "timestamp_iso", "source", "child_in_roi", "roi_status", 
+                "confidence", "latency_ms", "warning_logic_on", "switch_enabled", 
+                "warning_device_on", "battery_percent", "solar_status", 
+                "scenario", "camera_status", "edge_status", "led_driver_status"
+            ]
+            fields_str = ", ".join(fields)
+            
+            # Order by newest first
+            query_sql = f"""
+                SELECT {fields_str} 
+                FROM events 
+                {where_sql} 
+                ORDER BY id DESC 
+                LIMIT %s OFFSET %s
+            """
+            # Add limit/offset to params
+            query_params = params + [limit, offset]
+            
+            cursor.execute(query_sql, query_params)
+            rows = cursor.fetchall()
+            
+            # Serialize for JSON
+            serialized_rows = []
+            for row in rows:
+                new_row = row.copy()
+                
+                # datetime -> ISO string
+                if isinstance(new_row["timestamp_iso"], datetime):
+                    new_row["timestamp_iso"] = new_row["timestamp_iso"].strftime("%Y-%m-%dT%H:%M:%SZ")
+                
+                # Decimal -> float (if using Decimal cursor, but here using standard float in table)
+                # Just in case pymysql returns Decimal for FLOAT columns sometimes
+                for k, v in new_row.items():
+                    if hasattr(v, 'quantize'): # Check for Decimal-like
+                         new_row[k] = float(v)
+
+                serialized_rows.append(new_row)
+
+            return {
+                "total": total_rows,
+                "rows": serialized_rows
+            }
+
+    except Exception as e:
+        print(f"DB FETCH ERROR: {e}")
+        raise e # Re-raise to let caller handle 503
+    finally:
+        if conn:
+            conn.close()
