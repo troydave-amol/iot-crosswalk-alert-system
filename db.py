@@ -341,6 +341,11 @@ def fetch_analytics_aggregates(time_range="all"):
             cursorclass=pymysql.cursors.DictCursor
         )
 
+        # Fix: enforce UTC session timezone so UNIX_TIMESTAMP() / HOUR() / DATE() binning
+        # is always UTC-relative, regardless of the MySQL server's global timezone setting.
+        with conn.cursor() as _tz_cursor:
+            _tz_cursor.execute("SET time_zone = '+00:00'")
+
         # ── Range → SQL condition ────────────────────────────────────────────────
         conditions = []
         params = []
@@ -376,8 +381,13 @@ def fetch_analytics_aggregates(time_range="all"):
             bin_seconds = 86400    # 1-day bins
             bin_unit = "1d"
 
+        # Freeze range_end once so every query in this request sees the same closed window.
+        # Without this, each of the 5 queries could read different totals as new rows are inserted.
         range_end_utc = now_utc
-        where_sql = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        range_end_str = range_end_utc.strftime("%Y-%m-%d %H:%M:%S")
+        conditions.append("timestamp_iso < %s")
+        params.append(range_end_str)
+        where_sql = "WHERE " + " AND ".join(conditions)
 
         with conn.cursor() as cursor:
 
