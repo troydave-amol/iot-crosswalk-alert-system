@@ -7,7 +7,7 @@ from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO
 
 # DB Imports
-from db import init_db, insert_event, fetch_events
+from db import init_db, insert_event, fetch_events, fetch_analytics_aggregates
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "dev-secret"
@@ -202,9 +202,7 @@ def handle_connect():
     """
     print("Client connected")
     payload = build_status_payload()
-    socketio.emit("status_update", payload)
-
-    socketio.emit("status_update", payload)
+    socketio.emit("status_update", payload)  # Single emit on connect (fixed duplicate)
 
 # --------------------------------------------------------------------------------
 # API Routes
@@ -264,6 +262,49 @@ def api_events_route():
     except Exception as e:
         print(f"API EVENTS ERROR: {e}")
         # Return 503 Service Unavailable if DB fails
+        return jsonify({"ok": False, "error": "db_unavailable"}), 503
+
+@app.route("/api/analytics")
+def api_analytics_route():
+    """
+    Returns server-side computed analytics aggregates for a given time range.
+    Always computes from ALL matching rows in the DB — never limited by page size.
+    Timezone: Asia/Manila (UTC+8) for 'today'; UTC rolling windows for '15m' and '1h'.
+    """
+    try:
+        from datetime import timezone as tz_mod, timedelta
+        range_arg = request.args.get("range", "all")
+        if range_arg not in ("15m", "1h", "today", "all"):
+            return jsonify({"ok": False, "error": "invalid_range"}), 400
+
+        agg = fetch_analytics_aggregates(time_range=range_arg)
+
+        # Bin unit label map
+        bin_unit_map = {"15m": "1m", "1h": "5m", "today": "1h", "all": "1d"}
+
+        response = {
+            "ok": True,
+            "range": range_arg,
+            "timezone": "Asia/Manila",
+            "bin_unit": bin_unit_map.get(range_arg, "1h"),
+            "range_start": agg.get("range_start"),
+            "range_end": agg.get("range_end"),
+            "total_events": agg["total_events"],
+            "total_warnings": agg["total_warnings"],
+            "total_detections": agg["total_detections"],
+            "false_warnings": agg["false_warnings"],
+            "avg_latency": agg["avg_latency"],
+            "peak_hour": agg["peak_hour"],
+            "peak_hour_basis": "warnings",
+            "top_scenario": agg.get("top_scenario"),
+            "confidence_bins": agg.get("confidence_bins", [0, 0, 0, 0, 0]),
+            "scenario_distribution": agg.get("scenario_distribution", []),
+            "time_series": agg["time_series"]
+        }
+        return jsonify(response)
+
+    except Exception as e:
+        print(f"API ANALYTICS ERROR: {e}")
         return jsonify({"ok": False, "error": "db_unavailable"}), 503
 
 # --------------------------------------------------------------------------------

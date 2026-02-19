@@ -1,7 +1,7 @@
 import os
 import pymysql
 import pymysql.cursors
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -217,7 +217,13 @@ def fetch_events(
         elif time_range == "1h":
             conditions.append("timestamp_iso >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR)")
         elif time_range == "today":
-            conditions.append("timestamp_iso >= UTC_DATE()") # User required UTC_DATE()
+            # "Today" = midnight Asia/Manila (UTC+8), converted to UTC for comparison
+            manila_tz = timezone(timedelta(hours=8))
+            manila_now = datetime.now(manila_tz)
+            manila_today_start = manila_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            today_utc = manila_today_start.astimezone(timezone.utc)
+            conditions.append("timestamp_iso >= %s")
+            params.append(today_utc.strftime("%Y-%m-%d %H:%M:%S"))
         # "all" adds no condition
 
         # 2. Boolean Flags
@@ -312,6 +318,256 @@ def fetch_events(
     except Exception as e:
         print(f"DB FETCH ERROR: {e}")
         raise e # Re-raise to let caller handle 503
+    finally:
+        if conn:
+            conn.close()
+
+
+def fetch_analytics_aggregates(time_range="all"):
+    """
+    Returns server-side computed analytics aggregates for a given time range.
+    ALL matching rows are processed in SQL — never bounded by a page limit.
+    Timezone: 'today' uses Asia/Manila (UTC+8) midnight; rolling ranges use UTC.
+    Raises exception on DB error so caller can return 503.
+    """
+    conn = None
+    try:
+        conn = pymysql.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            user=os.getenv("DB_USER", "root"),
+            password=os.getenv("DB_PASS", ""),
+            database=os.getenv("DB_NAME", "crosswalk_db"),
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor
+        )
+
+        # ── Range → SQL condition ────────────────────────────────────────────────
+        conditions = []
+        params = []
+        now_utc = datetime.now(timezone.utc)
+        manila_tz = timezone(timedelta(hours=8))
+
+        if time_range == "15m":
+            range_start_utc = now_utc - timedelta(minutes=15)
+            conditions.append("timestamp_iso >= %s")
+            params.append(range_start_utc.strftime("%Y-%m-%d %H:%M:%S"))
+            bin_seconds = 60       # 1-minute bins
+            bin_unit = "1m"
+
+        elif time_range == "1h":
+            range_start_utc = now_utc - timedelta(hours=1)
+            conditions.append("timestamp_iso >= %s")
+            params.append(range_start_utc.strftime("%Y-%m-%d %H:%M:%S"))
+            bin_seconds = 300      # 5-minute bins
+            bin_unit = "5m"
+
+        elif time_range == "today":
+            # Midnight Asia/Manila → convert to UTC for comparison against UTC-stored values
+            manila_now = datetime.now(manila_tz)
+            manila_today_start = manila_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            range_start_utc = manila_today_start.astimezone(timezone.utc)
+            conditions.append("timestamp_iso >= %s")
+            params.append(range_start_utc.strftime("%Y-%m-%d %H:%M:%S"))
+            bin_seconds = 3600     # 1-hour bins
+            bin_unit = "1h"
+
+        else:  # "all"
+            range_start_utc = None
+            bin_seconds = 86400    # 1-day bins
+            bin_unit = "1d"
+
+        range_end_utc = now_utc
+        where_sql = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        with conn.cursor() as cursor:
+
+            # ── 1. KPI AGGREGATES (single fast query) ────────────────────────────
+            kpi_sql = f"""
+                SELECT
+                    COUNT(*)                                        AS total_events,
+                    SUM(warning_device_on = 1)                      AS total_warnings,
+                    SUM(child_in_roi = 1)                           AS total_detections,
+                    SUM(warning_device_on = 1 AND child_in_roi = 0) AS false_warnings,
+                    ROUND(AVG(latency_ms), 1)                       AS avg_latency
+                FROM events
+                {where_sql}
+            """
+            cursor.execute(kpi_sql, params)
+            kpi = cursor.fetchone()
+
+            # ── 2. TIME-SERIES BINS ───────────────────────────────────────────────
+            if time_range in ("15m", "1h"):
+                # UNIX_TIMESTAMP floor-based bins (works on DATETIME columns)
+                ts_sql = f"""
+                    SELECT
+                        FLOOR(UNIX_TIMESTAMP(timestamp_iso) / {bin_seconds}) * {bin_seconds} AS bin_ts,
+                        SUM(warning_device_on = 1) AS warnings,
+                        SUM(child_in_roi = 1)      AS detections
+                    FROM events
+                    {where_sql}
+                    GROUP BY bin_ts
+                    ORDER BY bin_ts
+                """
+                cursor.execute(ts_sql, params)
+                ts_rows = cursor.fetchall()
+
+                time_series = []
+                for row in ts_rows:
+                    bin_ts_val = int(row["bin_ts"])
+                    bin_dt_utc = datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=bin_ts_val)
+                    bin_dt_manila = bin_dt_utc.astimezone(manila_tz)
+                    label = bin_dt_manila.strftime("%H:%M")
+                    time_series.append({
+                        "label": label,
+                        "ts_ms": bin_ts_val * 1000,
+                        "warnings": int(row["warnings"] or 0),
+                        "detections": int(row["detections"] or 0)
+                    })
+
+            elif time_range == "today":
+                # Hourly bins: group by UTC hour, display as Manila hour
+                ts_sql = f"""
+                    SELECT
+                        HOUR(timestamp_iso) AS hour_utc,
+                        SUM(warning_device_on = 1) AS warnings,
+                        SUM(child_in_roi = 1)      AS detections
+                    FROM events
+                    {where_sql}
+                    GROUP BY hour_utc
+                    ORDER BY hour_utc
+                """
+                cursor.execute(ts_sql, params)
+                ts_rows = cursor.fetchall()
+
+                time_series = []
+                today_date_utc = range_start_utc.date()
+                for row in ts_rows:
+                    hour_utc = int(row["hour_utc"])
+                    hour_manila = (hour_utc + 8) % 24
+                    label = f"{hour_manila:02d}:00"
+                    # Approximate ts_ms for chart ordering
+                    bin_dt = datetime(today_date_utc.year, today_date_utc.month,
+                                      today_date_utc.day, hour_utc, 0, 0, tzinfo=timezone.utc)
+                    time_series.append({
+                        "label": label,
+                        "ts_ms": int(bin_dt.timestamp()) * 1000,
+                        "warnings": int(row["warnings"] or 0),
+                        "detections": int(row["detections"] or 0)
+                    })
+
+            else:  # "all" — daily bins
+                ts_sql = f"""
+                    SELECT
+                        DATE(timestamp_iso) AS bin_date,
+                        SUM(warning_device_on = 1) AS warnings,
+                        SUM(child_in_roi = 1)      AS detections
+                    FROM events
+                    {where_sql}
+                    GROUP BY bin_date
+                    ORDER BY bin_date
+                """
+                cursor.execute(ts_sql, params)
+                ts_rows = cursor.fetchall()
+
+                time_series = []
+                for row in ts_rows:
+                    bin_date = row["bin_date"]
+                    if isinstance(bin_date, datetime):
+                        label = bin_date.strftime("%b %d")
+                        ts_ms = int(bin_date.replace(tzinfo=timezone.utc).timestamp()) * 1000
+                    else:
+                        from datetime import date as date_cls
+                        label = str(bin_date)
+                        try:
+                            d = datetime.strptime(str(bin_date), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                            ts_ms = int(d.timestamp()) * 1000
+                        except Exception:
+                            ts_ms = 0
+                    time_series.append({
+                        "label": label,
+                        "ts_ms": ts_ms,
+                        "warnings": int(row["warnings"] or 0),
+                        "detections": int(row["detections"] or 0)
+                    })
+
+            # ── 3. PEAK HOUR (based on warnings, expressed in Manila time) ────────
+            peak_hour = "--"
+            peak_sql = f"""
+                SELECT
+                    HOUR(timestamp_iso)        AS hour_utc,
+                    SUM(warning_device_on = 1) AS warn_count
+                FROM events
+                {where_sql}
+                GROUP BY hour_utc
+                ORDER BY warn_count DESC
+                LIMIT 1
+            """
+            cursor.execute(peak_sql, params)
+            peak_row = cursor.fetchone()
+            if peak_row and peak_row["warn_count"] and int(peak_row["warn_count"]) > 0:
+                hour_utc = int(peak_row["hour_utc"])
+                hour_manila = (hour_utc + 8) % 24
+                ampm = "AM" if hour_manila < 12 else "PM"
+                h12 = hour_manila % 12 or 12
+                peak_hour = f"{h12} {ampm}"
+
+            # ── 4. CONFIDENCE HISTOGRAM (only for detections) ────────────────────
+            conf_sql = f"""
+                SELECT
+                    SUM(confidence < 0.2  AND child_in_roi = 1) AS b0,
+                    SUM(confidence >= 0.2 AND confidence < 0.4 AND child_in_roi = 1) AS b1,
+                    SUM(confidence >= 0.4 AND confidence < 0.6 AND child_in_roi = 1) AS b2,
+                    SUM(confidence >= 0.6 AND confidence < 0.8 AND child_in_roi = 1) AS b3,
+                    SUM(confidence >= 0.8 AND child_in_roi = 1) AS b4
+                FROM events
+                {where_sql}
+            """
+            cursor.execute(conf_sql, params)
+            conf_row = cursor.fetchone()
+            confidence_bins = [
+                int(conf_row.get("b0") or 0),
+                int(conf_row.get("b1") or 0),
+                int(conf_row.get("b2") or 0),
+                int(conf_row.get("b3") or 0),
+                int(conf_row.get("b4") or 0)
+            ] if conf_row else [0, 0, 0, 0, 0]
+
+            # ── 5. SCENARIO DISTRIBUTION ─────────────────────────────────────────
+            scen_sql = f"""
+                SELECT scenario, COUNT(*) AS cnt
+                FROM events
+                {where_sql}
+                GROUP BY scenario
+                ORDER BY cnt DESC
+                LIMIT 10
+            """
+            cursor.execute(scen_sql, params)
+            scen_rows = cursor.fetchall()
+            scenario_distribution = [
+                {"scenario": r["scenario"] or "Unknown", "count": int(r["cnt"])}
+                for r in scen_rows
+            ]
+            top_scenario = scenario_distribution[0]["scenario"] if scenario_distribution else None
+
+            return {
+                "total_events":           int(kpi["total_events"] or 0),
+                "total_warnings":         int(kpi["total_warnings"] or 0),
+                "total_detections":       int(kpi["total_detections"] or 0),
+                "false_warnings":         int(kpi["false_warnings"] or 0),
+                "avg_latency":            float(kpi["avg_latency"] or 0),
+                "peak_hour":              peak_hour,
+                "time_series":            time_series,
+                "confidence_bins":        confidence_bins,
+                "scenario_distribution":  scenario_distribution,
+                "top_scenario":           top_scenario,
+                "range_start": range_start_utc.strftime("%Y-%m-%dT%H:%M:%SZ") if range_start_utc else None,
+                "range_end":   range_end_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "bin_unit":    bin_unit
+            }
+
+    except Exception as e:
+        print(f"DB ANALYTICS ERROR: {e}")
+        raise e
     finally:
         if conn:
             conn.close()

@@ -25,12 +25,15 @@ window.EventStore = {
         led_driver: 'Ready'
     },
     // DB Mode Store
-    logsRows: [],      // Paginated DB results
-    dbTotal: 0,        // Total matching DB rows
-    analyticsRows: [], // Range-based DB results for Analytics
-    analyticsTotal: 0, // Optional total count
-    reportRows: [],    // Range-based DB results for Reports (dedicated store)
-    reportTotal: 0     // Optional total count for Reports
+    logsRows: [],           // Paginated DB results for Logs page
+    dbTotal: 0,             // Total matching DB rows (Logs)
+    analyticsAggregate: null, // /api/analytics response for Analytics page
+    reportAggregate: null,    // /api/analytics response for Reports page
+    // Legacy (kept for backward compat, not used by Analytics/Reports anymore)
+    analyticsRows: [],
+    analyticsTotal: 0,
+    reportRows: [],
+    reportTotal: 0
 }
     ;
 
@@ -320,7 +323,8 @@ const App = {
         // Server might send warning_on, or we derive it? 
         // For now take server value, but ensure it respects switch locally just in case?
         // Actually, if server controls it, we trust server.
-        status.warning_on = data.warning_on;
+        // BUG-5 fix: backend emits 'warning_device_on', not 'warning_on'
+        status.warning_on = data.warning_device_on ?? data.warning_on;
         status.confidence = data.confidence;
         status.roi_status = data.child_in_roi ? 'INSIDE' : 'OUTSIDE';
         status.latency_ms = data.latency || 0;
@@ -504,38 +508,20 @@ const App = {
     },
 
     async loadAnalyticsFromDB(range) {
-
-        // Adviser: explicit mapping (ensure backend receives these exact strings)
-        // Frontend uses: 15m, 1h, today, all
-        // Backend handles these.
-
-        const params = new URLSearchParams({
-            range: range,
-            limit: 500, // Fixed limit
-            offset: 0
-        });
-
+        // Calls /api/analytics which computes ALL KPIs server-side — never limited by page size.
         try {
-            const res = await fetch(`/api/events?${params.toString()}`);
+            const res = await fetch(`/api/analytics?range=${encodeURIComponent(range)}`);
             if (res.ok) {
                 const data = await res.json();
-
-                // Mismatch Guard
-                if (data.total > 0 && (!data.rows || data.rows.length === 0)) {
-                    console.error("DATA MISMATCH (Analytics): Total > 0 but rows empty.", data);
-                    window.EventStore.analyticsRows = [];
-                    window.EventStore.analyticsTotal = 0;
-                } else {
-                    window.EventStore.analyticsRows = data.rows;
-                    window.EventStore.analyticsTotal = data.total;
-                }
-
-                // Hide Warning if it was showing
+                window.EventStore.analyticsAggregate = data;
+                console.debug(
+                    `[Analytics] range=${data.range} | events=${data.total_events}` +
+                    ` | warnings=${data.total_warnings} | window=${data.range_start} → ${data.range_end}`
+                );
                 this.toggleAnalyticsWarning(false);
                 return true;
-            } else {
-                throw new Error("Analytics DB Fetch Failed");
             }
+            throw new Error(`HTTP ${res.status}`);
         } catch (e) {
             console.warn("Analytics fetch error:", e);
             this.toggleAnalyticsWarning(true);
@@ -552,33 +538,20 @@ const App = {
     // DB Fetch for Reports (dedicated store — never overwrites analyticsRows)
     // ---------------------------------------------------------
     async loadReportFromDB(range) {
-
-        const params = new URLSearchParams({
-            range: range,
-            limit: 500,
-            offset: 0
-        });
-
+        // Calls /api/analytics — same endpoint as Analytics, dedicated store so they never overwrite each other.
         try {
-            const res = await fetch(`/api/events?${params.toString()}`);
+            const res = await fetch(`/api/analytics?range=${encodeURIComponent(range)}`);
             if (res.ok) {
                 const data = await res.json();
-
-                if (data.total > 0 && (!data.rows || data.rows.length === 0)) {
-                    console.error('[DB-REPORT] DATA MISMATCH: total > 0 but rows empty.', data);
-                    window.EventStore.reportRows = [];
-                    window.EventStore.reportTotal = 0;
-                } else {
-                    window.EventStore.reportRows = data.rows || [];
-                    window.EventStore.reportTotal = data.total || 0;
-                }
-
-                console.debug(`[DB-REPORT] Fetched ${window.EventStore.reportRows.length} rows (Total: ${window.EventStore.reportTotal}) for range=${range}`);
+                window.EventStore.reportAggregate = data;
+                console.debug(
+                    `[Report] range=${data.range} | events=${data.total_events}` +
+                    ` | warnings=${data.total_warnings} | window=${data.range_start} → ${data.range_end}`
+                );
                 this.toggleReportWarning(false);
                 return true;
-            } else {
-                throw new Error(`HTTP ${res.status}`);
             }
+            throw new Error(`HTTP ${res.status}`);
         } catch (e) {
             console.warn('[DB-REPORT] Fetch error:', e);
             this.toggleReportWarning(true);
@@ -1151,14 +1124,12 @@ const App = {
     },
 
     updateAnalyticsUI() {
-        const rawEvents = this.getAnalyticsEvents();
-        // Normalize for consistent keys
-        const events = rawEvents.map(e => this.normalizeEvent(e));
+        const agg = window.EventStore.analyticsAggregate;
 
         // Empty State Check
         const chartGrid = document.querySelector('#analytics-section .charts-grid');
         if (chartGrid) {
-            if (events.length === 0) {
+            if (!agg || agg.total_events === 0) {
                 chartGrid.style.display = 'none';
                 let emptyMsg = document.getElementById('ana-empty-msg');
                 if (!emptyMsg) {
@@ -1172,6 +1143,7 @@ const App = {
                 } else {
                     emptyMsg.style.display = 'block';
                 }
+                return;
             } else {
                 chartGrid.style.display = 'grid';
                 const emptyMsg = document.getElementById('ana-empty-msg');
@@ -1179,141 +1151,51 @@ const App = {
             }
         }
 
-        this.computeKPIs(events);
-        this.updateCharts(events);
+        if (!agg) return;
+        this.renderKPIs(agg);
+        this.updateCharts(agg);
     },
 
+    // getAnalyticsEvents() retained for any legacy callers but no longer used by Analytics/Reports.
+    // Backend aggregate is the single source of truth — no client-side range re-filtering.
     getAnalyticsEvents() {
-        const range = this.state.analytics.range;
-        const now = Date.now();
-        let startTime = 0;
-
-        if (range === '15m') startTime = now - (15 * 60 * 1000);
-        else if (range === '1h') startTime = now - (60 * 60 * 1000);
-        else if (range === 'today') {
-            const t = new Date(); t.setHours(0, 0, 0, 0);
-            startTime = t.getTime();
-        }
-        // 'all' = 0
-
-        // Always use DB rows (analyticsRows sorted oldest-first for charts)
-        return (window.EventStore.analyticsRows || [])
-            .sort((a, b) => {
-                const tA = this.state.parseTimestamp(a.timestamp_iso)?.getTime() || 0;
-                const tB = this.state.parseTimestamp(b.timestamp_iso)?.getTime() || 0;
-                return tA - tB;
-            });
+        return (window.EventStore.analyticsRows || []).slice();
     },
 
+    renderKPIs(agg) {
+        document.getElementById('ana-kpi-warnings').textContent = agg.total_warnings;
+        document.getElementById('ana-kpi-detections').textContent = agg.total_detections;
+        document.getElementById('ana-kpi-false').textContent = agg.false_warnings;
+        document.getElementById('ana-kpi-latency').textContent = (agg.avg_latency || 0) + 'ms';
+        document.getElementById('ana-kpi-peak').textContent = agg.peak_hour || '--';
+        console.debug(
+            `[Analytics KPIs] warnings=${agg.total_warnings}, detections=${agg.total_detections},` +
+            ` false=${agg.false_warnings}, avg_lat=${agg.avg_latency}ms, peak=${agg.peak_hour}`
+        );
+    },
+
+    // computeKPIs retained for backward compat but superseded by renderKPIs(agg).
     computeKPIs(events) {
-        let totalWarnings = 0;
-        let totalDetections = 0;
-        let falseWarnings = 0;
-        let totalLatency = 0;
-        let latencyCount = 0;
-        const hoursMap = {};
-
-        events.forEach(e => {
-            // Use canonical keys with isOn()
-            const isWarn = this.isOn(e.warning_device_on);
-            const isDet = this.isOn(e.child_in_roi);
-
-            if (isWarn) totalWarnings++;
-            if (isDet) totalDetections++;
-            if (e.false_warning) falseWarnings++; // Keep existing or use (isWarn && !isDet)? existing log logic populates this.
-
-            const lat = parseFloat(e.latency_ms);
-            if (lat > 0) {
-                totalLatency += lat;
-                latencyCount++;
-            }
-
-            // Peak Hour — always use parseTimestamp for DB rows
-            let d = this.state.parseTimestamp(e.timestamp_iso) || new Date(e.rawTimestamp || e.id || 0);
-            const h = d.getHours();
-            hoursMap[h] = (hoursMap[h] || 0) + 1;
-        });
-
-        // Debug Log
-        console.debug(`[Analytics] Rows: ${events.length}, Warnings: ${totalWarnings}`);
-
-        // Peak Calc
-        let peakHour = '--';
-        let maxCount = 0;
-        for (const [h, count] of Object.entries(hoursMap)) {
-            if (count > maxCount) {
-                maxCount = count;
-                const date = new Date(); date.setHours(h);
-                peakHour = date.toLocaleTimeString([], { hour: 'numeric', hour12: true });
-            }
-        }
-
-        const avgLatency = latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0;
-
-        // DOM Updates
-        document.getElementById('ana-kpi-warnings').textContent = totalWarnings;
-        document.getElementById('ana-kpi-detections').textContent = totalDetections;
-        document.getElementById('ana-kpi-false').textContent = falseWarnings;
-        document.getElementById('ana-kpi-latency').textContent = avgLatency + 'ms';
-        document.getElementById('ana-kpi-peak').textContent = peakHour;
+        console.warn('[Analytics] computeKPIs() called with row data — use renderKPIs(agg) instead.');
     },
 
-    updateCharts(events) {
-        // Helper: Binning
-        const range = this.state.analytics.range;
-        const binSize = (range === '15m' || range === '1h') ? 5 * 60 * 1000 : 60 * 60 * 1000; // 5m or 1h
-        const timeFormat = (range === '15m' || range === '1h') ?
-            d => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) :
-            d => d.toLocaleTimeString([], { hour: 'numeric', hour12: true });
+    // updateCharts now receives the full aggregate object from /api/analytics.
+    // All binning is done server-side — client only renders the pre-computed arrays.
+    updateCharts(agg) {
+        const timeSeries = agg.time_series || [];
+        const labels = timeSeries.map(b => b.label);
+        const dataWarnings = timeSeries.map(b => b.warnings);
+        const dataDetections = timeSeries.map(b => b.detections);
 
-        // 1. Comparison & Distribution Maps
-        const bins = {};
-        const confBins = [0, 0, 0, 0, 0]; // 0-0.2, 0.2-0.4 ...
-        const scenarioMap = {};
-
-        events.forEach(e => {
-            // Time Bins — always use parseTimestamp for DB rows
-            let ts;
-            const parsed = this.state.parseTimestamp(e.timestamp_iso);
-            ts = parsed ? parsed.getTime() : (e.rawTimestamp || e.id || 0);
-            const binKey = Math.floor(ts / binSize) * binSize;
-            if (!bins[binKey]) bins[binKey] = { warnings: 0, detections: 0 };
-
-            // Use isOn logic
-            if (this.isOn(e.warning_device_on)) bins[binKey].warnings++;
-            if (this.isOn(e.child_in_roi)) bins[binKey].detections++;
-
-            // Confidence (only if detection)
-            if (this.isOn(e.child_in_roi)) {
-                const c = parseFloat(e.confidence) || 0;
-                if (c < 0.2) confBins[0]++;
-                else if (c < 0.4) confBins[1]++;
-                else if (c < 0.6) confBins[2]++;
-                else if (c < 0.8) confBins[3]++;
-                else confBins[4]++;
-            }
-
-            // Scenario
-            const s = e.scenario || 'Unknown';
-            scenarioMap[s] = (scenarioMap[s] || 0) + 1;
-        });
-
-        // Convert Bins to Arrays
-        const sortedKeys = Object.keys(bins).sort();
-        const labels = sortedKeys.map(k => timeFormat(new Date(parseInt(k))));
-        const dataWarnings = sortedKeys.map(k => bins[k].warnings);
-        const dataDetections = sortedKeys.map(k => bins[k].detections);
-
-        // Update Charts
-        // A) Warnings
+        // A) Warnings over time
         if (this.state.charts.warnings) {
             const chart = this.state.charts.warnings;
             chart.data.labels = labels;
             chart.data.datasets[0].data = dataWarnings;
-            chart.update('none'); // 'none' mode for performance
+            chart.update('none');
         }
 
-        // B) Detections
+        // B) Detections over time
         if (this.state.charts.detections) {
             const chart = this.state.charts.detections;
             chart.data.labels = labels;
@@ -1321,18 +1203,19 @@ const App = {
             chart.update('none');
         }
 
-        // C) Confidence
+        // C) Confidence histogram (server-computed per-bucket counts)
         if (this.state.charts.confidence) {
             const chart = this.state.charts.confidence;
-            chart.data.datasets[0].data = confBins;
+            chart.data.datasets[0].data = agg.confidence_bins || [0, 0, 0, 0, 0];
             chart.update('none');
         }
 
-        // D) Scenario
+        // D) Scenario distribution (server-computed)
         if (this.state.charts.scenario) {
+            const dist = agg.scenario_distribution || [];
             const chart = this.state.charts.scenario;
-            chart.data.labels = Object.keys(scenarioMap);
-            chart.data.datasets[0].data = Object.values(scenarioMap);
+            chart.data.labels = dist.map(d => d.scenario);
+            chart.data.datasets[0].data = dist.map(d => d.count);
             chart.update('none');
         }
     },
@@ -1397,88 +1280,37 @@ const App = {
     },
 
     async generateReport() {
-        // Ensure data is loaded. If reportRows is empty, fetch now.
-        if ((window.EventStore.reportRows || []).length === 0) {
+        // Ensure aggregate is loaded. If not, fetch now.
+        if (!window.EventStore.reportAggregate) {
             const ok = await this.loadReportFromDB(this.state.reports.range);
-            if (!ok) {
-                // DB unavailable — banner already shown by loadReportFromDB
-                return;
-            }
+            if (!ok) return; // DB unavailable — banner shown by loadReportFromDB
         }
 
+        const agg = window.EventStore.reportAggregate;
         const range = this.state.reports.range;
-        // Normalize events for consistent key access
-        const rawEvents = this.getReportEvents();
-        const events = rawEvents.map(e => this.normalizeEvent(e));
 
-        let totalWarnings = 0;
-        let totalDetections = 0;
-        let falseWarnings = 0;
-        let totalLatency = 0;
-        let latencyCount = 0;
-        const hoursMap = {};
-        const scenarioMap = {};
+        // All metrics come from server-side aggregate — accurate for ALL rows, not a limited subset.
+        const totalWarnings = agg.total_warnings;
+        const totalDetections = agg.total_detections;
+        const falseWarnings = agg.false_warnings;
+        const avgLatency = Math.round(agg.avg_latency || 0);
+        const peakHour = agg.peak_hour || '--';
+        const topScenario = agg.top_scenario || '--';
 
-        events.forEach(e => {
-            // Use isOn() for robust boolean handling (handles "1", "true", true, 1)
-            const isWarn = this.isOn(e.warning_device_on);
-            const isDet = this.isOn(e.child_in_roi);
+        console.debug(
+            `[Report] range=${range} | events=${agg.total_events} | warnings=${totalWarnings}` +
+            ` | detections=${totalDetections} | false=${falseWarnings}` +
+            ` | avg_lat=${avgLatency}ms | peak=${peakHour} | window=${agg.range_start} → ${agg.range_end}`
+        );
 
-            if (isWarn) totalWarnings++;
-            if (isDet) totalDetections++;
-
-            // False Warning: warning ON while child NOT in ROI
-            if (this.isOn(e.false_warning) || (isWarn && !isDet)) falseWarnings++;
-
-            const lat = parseFloat(e.latency_ms);
-            if (!isNaN(lat) && lat > 0) {
-                totalLatency += lat;
-                latencyCount++;
-            }
-
-            // Peak Hour — always use timestamp_iso for DB rows (with rawTimestamp fallback for session events)
-            let d = this.state.parseTimestamp(e.timestamp_iso) || new Date(e.rawTimestamp || e.id || 0);
-            const h = d.getHours();
-            if (!isNaN(h)) hoursMap[h] = (hoursMap[h] || 0) + (isWarn ? 1 : 0);
-
-            // Scenarios
-            if (e.scenario) scenarioMap[e.scenario] = (scenarioMap[e.scenario] || 0) + 1;
-        });
-
-        // Debug
-        console.debug(`[Report] Rows: ${events.length}, Warnings: ${totalWarnings}, Detections: ${totalDetections}, FalseWarn: ${falseWarnings}, AvgLat: ${latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0}ms`);
-
-        // Peak Hour Calc (based on warning counts per hour)
-        let peakHour = '--';
-        let maxCount = 0;
-        for (const [h, count] of Object.entries(hoursMap)) {
-            if (count > maxCount) {
-                maxCount = count;
-                const d = new Date(); d.setHours(parseInt(h), 0, 0, 0);
-                peakHour = d.toLocaleTimeString([], { hour: 'numeric', hour12: true }) +
-                    ' - ' +
-                    new Date(d.getTime() + 3600000).toLocaleTimeString([], { hour: 'numeric', hour12: true });
-            }
-        }
-
-        const avgLatency = latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0;
-
-        // Insights Generation
+        // Insights
         const insights = [];
-        if (events.length === 0) {
+        if (agg.total_events === 0) {
             insights.push('No events recorded during this period.');
         } else {
             if (totalWarnings > 0) insights.push(`Total of ${totalWarnings} warnings triggered.`);
             if (peakHour !== '--') insights.push(`Peak warning period: ${peakHour}`);
-
-            // Common Scenario
-            let commonScenario = '--';
-            let maxScen = 0;
-            for (const [s, c] of Object.entries(scenarioMap)) {
-                if (c > maxScen) { maxScen = c; commonScenario = s; }
-            }
-            if (commonScenario !== '--') insights.push(`Most common scenario: ${commonScenario}`);
-
+            if (topScenario !== '--') insights.push(`Most common scenario: ${topScenario}`);
             if (avgLatency < 100) insights.push(`System performance optimal (Avg latency < 100ms).`);
             else insights.push(`Average latency is ${avgLatency}ms.`);
         }
@@ -1491,12 +1323,8 @@ const App = {
             falseWarnings,
             avgLatency,
             peakHour,
-            metrics: {
-                mostCommonScenario: insights.find(i => i.includes('Most common'))?.split(': ')[1] || 'N/A'
-            },
-            insights,
-            // Keep raw rows for export consistency
-            _rows: events
+            metrics: { mostCommonScenario: topScenario },
+            insights
         };
 
         this.state.reports.lastSummary = summary;
