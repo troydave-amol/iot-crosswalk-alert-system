@@ -211,11 +211,11 @@ def fetch_events(
         conditions = []
         params = []
 
-        # 1. Time Range
+        # 1. Time Range — use UTC_TIMESTAMP() to match UTC-stored timestamps
         if time_range == "15m":
-            conditions.append("timestamp_iso >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)")
+            conditions.append("timestamp_iso >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 15 MINUTE)")
         elif time_range == "1h":
-            conditions.append("timestamp_iso >= DATE_SUB(NOW(), INTERVAL 1 HOUR)")
+            conditions.append("timestamp_iso >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR)")
         elif time_range == "today":
             conditions.append("timestamp_iso >= UTC_DATE()") # User required UTC_DATE()
         # "all" adds no condition

@@ -25,10 +25,12 @@ window.EventStore = {
         led_driver: 'Ready'
     },
     // DB Mode Store
-    logsRows: [],     // Paginated DB results
-    dbTotal: 0,       // Total matching DB rows
-    analyticsRows: [], // Range-based DB results for Analytics/Reports
-    analyticsTotal: 0  // Optional total count
+    logsRows: [],      // Paginated DB results
+    dbTotal: 0,        // Total matching DB rows
+    analyticsRows: [], // Range-based DB results for Analytics
+    analyticsTotal: 0, // Optional total count
+    reportRows: [],    // Range-based DB results for Reports (dedicated store)
+    reportTotal: 0     // Optional total count for Reports
 }
     ;
 
@@ -53,7 +55,6 @@ const App = {
         // App Flags
         mockMode: true,
         isConnected: false,
-        dbMode: localStorage.getItem('db_mode_enabled') === 'true', // DB Mode State
         lastSocketUpdate: 0,
 
         // System Configuration
@@ -138,19 +139,8 @@ const App = {
         });
 
         // Initial Load for Logs if starting there
-        if (window.location.hash === '#logs' && this.state.dbMode) {
+        if (window.location.hash === '#logs') {
             this.loadLogsFromDB();
-        }
-
-        // DB Mode Init
-        const dbToggle = document.getElementById('toggleDbMode');
-        if (dbToggle) {
-            // Sync UI to initial state
-            this.setDbMode(this.state.dbMode);
-
-            dbToggle.addEventListener('change', (e) => {
-                this.setDbMode(e.target.checked);
-            });
         }
     },
 
@@ -167,138 +157,6 @@ const App = {
         this.updateConnectionStatus();
     },
 
-    // ---------------------------------------------------------
-    // DB Mode Logic (Refined UI/UX)
-    // ---------------------------------------------------------
-    setDbMode(enabled) {
-        // 1. Update State & Storage
-        this.state.dbMode = enabled;
-        localStorage.setItem('db_mode_enabled', enabled);
-
-        // 2. Update Toggle UI
-        const toggle = document.getElementById('toggleDbMode');
-        const label = document.getElementById('dbModeStateLabel');
-        const warning = document.getElementById('dbModeWarning');
-
-        if (toggle) {
-            toggle.checked = enabled;
-        }
-
-        if (label) label.textContent = enabled ? 'Enabled' : 'Disabled';
-
-        // 3. Status Chip Logic
-        const badge = document.getElementById('dbHubStatus');
-
-        if (enabled) {
-            // Turning ON
-            if (badge) {
-                badge.className = 'status-chip mock'; // Grey/Neutral
-                badge.textContent = 'Checking...';
-                badge.style.display = 'inline-flex';
-                badge.style.backgroundColor = '';
-                badge.style.color = '';
-            }
-            if (warning) warning.style.display = 'none';
-
-            this.checkBackendHealth();
-        } else {
-            // Turning OFF
-            if (badge) {
-                badge.className = 'status-chip neutral';
-                badge.textContent = 'Session';
-                badge.style.display = 'inline-flex';
-                badge.style.backgroundColor = '';
-                badge.style.color = '';
-            }
-            if (warning) warning.style.display = 'none';
-        }
-
-        // 4. Polling & View Logic
-        const hash = window.location.hash;
-
-        // Logs Polling
-        if (hash === '#logs') {
-            if (enabled) {
-                this.loadLogsFromDB();
-                if (this.state.logsPollingTimer) clearInterval(this.state.logsPollingTimer);
-                this.state.logsPollingTimer = setInterval(() => this.loadLogsFromDB(), 10000);
-            } else {
-                if (this.state.logsPollingTimer) {
-                    clearInterval(this.state.logsPollingTimer);
-                    this.state.logsPollingTimer = null;
-                }
-                this.renderLogsTable();
-            }
-        }
-
-        // Analytics Polling
-        if (hash === '#analytics') {
-            if (enabled) {
-                this.loadAnalyticsFromDB(this.state.analytics.range).then(() => this.updateAnalyticsUI());
-                if (this.state.analyticsPollingTimer) clearInterval(this.state.analyticsPollingTimer);
-                this.state.analyticsPollingTimer = setInterval(() => {
-                    this.loadAnalyticsFromDB(this.state.analytics.range).then(() => this.updateAnalyticsUI());
-                }, 30000);
-            } else {
-                if (this.state.analyticsPollingTimer) {
-                    clearInterval(this.state.analyticsPollingTimer);
-                    this.state.analyticsPollingTimer = null;
-                }
-                this.updateAnalyticsUI();
-            }
-        }
-    },
-
-    async checkBackendHealth() {
-        const badge = document.getElementById('dbHubStatus');
-        const warning = document.getElementById('dbModeWarning');
-
-        try {
-            const res = await fetch('/api/health');
-            if (res.ok) {
-                // Success: Online
-                if (badge) {
-                    badge.className = 'status-chip connected';
-                    badge.textContent = 'Online';
-                    badge.style.backgroundColor = ''; // Use CSS class color
-                }
-            } else {
-                throw new Error("Backend Returned Error");
-            }
-        } catch (e) {
-            console.warn("DB Mode Health Check Failed:", e);
-
-            // Failure: Offline -> Auto-Revert
-            if (badge) {
-                // Briefly show error if you want, or just revert?
-                // User wants "Show warning... Auto-switch back to OFF"
-                badge.className = 'status-chip neutral'; // Revert to Session style?
-                badge.textContent = 'Session';
-            }
-
-            // Show Warning
-            if (warning) {
-                warning.style.display = 'block';
-                // Optional: Hide warning after 5s? 
-                // "Backend offline — staying in session mode" implies persistent message until user tries again?
-                // Or maybe just let it sit there.
-            }
-
-            // Auto-Revert Toggle Logic
-            this.state.dbMode = false;
-            localStorage.setItem('db_mode_enabled', 'false');
-
-            const toggle = document.getElementById('toggleDbMode');
-            const label = document.getElementById('dbModeStateLabel');
-
-            if (toggle) toggle.checked = false;
-            if (label) label.textContent = 'Disabled';
-        }
-    },
-
-    // ---------------------------------------------------------
-    // 3. Mock Data Engine
-    // ---------------------------------------------------------
     setupMockEngine() {
         // Main System Tick (1Hz)
         setInterval(() => {
@@ -324,25 +182,12 @@ const App = {
                 this.renderLogsTable(true); // pass true to indicate auto-refresh if needed
             }
 
-            // Analytics Live Update
-            // Prompt: "If DB Mode ON -> refresh every 30s", "If OFF -> existing behavior"
+            // Analytics Live Update (Session/Mock: every 2s)
             if (window.location.hash === '#analytics') {
-                if (this.state.dbMode) {
-                    // DB Mode Polling (30s)
-                    // We handle this in setupNavigation/setInterval actually, 
-                    // but we could also do it here if we want a single loop. 
-                    // However, Prompt said: "Stop polling when leaving Analytics tab".
-                    // It's cleaner to use a separate interval in setupNavigation 
-                    // OR use this central loop with a checks.
-
-                    // Let's use the setupNavigation approach for the 30s DB poll to be cleaner and explicit.
-                    // This block here is for MOCK/Session mode live updates (approx every 2s).
-                } else {
-                    // Session/Mock Mode: Update every 2s
-                    if (now - this.state.analytics.lastUpdate > 2000) {
-                        this.updateAnalyticsUI();
-                        this.state.analytics.lastUpdate = now;
-                    }
+                if (now - this.state.analytics.lastUpdate > 2000) {
+                    // DB polling is handled separately in setupNavigation's 30s interval.
+                    // This tick only updates the UI if already populated (avoids flicker).
+                    this.state.analytics.lastUpdate = now;
                 }
             }
 
@@ -602,7 +447,6 @@ const App = {
     // ---------------------------------------------------------
 
     async loadLogsFromDB() {
-        if (!this.state.dbMode) return;
 
         const f = this.state.logsFilter;
         // Build Query Params
@@ -612,8 +456,8 @@ const App = {
             range: f.range
         });
 
-        if (f.warningOnly) params.append('warning_only', '1');
-        if (f.inRoiOnly) params.append('in_roi_only', '1');
+        if (f.warningOnly) params.append('warning_only', 'true');
+        if (f.inRoiOnly) params.append('in_roi_only', 'true');
         if (f.minConf > 0) params.append('min_conf', f.minConf);
         if (f.scenario !== 'All') params.append('scenario', f.scenario);
         if (f.searchText) params.append('search', f.searchText);
@@ -653,12 +497,13 @@ const App = {
         } catch (e) {
             console.warn("Logs fetch error:", e);
             this.state.logsDbError = true;
-            this.renderLogsTable(); // Will fallback to session
+            window.EventStore.logsRows = [];
+            window.EventStore.dbTotal = 0;
+            this.renderLogsTable(); // Shows empty state + warning banner
         }
     },
 
     async loadAnalyticsFromDB(range) {
-        if (!this.state.dbMode) return false;
 
         // Adviser: explicit mapping (ensure backend receives these exact strings)
         // Frontend uses: 15m, 1h, today, all
@@ -699,14 +544,56 @@ const App = {
     },
 
     toggleAnalyticsWarning(show) {
-        // We'll implement a shared warning ID for Analytics & Reports or separate?
-        // Plan said: "Add a hidden warning alert div in the Analytics and Reports sections"
-        // Let's assume IDs: 'anaDbWarning' and 'repDbWarning'
         const anaWarn = document.getElementById('anaDbWarning');
-        const repWarn = document.getElementById('repDbWarning');
-
         if (anaWarn) anaWarn.style.display = show ? 'block' : 'none';
-        if (repWarn) repWarn.style.display = show ? 'block' : 'none';
+    },
+
+    // ---------------------------------------------------------
+    // DB Fetch for Reports (dedicated store — never overwrites analyticsRows)
+    // ---------------------------------------------------------
+    async loadReportFromDB(range) {
+
+        const params = new URLSearchParams({
+            range: range,
+            limit: 500,
+            offset: 0
+        });
+
+        try {
+            const res = await fetch(`/api/events?${params.toString()}`);
+            if (res.ok) {
+                const data = await res.json();
+
+                if (data.total > 0 && (!data.rows || data.rows.length === 0)) {
+                    console.error('[DB-REPORT] DATA MISMATCH: total > 0 but rows empty.', data);
+                    window.EventStore.reportRows = [];
+                    window.EventStore.reportTotal = 0;
+                } else {
+                    window.EventStore.reportRows = data.rows || [];
+                    window.EventStore.reportTotal = data.total || 0;
+                }
+
+                console.debug(`[DB-REPORT] Fetched ${window.EventStore.reportRows.length} rows (Total: ${window.EventStore.reportTotal}) for range=${range}`);
+                this.toggleReportWarning(false);
+                return true;
+            } else {
+                throw new Error(`HTTP ${res.status}`);
+            }
+        } catch (e) {
+            console.warn('[DB-REPORT] Fetch error:', e);
+            this.toggleReportWarning(true);
+            return false;
+        }
+    },
+
+    toggleReportWarning(show) {
+        const el = document.getElementById('repDbWarning');
+        if (el) {
+            el.style.display = show ? 'block' : 'none';
+            if (show) {
+                el.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> DB unavailable — no data available.';
+            }
+        }
     },
 
     setupLogEvents() {
@@ -721,8 +608,7 @@ const App = {
                 debounceTimer = setTimeout(() => {
                     filters.searchText = e.target.value;
                     filters.currentPage = 1;
-                    if (this.state.dbMode) this.loadLogsFromDB();
-                    else this.renderLogsTable();
+                    this.loadLogsFromDB();
                 }, 250);
             });
         }
@@ -737,8 +623,7 @@ const App = {
                 // Update State
                 filters.range = e.target.getAttribute('data-range');
                 filters.currentPage = 1;
-                if (this.state.dbMode) this.loadLogsFromDB();
-                else this.renderLogsTable();
+                this.loadLogsFromDB();
             });
         });
 
@@ -746,17 +631,14 @@ const App = {
         document.getElementById('filterWarningOn')?.addEventListener('change', (e) => {
             filters.warningOnly = e.target.checked;
             filters.currentPage = 1;
-            this.renderLogsTable(); /* don't auto render on every click if we have apply? Prompt said Apply button triggers it, but live updates are nicer. Prompt says: Apply button triggers renderLogsTable(), but also said "Date preset buttons: set active... and render". Let's stick to prompt strictness where possible, but for UX 'Apply' usually implies manual trigger. However, the prompt also says "Slider updates label live and renders on release". Given the 'Apply' button exists, I will make the toggles/dropdowns update state but ONLY render when Apply is clicked, OR just render immediately for better UX. The prompt specifically lists "Apply (id=btnApplyLogsFilters)". So I will bind the render to the Apply button for the form controls. But Date Presets are immediate per prompt. */
         });
 
         document.getElementById('filterInRoi')?.addEventListener('change', (e) => {
             filters.inRoiOnly = e.target.checked;
-            // Waiting for Apply button
         });
 
         document.getElementById('filterScenario')?.addEventListener('change', (e) => {
             filters.scenario = e.target.value;
-            // Waiting for Apply button
         });
 
         // Slider
@@ -768,17 +650,14 @@ const App = {
                 filters.minConf = parseFloat(e.target.value);
             });
             slider.addEventListener('change', () => {
-                // Waiting for Apply button or immediate? Prompt: "renders on release".
-                this.renderLogsTable();
+                this.loadLogsFromDB();
             });
         }
 
         // Buttons
         document.getElementById('btnApplyLogsFilters')?.addEventListener('click', () => {
-            // Re-read current DOM state just to be sure or just render based on bound state (bound state is better)
             filters.currentPage = 1;
-            if (this.state.dbMode) this.loadLogsFromDB();
-            else this.renderLogsTable();
+            this.loadLogsFromDB();
         });
 
         document.getElementById('btnResetLogsFilters')?.addEventListener('click', () => {
@@ -800,35 +679,27 @@ const App = {
             const labelMin = document.getElementById('filterMinConfLabel'); if (labelMin) labelMin.textContent = "0.00";
             const selScen = document.getElementById('filterScenario'); if (selScen) selScen.value = 'All';
 
-            this.renderLogsTable(); // Reset always renders session logs initially properly, but if in DB mode?
-            // If DB Mode, we should probably fetch from DB with reset params?
-            // "If DB Mode ON -> loadLogsFromDB()"
-            if (this.state.dbMode) this.loadLogsFromDB();
-            else this.renderLogsTable();
+            this.loadLogsFromDB();
         });
 
         // Pagination
         document.getElementById('pageSizeSelect')?.addEventListener('change', (e) => {
             filters.pageSize = parseInt(e.target.value);
-            filters.pageSize = parseInt(e.target.value);
             filters.currentPage = 1;
-            if (this.state.dbMode) this.loadLogsFromDB();
-            else this.renderLogsTable();
+            this.loadLogsFromDB();
         });
 
         document.getElementById('pagePrev')?.addEventListener('click', () => {
             if (filters.currentPage > 1) {
                 filters.currentPage--;
-                if (this.state.dbMode) this.loadLogsFromDB();
-                else this.renderLogsTable();
+                this.loadLogsFromDB();
             }
         });
 
         document.getElementById('pageNext')?.addEventListener('click', () => {
             if (filters.currentPage < filters.totalPages) {
                 filters.currentPage++;
-                if (this.state.dbMode) this.loadLogsFromDB();
-                else this.renderLogsTable();
+                this.loadLogsFromDB();
             }
         });
 
@@ -887,64 +758,36 @@ const App = {
         const warningEl = document.getElementById('logsDbWarning');
         if (!tbody) return;
 
-        // 1. Determine Source
-        let displayLogs = [];
-        let total = 0;
-        let isDbSource = this.state.dbMode && !this.state.logsDbError;
-
-        if (isDbSource) {
-            // Use DB Data
-            displayLogs = window.EventStore.logsRows || [];
-            total = window.EventStore.dbTotal || 0;
-            if (warningEl) warningEl.style.display = 'none';
-        } else {
-            // Use Session Data
-            const allFiltered = this.getFilteredLogs();
-            total = allFiltered.length;
-
-            // Recalc pages for session data
-            const f = this.state.logsFilter;
-            f.totalPages = Math.ceil(total / f.pageSize) || 1;
-            if (f.currentPage > f.totalPages) f.currentPage = f.totalPages;
-            if (f.currentPage < 1) f.currentPage = 1;
-
-            const start = (f.currentPage - 1) * f.pageSize;
-            const end = start + f.pageSize;
-            displayLogs = allFiltered.slice(start, end);
-
-            // Show warning only if DB mode was intended but failed
-            if (warningEl) warningEl.style.display = this.state.dbMode && this.state.logsDbError ? 'block' : 'none';
-        }
-
+        // Always use DB source
+        const displayLogs = window.EventStore.logsRows || [];
+        const total = window.EventStore.dbTotal || 0;
         const f = this.state.logsFilter;
-        // If DB Source, pages are calc based on Total
-        if (isDbSource) {
-            // Logic: Backend handles slicing, we just need to know total pages
-            f.totalPages = Math.ceil(total / f.pageSize) || 1;
-        }
+
+        // Show warning banner only on DB error
+        if (warningEl) warningEl.style.display = this.state.logsDbError ? 'block' : 'none';
+
+        // Recalc pagination from DB total
+        f.totalPages = Math.ceil(total / f.pageSize) || 1;
+        if (f.currentPage > f.totalPages) f.currentPage = f.totalPages;
+        if (f.currentPage < 1) f.currentPage = 1;
 
         // Render Rows
         if (displayLogs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:#888;">No logs found.</td></tr>';
         } else {
             tbody.innerHTML = displayLogs.map(log => {
-                // Time Display Logic
-                let timeStr = log.timestamp; // Default to existing if valid
-                if (this.state.dbMode) {
-                    const d = this.state.parseTimestamp(log.timestamp_iso);
-                    if (d) timeStr = d.toLocaleTimeString();
-                    else timeStr = log.timestamp_iso || "Invalid Date";
-                } else {
-                    // Session fallback
-                    if (!timeStr && log.rawTimestamp) timeStr = new Date(log.rawTimestamp).toLocaleTimeString();
-                }
+                // Always parse timestamp from ISO (DB source)
+                let timeStr;
+                const d = this.state.parseTimestamp(log.timestamp_iso);
+                if (d) timeStr = d.toLocaleTimeString();
+                else timeStr = log.timestamp_iso || log.timestamp || 'Unknown';
 
                 return `
                 <tr>
                     <td>${timeStr}</td>
                     <td><span class="badge ${log.child_in_roi ? 'badge-warning' : 'badge-neutral'}">${log.child_in_roi ? 'YES' : 'NO'}</span></td>
                     <td><span style="font-size:0.85em; color:${log.roi_status === 'INSIDE' ? '#d32f2f' : '#999'}">${log.roi_status}</span></td>
-                    <td><span class="badge ${log.warning_on ? 'badge-warning' : 'badge-success'}">${log.warning_on ? 'ON' : 'OFF'}</span></td>
+                    <td><span class="badge ${this.isOn(log.warning_device_on ?? log.warning_on) ? 'badge-warning' : 'badge-success'}">${this.isOn(log.warning_device_on ?? log.warning_on) ? 'ON' : 'OFF'}</span></td>
                     <td>${(log.confidence || 0).toFixed(2)}</td>
                     <td>${log.latency_ms}ms</td>
                     <td>${log.scenario}</td>
@@ -953,21 +796,16 @@ const App = {
             `}).join('');
         }
 
-        // Calculate range text
+        // Pagination info
         const startIdx = (f.currentPage - 1) * f.pageSize;
         const currentCount = displayLogs.length;
-
-        // Fix: "Showing 0-0 of 0" logic
-        let rangeText = "";
+        let rangeText = '';
         if (total === 0) {
-            rangeText = "Showing 0 of 0 events";
+            rangeText = 'Showing 0 of 0 events';
         } else {
-            const endRange = startIdx + currentCount;
-            // Guard against weird math if backend returns weirdness
-            rangeText = `Showing ${startIdx + 1}–${endRange} of ${total} ${isDbSource ? 'persistent' : 'filtered'} events`;
+            rangeText = `Showing ${startIdx + 1}–${startIdx + currentCount} of ${total} persistent events`;
         }
 
-        // Update Controls
         document.getElementById('resultCount').textContent = rangeText;
         document.getElementById('pageIndicator').textContent = `Page ${f.currentPage} of ${f.totalPages}`;
         document.getElementById('pagePrev').disabled = (f.currentPage <= 1);
@@ -975,16 +813,21 @@ const App = {
     },
 
     exportCSV() {
-        const data = this.getFilteredLogs();
+        // Export from DB dataset (logsRows)
+        const data = window.EventStore.logsRows || [];
         const headers = ["Timestamp,Message,In ROI,Warning,Confidence,Latency,Scenario,False Warning\n"];
-        const rows = data.map(log =>
-            `${log.timestamp},${log.message},${log.child_in_roi},${log.warning_on},${log.confidence.toFixed(2)},${log.latency_ms},${log.scenario},${log.false_warning}`
-        );
+        const rows = data.map(log => {
+            const d = this.state.parseTimestamp(log.timestamp_iso);
+            const ts = d ? d.toLocaleString() : (log.timestamp_iso || log.timestamp || '');
+            const msg = log.child_in_roi ? 'Child-class Detected' : 'No Detection';
+            return `${ts},${msg},${log.child_in_roi},${log.warning_on},${(log.confidence || 0).toFixed(2)},${log.latency_ms},${log.scenario},${log.false_warning}`;
+        });
         this.downloadFile(headers.concat(rows).join("\n"), 'csv');
     },
 
     exportJSON() {
-        const data = this.getFilteredLogs();
+        // Export from DB dataset (logsRows)
+        const data = window.EventStore.logsRows || [];
         const jsonStr = JSON.stringify(data, null, 2);
         this.downloadFile(jsonStr, 'json');
     },
@@ -1093,14 +936,12 @@ const App = {
                 el.classList.toggle('active', el.id === `${hash}-section`);
             });
 
-            // Logs Polling Logic
+            // Logs Polling Logic — always fetch from DB
             if (hash === 'logs') {
-                if (this.state.dbMode) {
-                    this.loadLogsFromDB();
-                    // Start Polling (10s)
-                    if (this.state.logsPollingTimer) clearInterval(this.state.logsPollingTimer);
-                    this.state.logsPollingTimer = setInterval(() => this.loadLogsFromDB(), 10000);
-                }
+                this.loadLogsFromDB();
+                // Start Polling (10s)
+                if (this.state.logsPollingTimer) clearInterval(this.state.logsPollingTimer);
+                this.state.logsPollingTimer = setInterval(() => this.loadLogsFromDB(), 10000);
             } else {
                 // Leaving Logs
                 if (this.state.logsPollingTimer) {
@@ -1118,17 +959,13 @@ const App = {
                     this.state.analyticsPollingTimer = null;
                 }
 
-                if (this.state.dbMode) {
-                    // 1. Initial Load
-                    this.loadAnalyticsFromDB(this.state.analytics.range).then(() => this.updateAnalyticsUI());
+                // Always fetch from DB, then update UI
+                this.loadAnalyticsFromDB(this.state.analytics.range).then(() => this.updateAnalyticsUI());
 
-                    // 2. Start Polling (30s)
-                    this.state.analyticsPollingTimer = setInterval(() => {
-                        this.loadAnalyticsFromDB(this.state.analytics.range).then(() => this.updateAnalyticsUI());
-                    }, 30000);
-                } else {
-                    this.updateAnalyticsUI();
-                }
+                // Start Polling (30s)
+                this.state.analyticsPollingTimer = setInterval(() => {
+                    this.loadAnalyticsFromDB(this.state.analytics.range).then(() => this.updateAnalyticsUI());
+                }, 30000);
             } else {
                 // Leaving Analytics
                 if (this.state.analyticsPollingTimer) {
@@ -1277,12 +1114,8 @@ const App = {
                 const newRange = e.target.getAttribute('data-ana-range');
                 this.state.analytics.range = newRange;
 
-                // Load Data
-                if (this.state.dbMode) {
-                    this.loadAnalyticsFromDB(newRange).then(() => this.updateAnalyticsUI());
-                } else {
-                    this.updateAnalyticsUI();
-                }
+                // Load Data — always fetch from DB
+                this.loadAnalyticsFromDB(newRange).then(() => this.updateAnalyticsUI());
             });
         });
 
@@ -1363,21 +1196,13 @@ const App = {
         }
         // 'all' = 0
 
-        // Filter and Sort (Oldest first for Charts, usually)
-        if (this.state.dbMode) {
-            // Use DB rows
-            return (window.EventStore.analyticsRows || [])
-                .sort((a, b) => {
-                    const tA = this.state.parseTimestamp(a.timestamp_iso)?.getTime() || 0;
-                    const tB = this.state.parseTimestamp(b.timestamp_iso)?.getTime() || 0;
-                    return tA - tB;
-                });
-        } else {
-            // Use Session events
-            return window.EventStore.events
-                .filter(log => (log.rawTimestamp || log.id) >= startTime)
-                .sort((a, b) => (a.rawTimestamp || a.id) - (b.rawTimestamp || b.id));
-        }
+        // Always use DB rows (analyticsRows sorted oldest-first for charts)
+        return (window.EventStore.analyticsRows || [])
+            .sort((a, b) => {
+                const tA = this.state.parseTimestamp(a.timestamp_iso)?.getTime() || 0;
+                const tB = this.state.parseTimestamp(b.timestamp_iso)?.getTime() || 0;
+                return tA - tB;
+            });
     },
 
     computeKPIs(events) {
@@ -1403,20 +1228,14 @@ const App = {
                 latencyCount++;
             }
 
-            // Peak Hour
-            let d = new Date(e.rawTimestamp || e.id);
-            if (this.state.dbMode && e.timestamp_iso) {
-                const parsed = this.state.parseTimestamp(e.timestamp_iso);
-                if (parsed) d = parsed;
-            }
+            // Peak Hour — always use parseTimestamp for DB rows
+            let d = this.state.parseTimestamp(e.timestamp_iso) || new Date(e.rawTimestamp || e.id || 0);
             const h = d.getHours();
             hoursMap[h] = (hoursMap[h] || 0) + 1;
         });
 
-        // Debug Log (Adviser req)
-        if (this.state.dbMode) {
-            console.debug(`[Analytics Fix] Rows: ${events.length}, Warnings: ${totalWarnings}`);
-        }
+        // Debug Log
+        console.debug(`[Analytics] Rows: ${events.length}, Warnings: ${totalWarnings}`);
 
         // Peak Calc
         let peakHour = '--';
@@ -1453,12 +1272,10 @@ const App = {
         const scenarioMap = {};
 
         events.forEach(e => {
-            // Time Bins
-            let ts = e.rawTimestamp || e.id;
-            if (this.state.dbMode && e.timestamp_iso) {
-                const parsed = this.state.parseTimestamp(e.timestamp_iso);
-                if (parsed) ts = parsed.getTime();
-            }
+            // Time Bins — always use parseTimestamp for DB rows
+            let ts;
+            const parsed = this.state.parseTimestamp(e.timestamp_iso);
+            ts = parsed ? parsed.getTime() : (e.rawTimestamp || e.id || 0);
             const binKey = Math.floor(ts / binSize) * binSize;
             if (!bins[binKey]) bins[binKey] = { warnings: 0, detections: 0 };
 
@@ -1532,7 +1349,7 @@ const App = {
             };
         }
 
-        // 1. Presets
+        // 1. Presets — always fetch dedicated report data for the selected range
         document.querySelectorAll('.btn-preset[data-rep-range]').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 // UI
@@ -1541,26 +1358,19 @@ const App = {
 
                 // State
                 this.state.reports.range = e.target.getAttribute('data-rep-range');
-                // Auto-regenerate on preset change
-                if (this.state.dbMode) {
-                    this.loadAnalyticsFromDB(this.state.reports.range).then(() => this.generateReport());
-                } else {
-                    this.generateReport();
-                }
+
+                // Always fetch from DB then generate
+                this.loadReportFromDB(this.state.reports.range).then(() => this.generateReport());
             });
         });
 
         // 2. Actions
         document.getElementById('btnGenerateReport')?.addEventListener('click', () => {
-            if (this.state.dbMode) {
-                this.loadAnalyticsFromDB(this.state.reports.range).then(() => this.generateReport());
-            } else {
-                this.generateReport();
-            }
+            // Always fetch fresh data for the selected report range
+            this.loadReportFromDB(this.state.reports.range).then(() => this.generateReport());
         });
 
         document.getElementById('btnPrintReport')?.addEventListener('click', () => {
-            // Ensure report is fresh
             if (!this.state.reports.lastSummary) this.generateReport();
             window.print();
         });
@@ -1575,47 +1385,31 @@ const App = {
             this.downloadReport('csv');
         });
 
-        // Initial Generation
-        if (!this.state.dbMode) {
-            setTimeout(() => this.generateReport(), 500);
-        } else {
-            // If DB Mode, we likely want to show default report
-            setTimeout(() => {
-                // Try reuse if Analytics already has data, else fetch
-                const anaRange = this.state.analytics.range;
-                const repRange = this.state.reports.range;
+        // Initial Generation — always fetch from DB on load
+        setTimeout(() => {
+            this.loadReportFromDB(this.state.reports.range).then(() => this.generateReport());
+        }, 500);
+    },
 
-                // If analytics has 'today' data and we need 'today', reuse it
-                if (anaRange === repRange && window.EventStore.analyticsRows.length > 0) {
-                    this.generateReport();
-                } else {
-                    this.loadAnalyticsFromDB(repRange).then(() => this.generateReport());
-                }
-            }, 500);
-        }
+    // Returns the event dataset for the current report range (always from DB reportRows).
+    getReportEvents() {
+        return (window.EventStore.reportRows || []).slice();
     },
 
     async generateReport() {
-        // DB Mode: Ensure we have data for the REPORT range
-        if (this.state.dbMode) {
-            const range = this.state.reports.range;
-            // Check if we already have this data loaded in Analytics (optimization)
-            // Only reuse if the analytics range matches report range.
-            // Otherwise we MUST fetch new data.
-            if (this.state.analytics.range !== range || !window.EventStore.analyticsRows) {
-                // Fetch dedicated report dataset (re-using loadAnalyticsFromDB helper for now as it fills same store)
-                // NOTE: reusing loadAnalyticsFromDB overwrites analyticsRows. This is okay as they are usually same page 
-                // BUT if user switches tabs quickly it might be confusing. 
-                // Ideally reports should have own store, but for "Wire Analytics to DB" scope, sharing is acceptable
-                // provided we accept the overwrite.
-                await this.loadAnalyticsFromDB(range);
+        // Ensure data is loaded. If reportRows is empty, fetch now.
+        if ((window.EventStore.reportRows || []).length === 0) {
+            const ok = await this.loadReportFromDB(this.state.reports.range);
+            if (!ok) {
+                // DB unavailable — banner already shown by loadReportFromDB
+                return;
             }
         }
 
-        const events = this.getReportEvents();
         const range = this.state.reports.range;
-
-        // ... rest of logic uses 'events' which is now populated from DB store if logic holds
+        // Normalize events for consistent key access
+        const rawEvents = this.getReportEvents();
+        const events = rawEvents.map(e => this.normalizeEvent(e));
 
         let totalWarnings = 0;
         let totalDetections = 0;
@@ -1626,30 +1420,41 @@ const App = {
         const scenarioMap = {};
 
         events.forEach(e => {
-            if (e.warning_on) totalWarnings++;
-            if (e.child_in_roi) totalDetections++;
-            if (e.false_warning) falseWarnings++;
-            if (e.latency_ms > 0) {
-                totalLatency += e.latency_ms;
+            // Use isOn() for robust boolean handling (handles "1", "true", true, 1)
+            const isWarn = this.isOn(e.warning_device_on);
+            const isDet = this.isOn(e.child_in_roi);
+
+            if (isWarn) totalWarnings++;
+            if (isDet) totalDetections++;
+
+            // False Warning: warning ON while child NOT in ROI
+            if (this.isOn(e.false_warning) || (isWarn && !isDet)) falseWarnings++;
+
+            const lat = parseFloat(e.latency_ms);
+            if (!isNaN(lat) && lat > 0) {
+                totalLatency += lat;
                 latencyCount++;
             }
 
-            // Peak Hour
-            const d = new Date(e.rawTimestamp || e.id);
+            // Peak Hour — always use timestamp_iso for DB rows (with rawTimestamp fallback for session events)
+            let d = this.state.parseTimestamp(e.timestamp_iso) || new Date(e.rawTimestamp || e.id || 0);
             const h = d.getHours();
-            hoursMap[h] = (hoursMap[h] || 0) + 1;
+            if (!isNaN(h)) hoursMap[h] = (hoursMap[h] || 0) + (isWarn ? 1 : 0);
 
             // Scenarios
             if (e.scenario) scenarioMap[e.scenario] = (scenarioMap[e.scenario] || 0) + 1;
         });
 
-        // Peak Hour Calc
+        // Debug
+        console.debug(`[Report] Rows: ${events.length}, Warnings: ${totalWarnings}, Detections: ${totalDetections}, FalseWarn: ${falseWarnings}, AvgLat: ${latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0}ms`);
+
+        // Peak Hour Calc (based on warning counts per hour)
         let peakHour = '--';
         let maxCount = 0;
         for (const [h, count] of Object.entries(hoursMap)) {
             if (count > maxCount) {
                 maxCount = count;
-                const d = new Date(); d.setHours(h);
+                const d = new Date(); d.setHours(parseInt(h), 0, 0, 0);
                 peakHour = d.toLocaleTimeString([], { hour: 'numeric', hour12: true }) +
                     ' - ' +
                     new Date(d.getTime() + 3600000).toLocaleTimeString([], { hour: 'numeric', hour12: true });
@@ -1661,7 +1466,7 @@ const App = {
         // Insights Generation
         const insights = [];
         if (events.length === 0) {
-            insights.push("No events recorded during this period.");
+            insights.push('No events recorded during this period.');
         } else {
             if (totalWarnings > 0) insights.push(`Total of ${totalWarnings} warnings triggered.`);
             if (peakHour !== '--') insights.push(`Peak warning period: ${peakHour}`);
@@ -1679,17 +1484,19 @@ const App = {
         }
 
         const summary = {
-            rangeLabel: document.querySelector(`.btn-preset[data-rep-range="${range}"]`)?.textContent || range,
+            rangeLabel: document.querySelector(`.btn-preset[data-rep-range="${range}"]`)?.textContent?.trim() || range,
             generatedAt: new Date().toLocaleString(),
             totalWarnings,
             totalDetections,
             falseWarnings,
             avgLatency,
             peakHour,
-            metrics: { // For CSV/JSON
-                mostCommonScenario: insights.find(i => i.includes('Most common'))?.split(": ")[1] || "N/A"
+            metrics: {
+                mostCommonScenario: insights.find(i => i.includes('Most common'))?.split(': ')[1] || 'N/A'
             },
-            insights
+            insights,
+            // Keep raw rows for export consistency
+            _rows: events
         };
 
         this.state.reports.lastSummary = summary;
@@ -1720,21 +1527,23 @@ const App = {
         const dateStr = new Date().toISOString().slice(0, 10);
         const filename = `report_summary_${dateStr}_${this.state.reports.range}.${type}`;
 
-        let content = "";
+        let content = '';
         if (type === 'json') {
-            content = JSON.stringify(s, null, 2);
+            // Export summary without internal _rows field
+            const { _rows, ...exportable } = s;
+            content = JSON.stringify(exportable, null, 2);
         } else {
-            // CSV
-            const header = "Generated At,Range,Total Warnings,Total Detections,False Warnings,Avg Latency,Peak Hour,Most Common Scenario,Location,Client,Title\n";
-            const row = `${s.generatedAt},${s.rangeLabel},${s.totalWarnings},${s.totalDetections},${s.falseWarnings},${s.avgLatency},${s.peakHour},${s.metrics.mostCommonScenario},"Casisang Central School","TMC","IoT-Based Smart School-Zone Crosswalk Alert System"`;
+            // CSV — summary row
+            const header = 'Generated At,Range,Total Warnings,Total Detections,False Warnings,Avg Latency,Peak Hour,Most Common Scenario,Location,Client,Title\n';
+            const row = `${s.generatedAt},${s.rangeLabel},${s.totalWarnings},${s.totalDetections},${s.falseWarnings},${s.avgLatency}ms,${s.peakHour},${s.metrics.mostCommonScenario},"Casisang Central School","TMC","IoT-Based Smart School-Zone Crosswalk Alert System"`;
             content = header + row;
         }
 
         const blob = new Blob([content], { type: type === 'csv' ? 'text/csv;charset=utf-8;' : 'application/json' });
         const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", filename);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

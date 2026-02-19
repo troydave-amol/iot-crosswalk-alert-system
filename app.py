@@ -232,8 +232,8 @@ def api_events_route():
         
         # Boolean flags usually come as strings "true"/"false" or just present
         # Here we assume "true" string for True, anything else False for safety
-        warning_only = request.args.get("warning_only", "false").lower() == "true"
-        in_roi_only = request.args.get("in_roi_only", "false").lower() == "true"
+        warning_only = request.args.get("warning_only", "false").lower() in ("true", "1")
+        in_roi_only = request.args.get("in_roi_only", "false").lower() in ("true", "1")
         
         min_conf = float(request.args.get("min_conf", 0.0))
         scenario = request.args.get("scenario", None)
