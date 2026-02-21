@@ -60,10 +60,10 @@ Always check `execution/` for an existing script before creating a new one.
 
 1. Identify dataset folder structure under `datasets/`
 2. Confirm annotation format (YOLO `.txt` labels or convert)
-3. Validate labels with `execution/` scripts (bounds check, missing labels)
+3. Validate labels with `execution/validate_labels.py` (bounds check, missing labels)
 4. Update or create `datasets/<name>.yaml` (see `datasets/citypersons.yaml` as reference)
-5. Create train/val/test split
-6. For child-class fine-tuning: follow annotation guideline — see `references/annotation_guideline.md`
+5. Create train/val/test split via `execution/split_dataset.py`
+6. For child-class fine-tuning: follow annotation guideline — see `directives/annotation_guideline_child_class.md`
 
 **Active datasets:**
 - `datasets/citypersons/` — pedestrian baseline (~8,479 files)
@@ -74,11 +74,11 @@ Always check `execution/` for an existing script before creating a new one.
 
 ## Training Workflow
 
-1. Baseline model: `yolov8n.pt` (present in project root)
-2. Existing training run: `runs/detect/train/` — contains weights, curves, confusion matrix
+1. Baseline model: `models/yolov8n.pt`
+2. Existing training run: `models/runs/detect/train/` — contains weights, curves, confusion matrix
 3. For fine-tuning child class: use `datasets/crosswalk_child.yaml`
 4. Evaluate: precision/recall/F1 + latency (ms) — must go into manuscript
-5. See `references/training_plan.md` for full training parameters and evaluation targets
+5. See `directives/yolov8_training_plan.md` for full training parameters and evaluation targets
 
 ---
 
@@ -94,14 +94,14 @@ Key endpoints that must remain stable:
 | `GET /api/analytics` | SQL-accurate aggregates, includes metadata |
 | `GET /api/health` | returns `{"ok": true}` even if DB is down |
 
-See `references/api_contract.md` for full field definitions and range rules.
+See `directives/api_events_contract.md` for full field definitions and range rules.
 
 **Self-anneal loop for backend bugs:**
 1. Reproduce with minimal steps
 2. Identify root cause (logs/SQL/network proof)
 3. Fix deterministically
-4. Add regression test in `execution/`
-5. Update relevant directive
+4. Add regression test in `execution/` (see `execution/smoke_test_api.py`, `execution/verify_db.py`)
+5. Update relevant directive in `directives/`
 
 ---
 
@@ -137,7 +137,10 @@ Legacy field `warning_on` is fallback only.
 
 ## Resources
 
-- `references/api_contract.md` — Full API field specs and range rules
-- `references/annotation_guideline.md` — Child-class labeling rules (inclusion/exclusion, bbox, occlusion)
-- `references/training_plan.md` — YOLOv8 training parameters and evaluation targets
-- `scripts/` — Execution scripts (dataset validation, API smoke tests, DB queries)
+- `directives/api_events_contract.md` — Full API field specs and range rules
+- `directives/api_analytics_aggregates.md` — Analytics endpoint contract and validation rules
+- `directives/annotation_guideline_child_class.md` — Child-class labeling rules (inclusion/exclusion, bbox, occlusion)
+- `directives/yolov8_training_plan.md` — YOLOv8 training parameters and evaluation targets
+- `directives/dataset_prepare_citypersons.md` — Dataset preparation SOP
+- `directives/roi_logic_and_trigger_rules.md` — ROI trigger logic rules
+- `execution/` — All deterministic scripts (validate_labels, split_dataset, verify_db, generate_report, smoke_test_api, setup_datasets)
