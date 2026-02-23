@@ -1,12 +1,12 @@
 """
-execution/generate_report.py
+scripts/generate_report.py
 ----------------------------
 Queries the MySQL events table for a given time range and writes
 a summary CSV report to reports/.
 
 Usage:
-    python execution/generate_report.py --range today
-    python execution/generate_report.py --range all --out reports/custom_report.csv
+    python scripts/generate_report.py --range today
+    python scripts/generate_report.py --range all --out reports/custom_report.csv
 
 Output columns:
     timestamp_iso, warning_device_on, child_in_roi, confidence, latency_ms

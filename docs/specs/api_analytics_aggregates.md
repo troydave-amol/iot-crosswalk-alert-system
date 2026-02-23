@@ -43,8 +43,8 @@ GET /api/analytics?range=<15m|1h|today|all>
 - On DB error: return HTTP 503 `{ "error": "db_unavailable" }` — do NOT crash
 
 ## Tools / Scripts
-- `execution/verify_db.py` — run ground-truth SQL and compare to API response
-- `execution/smoke_test_api.py` — automated endpoint health and range check
+- `scripts/verify_db.py` — run ground-truth SQL and compare to API response
+- `scripts/smoke_test_api.py` — automated endpoint health and range check
 
 ## Validation Steps
 1. Run raw SQL for each range: `SELECT COUNT(*) WHERE warning_device_on=1 AND created_at >= <range_start>`.

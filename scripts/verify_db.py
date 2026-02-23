@@ -1,5 +1,5 @@
 """
-execution/verify_db.py
+scripts/verify_db.py
 ----------------------
 Runs raw SQL ground-truth queries for each time range and compares
 results against the /api/analytics endpoint.
@@ -7,8 +7,8 @@ results against the /api/analytics endpoint.
 Any mismatch is treated as a BUG.
 
 Usage:
-    python execution/verify_db.py
-    python execution/verify_db.py --host localhost --port 5000
+    python scripts/verify_db.py
+    python scripts/verify_db.py --host localhost --port 5000
 
 Prerequisites:
     - Flask app must be running (python app.py)

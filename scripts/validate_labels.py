@@ -1,11 +1,11 @@
 """
-execution/validate_labels.py
+scripts/validate_labels.py
 ----------------------------
 Validates YOLO-format label files for a given dataset under datasets/.
 
 Usage:
-    python execution/validate_labels.py --dataset citypersons
-    python execution/validate_labels.py --dataset jaad
+    python scripts/validate_labels.py --dataset citypersons
+    python scripts/validate_labels.py --dataset jaad
 
 Outputs:
     reports/<dataset>_label_validation.csv   — one row per issue found

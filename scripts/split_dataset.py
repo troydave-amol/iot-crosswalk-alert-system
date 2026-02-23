@@ -1,11 +1,11 @@
 """
-execution/split_dataset.py
+scripts/split_dataset.py
 --------------------------
 Splits a flat YOLO dataset (images/ + labels/) into train/val/test sub-splits.
 
 Usage:
-    python execution/split_dataset.py --dataset citypersons --split 80 10 10
-    python execution/split_dataset.py --dataset jaad --split 80 10 10
+    python scripts/split_dataset.py --dataset citypersons --split 80 10 10
+    python scripts/split_dataset.py --dataset jaad --split 80 10 10
 
 Inputs:
     datasets/<name>/images/   — flat directory of images

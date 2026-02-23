@@ -37,7 +37,7 @@ IoT-Based Smart School-Zone Crosswalk Alert System Using CNN for Real-Time Child
 LLMs are probabilistic; this project needs deterministic correctness. Use a 3-layer system to reduce compounded error.
 
 ### Layer 1: Directive (What to do)
-- SOPs written in Markdown stored in `directives/`
+- SOPs written in Markdown stored in `docs/specs/`
 - Each directive must include:
   - Goal and scope (including out-of-scope)
   - Inputs required
@@ -45,12 +45,12 @@ LLMs are probabilistic; this project needs deterministic correctness. Use a 3-la
   - Outputs/deliverables
   - Edge cases and validation steps
 - Examples of directives in this project:
-  - `directives/dataset_prepare_citypersons.md`
-  - `directives/annotation_guideline_child_class.md`
-  - `directives/yolov8_training_plan.md`
-  - `directives/api_events_contract.md`
-  - `directives/api_analytics_aggregates.md`
-  - `directives/roi_logic_and_trigger_rules.md`
+  - `docs/specs/dataset_prepare_citypersons.md`
+  - `docs/specs/annotation_guideline_child_class.md`
+  - `docs/specs/yolov8_training_plan.md`
+  - `docs/specs/api_events_contract.md`
+  - `docs/specs/api_analytics_aggregates.md`
+  - `docs/specs/roi_logic_and_trigger_rules.md`
 
 ### Layer 2: Orchestration (Decision making)
 - This is you.
@@ -62,7 +62,7 @@ LLMs are probabilistic; this project needs deterministic correctness. Use a 3-la
   - Keep scope aligned with the capstone rules (no SMS/audio/speed/recognition)
 
 ### Layer 3: Execution (Doing the work)
-- Deterministic scripts stored in `execution/`
+- Deterministic scripts stored in `scripts/`
 - Scripts must be:
   - Fast, testable, repeatable
   - Commented
@@ -89,7 +89,7 @@ Before doing anything, confirm it matches scope:
 If a request breaks scope, stop and ask for clarification or refuse.
 
 ### 2) Check for tools first
-Before creating new scripts, check `execution/` for an existing one that matches the directive.
+Before creating new scripts, check `scripts/` for an existing one that matches the directive.
 Only create new scripts if none exist.
 
 ### 3) Determinism for critical logic
@@ -141,8 +141,8 @@ When something breaks:
 
 ### Directory Structure (Recommended)
 - `.tmp/` — Intermediate files (safe to delete/regenerate)
-- `directives/` — SOPs (what to do)
-- `execution/` — Deterministic tools/scripts (how to do it)
+- `docs/specs/` — SOPs (what to do)
+- `scripts/` — Deterministic tools/scripts (how to do it)
 - `datasets/` — Local dataset staging (do not commit large datasets)
 - `models/` — Trained weights and configs (versioned by date)
 - `reports/` — Evaluation outputs (CSV, charts, summaries)

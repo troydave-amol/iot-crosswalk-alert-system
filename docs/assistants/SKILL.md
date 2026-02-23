@@ -36,11 +36,11 @@ If a request breaks scope, stop and ask for clarification or refuse.
 
 | Layer | Role | Location |
 |---|---|---|
-| **Directive** | What to do (SOPs) | `directives/` |
+| **Directive** | What to do (SOPs) | `docs/specs/` |
 | **Orchestration** | Decision-making (YOU) | — |
-| **Execution** | Deterministic scripts | `execution/` |
+| **Execution** | Deterministic scripts | `scripts/` |
 
-Always check `execution/` for an existing script before creating a new one.
+Always check `scripts/` for an existing script before creating a new one.
 
 ---
 
@@ -60,10 +60,10 @@ Always check `execution/` for an existing script before creating a new one.
 
 1. Identify dataset folder structure under `datasets/`
 2. Confirm annotation format (YOLO `.txt` labels or convert)
-3. Validate labels with `execution/validate_labels.py` (bounds check, missing labels)
+3. Validate labels with `scripts/validate_labels.py` (bounds check, missing labels)
 4. Update or create `datasets/<name>.yaml` (see `datasets/citypersons.yaml` as reference)
-5. Create train/val/test split via `execution/split_dataset.py`
-6. For child-class fine-tuning: follow annotation guideline — see `directives/annotation_guideline_child_class.md`
+5. Create train/val/test split via `scripts/split_dataset.py`
+6. For child-class fine-tuning: follow annotation guideline — see `docs/specs/annotation_guideline_child_class.md`
 
 **Active datasets:**
 - `datasets/citypersons/` — pedestrian baseline (~8,479 files)
@@ -78,7 +78,7 @@ Always check `execution/` for an existing script before creating a new one.
 2. Existing training run: `models/runs/detect/train/` — contains weights, curves, confusion matrix
 3. For fine-tuning child class: use `datasets/crosswalk_child.yaml`
 4. Evaluate: precision/recall/F1 + latency (ms) — must go into manuscript
-5. See `directives/yolov8_training_plan.md` for full training parameters and evaluation targets
+5. See `docs/specs/yolov8_training_plan.md` for full training parameters and evaluation targets
 
 ---
 
@@ -94,14 +94,14 @@ Key endpoints that must remain stable:
 | `GET /api/analytics` | SQL-accurate aggregates, includes metadata |
 | `GET /api/health` | returns `{"ok": true}` even if DB is down |
 
-See `directives/api_events_contract.md` for full field definitions and range rules.
+See `docs/specs/api_events_contract.md` for full field definitions and range rules.
 
 **Self-anneal loop for backend bugs:**
 1. Reproduce with minimal steps
 2. Identify root cause (logs/SQL/network proof)
 3. Fix deterministically
-4. Add regression test in `execution/` (see `execution/smoke_test_api.py`, `execution/verify_db.py`)
-5. Update relevant directive in `directives/`
+4. Add regression test in `scripts/` (see `scripts/smoke_test_api.py`, `scripts/verify_db.py`)
+5. Update relevant directive in `docs/specs/`
 
 ---
 
@@ -137,10 +137,10 @@ Legacy field `warning_on` is fallback only.
 
 ## Resources
 
-- `directives/api_events_contract.md` — Full API field specs and range rules
-- `directives/api_analytics_aggregates.md` — Analytics endpoint contract and validation rules
-- `directives/annotation_guideline_child_class.md` — Child-class labeling rules (inclusion/exclusion, bbox, occlusion)
-- `directives/yolov8_training_plan.md` — YOLOv8 training parameters and evaluation targets
-- `directives/dataset_prepare_citypersons.md` — Dataset preparation SOP
-- `directives/roi_logic_and_trigger_rules.md` — ROI trigger logic rules
-- `execution/` — All deterministic scripts (validate_labels, split_dataset, verify_db, generate_report, smoke_test_api, setup_datasets)
+- `docs/specs/api_events_contract.md` — Full API field specs and range rules
+- `docs/specs/api_analytics_aggregates.md` — Analytics endpoint contract and validation rules
+- `docs/specs/annotation_guideline_child_class.md` — Child-class labeling rules (inclusion/exclusion, bbox, occlusion)
+- `docs/specs/yolov8_training_plan.md` — YOLOv8 training parameters and evaluation targets
+- `docs/specs/dataset_prepare_citypersons.md` — Dataset preparation SOP
+- `docs/specs/roi_logic_and_trigger_rules.md` — ROI trigger logic rules
+- `scripts/` — All deterministic scripts (validate_labels, split_dataset, verify_db, generate_report, smoke_test_api, setup_datasets)
