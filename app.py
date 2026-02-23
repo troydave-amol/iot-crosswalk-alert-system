@@ -6,6 +6,18 @@ from threading import Thread
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO
 
+import cv2
+import json
+from pathlib import Path
+from cv_inference import ChildLikeDetector, ROI
+from warning_controller import WarningController
+
+MODEL_PATH = r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\models\yolov8_childlike_best.pt"
+CHILD_CONF = 0.65
+WARNING_HOLD_SECONDS = 2.0
+DEMO_SOURCE = r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\datasets\jaad_source\JAAD\JAAD_clips\video_0005.mp4"
+ROI_PATH = Path("roi_config.json")
+
 # DB Imports
 from db import init_db, insert_event, fetch_events, fetch_analytics_aggregates
 
@@ -46,6 +58,89 @@ system_state = {
 # --------------------------------------------------------------------------------
 # Helper Functions
 # --------------------------------------------------------------------------------
+
+def load_roi_for_frame(frame_w: int, frame_h: int) -> ROI:
+    """
+    Loads ROI saved from Settings ROI tool and scales to current frame size.
+    Expected JSON keys: x1,y1,x2,y2,image_w,image_h (pixel coords in saved image space)
+    """
+    if not ROI_PATH.exists():
+        # Safe default: whole frame (but better to require ROI file)
+        return ROI(0, 0, frame_w - 1, frame_h - 1)
+
+    data = json.loads(ROI_PATH.read_text(encoding="utf-8"))
+
+    x1, y1, x2, y2 = int(data.get("x1", 0)), int(data.get("y1", 0)), int(data.get("x2", 0)), int(data.get("y2", 0))
+    base_w, base_h = int(data.get("image_w", frame_w)), int(data.get("image_h", frame_h))
+
+    sx = frame_w / base_w
+    sy = frame_h / base_h
+
+    return ROI(
+        x1=int(x1 * sx),
+        y1=int(y1 * sy),
+        x2=int(x2 * sx),
+        y2=int(y2 * sy),
+    )
+
+def run_live_inference_loop(socketio):
+    det = ChildLikeDetector(MODEL_PATH, conf_child=CHILD_CONF)
+    warn_ctrl = WarningController(hold_seconds=WARNING_HOLD_SECONDS)
+
+    cap = cv2.VideoCapture(DEMO_SOURCE)
+    if not cap.isOpened():
+        print(f"[LIVE] Cannot open source: {DEMO_SOURCE}")
+        return
+
+    # Read one frame to get resolution
+    ok, frame = cap.read()
+    if not ok or frame is None:
+        print("[LIVE] Cannot read first frame.")
+        cap.release()
+        return
+
+    h, w = frame.shape[:2]
+    roi = load_roi_for_frame(w, h)
+
+    # rewind for video sources (optional)
+    try:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    except Exception:
+        pass
+
+    print(f"[LIVE] Started inference loop @ {w}x{h}, conf={CHILD_CONF}, hold={WARNING_HOLD_SECONDS}s")
+
+    while True:
+        ok, frame = cap.read()
+        if not ok or frame is None:
+            # loop video for demo
+            if isinstance(DEMO_SOURCE, str):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                continue
+            break
+
+        out = det.infer_frame(frame, roi)
+
+        # Debounced warning request
+        warning_requested = warn_ctrl.update(out["child_in_roi"])
+
+        # For now, since hardware is Step 5.3:
+        warning_device_on = bool(warning_requested)
+
+        payload = {
+            # frozen contract fields
+            "timestamp_iso": out["timestamp_iso"],
+            "latency_ms": out["latency_ms"],
+            "confidence": out["confidence"],
+            "child_in_roi": out["child_in_roi"],
+            "roi_status": out["roi_status"],
+            "warning_device_on": warning_device_on,
+        }
+
+        socketio.emit("status_update", payload)
+
+        # throttle a bit (prevents CPU spikes)
+        socketio.sleep(0.05)  # ~20 updates/sec
 
 def build_status_payload():
     """
@@ -194,6 +289,8 @@ def background_status_loop():
 def index():
     return render_template("index.html")
 
+live_thread_started = False
+
 @socketio.on("connect")
 def handle_connect():
     """
@@ -203,6 +300,13 @@ def handle_connect():
     print("Client connected")
     payload = build_status_payload()
     socketio.emit("status_update", payload)  # Single emit on connect (fixed duplicate)
+
+    global live_thread_started
+    if not live_thread_started:
+        live_thread_started = True
+        import threading
+        t = threading.Thread(target=run_live_inference_loop, args=(socketio,), daemon=True)
+        t.start()
 
 # --------------------------------------------------------------------------------
 # API Routes
@@ -314,9 +418,9 @@ if __name__ == "__main__":
     # Initialize DB (safe to run multiple times)
     init_db()
 
-    # Start the background simulation thread
-    t = Thread(target=background_status_loop, daemon=True)
-    t.start()
+    # Start the background simulation thread (DISABLED for live inference mode)
+    # t = Thread(target=background_status_loop, daemon=True)
+    # t.start()
     
     # Run the Flask-SocketIO server
     socketio.run(app, host="0.0.0.0", port=5000, debug=True)

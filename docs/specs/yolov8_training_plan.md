@@ -19,6 +19,7 @@ data: datasets/citypersons.yaml
 epochs: 50
 imgsz: 640
 batch: 16
+workers: 2  # CRITICAL: leave at 2 to prevent pagefile OOM on Windows
 device: 0  # GPU if available
 ```
 
