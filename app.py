@@ -3,7 +3,7 @@ import random
 from datetime import datetime, timezone
 from threading import Thread
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 from flask_socketio import SocketIO
 
 import cv2
@@ -17,6 +17,7 @@ CHILD_CONF = 0.65
 WARNING_HOLD_SECONDS = 2.0
 DEMO_SOURCE = r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\datasets\jaad_source\JAAD\JAAD_clips\video_0005.mp4"
 ROI_PATH = Path("roi_config.json")
+USE_WEBCAM = True
 
 # DB Imports
 from db import init_db, insert_event, fetch_events, fetch_analytics_aggregates
@@ -137,6 +138,7 @@ def run_live_inference_loop(socketio):
             "warning_device_on": warning_device_on,
         }
 
+        print(f"[LIVE] status_update payload: {json.dumps(payload)}")
         socketio.emit("status_update", payload)
 
         # throttle a bit (prevents CPU spikes)
@@ -289,6 +291,43 @@ def background_status_loop():
 def index():
     return render_template("index.html")
 
+@app.get("/api/roi")
+def api_get_roi():
+    if not ROI_PATH.exists():
+        return jsonify({"ok": False, "error": "roi_not_set"}), 404
+    data = json.loads(ROI_PATH.read_text(encoding="utf-8"))
+    return jsonify({"ok": True, "roi": data})
+
+def _validate_roi_payload(d: dict):
+    required = ["x1","y1","x2","y2","image_w","image_h"]
+    for k in required:
+        if k not in d:
+            return False, f"missing:{k}"
+    try:
+        x1,y1,x2,y2 = int(d["x1"]), int(d["y1"]), int(d["x2"]), int(d["y2"])
+        iw,ih = int(d["image_w"]), int(d["image_h"])
+    except Exception:
+        return False, "type_error"
+
+    if iw <= 0 or ih <= 0:
+        return False, "bad_image_size"
+    if x2 <= x1 or y2 <= y1:
+        return False, "bad_rect"
+    if x1 < 0 or y1 < 0 or x2 > iw or y2 > ih:
+        # allow it but clamp is better; for now reject to avoid mismatched ROI
+        return False, "rect_out_of_bounds"
+    return True, ""
+
+@app.post("/api/roi")
+def api_set_roi():
+    d = request.get_json(silent=True) or {}
+    ok, err = _validate_roi_payload(d)
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 400
+
+    ROI_PATH.write_text(json.dumps(d, indent=2), encoding="utf-8")
+    return jsonify({"ok": True})
+
 live_thread_started = False
 
 @socketio.on("connect")
@@ -302,6 +341,8 @@ def handle_connect():
     socketio.emit("status_update", payload)  # Single emit on connect (fixed duplicate)
 
     global live_thread_started
+    if USE_WEBCAM:
+        return  # inference will run inside gen_frames()
     if not live_thread_started:
         live_thread_started = True
         import threading
@@ -311,6 +352,58 @@ def handle_connect():
 # --------------------------------------------------------------------------------
 # API Routes
 # --------------------------------------------------------------------------------
+
+@app.route("/video_feed")
+def video_feed_route():
+    return Response(gen_frames(), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+def gen_frames():
+    det = ChildLikeDetector(MODEL_PATH, conf_child=CHILD_CONF)
+    warn_ctrl = WarningController(hold_seconds=WARNING_HOLD_SECONDS)
+    last_emit = 0.0
+    EMIT_EVERY_SEC = 0.10  # 10 updates/sec
+
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
+    last_roi_reload = 0.0
+    roi = None
+
+    while True:
+        ok, frame = cap.read()
+        if not ok or frame is None:
+            time.sleep(0.1)
+            continue
+
+        h, w = frame.shape[:2]
+        now = time.time()
+
+        if (now - last_roi_reload) > 1.0:
+            roi = load_roi_for_frame(w, h)
+            last_roi_reload = now
+
+        if (now - last_emit) >= EMIT_EVERY_SEC:
+            out = det.infer_frame(frame, roi)
+            warning_requested = warn_ctrl.update(out["child_in_roi"])
+            warning_device_on = bool(warning_requested)
+
+            payload = {
+                "timestamp_iso": out["timestamp_iso"],
+                "latency_ms": out["latency_ms"],
+                "confidence": out["confidence"],
+                "child_in_roi": out["child_in_roi"],
+                "roi_status": out["roi_status"],
+                "warning_device_on": warning_device_on,
+            }
+            socketio.emit("status_update", payload)
+            last_emit = now
+
+        ret, buffer = cv2.imencode('.jpg', frame)
+        if ret:
+            frame_bytes = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
 @app.route("/api/health")
 def api_health():

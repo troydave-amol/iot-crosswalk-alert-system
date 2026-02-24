@@ -1590,7 +1590,29 @@ const App = {
         }
     },
 
-    saveRoi() {
+    async saveRoiToServer(roiRect, roiImageMeta) {
+        const payload = {
+            x1: roiRect.x || roiRect.x1 || 0,
+            y1: roiRect.y || roiRect.y1 || 0,
+            x2: (roiRect.x !== undefined ? roiRect.x + roiRect.w : roiRect.x2) || 0,
+            y2: (roiRect.y !== undefined ? roiRect.y + roiRect.h : roiRect.y2) || 0,
+            image_w: roiImageMeta?.width || roiImageMeta?.image_w || 0,
+            image_h: roiImageMeta?.height || roiImageMeta?.image_h || 0,
+        };
+
+        const res = await fetch("/api/roi", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j.ok) {
+            throw new Error(j.error || "Failed to save ROI to server");
+        }
+    },
+
+    async saveRoi() {
         if (!this.state.roi) {
             alert("No ROI defined.");
             return;
@@ -1607,9 +1629,20 @@ const App = {
             }
 
             // 3. Meta
+            let meta = null;
             if (this.roiState.img) {
-                const meta = { width: this.roiState.img.naturalWidth, height: this.roiState.img.naturalHeight };
+                meta = { width: this.roiState.img.naturalWidth, height: this.roiState.img.naturalHeight };
                 localStorage.setItem('roiImageMeta', JSON.stringify(meta));
+            } else {
+                meta = JSON.parse(localStorage.getItem('roiImageMeta') || "{}");
+            }
+
+            // 4. Send to Backend
+            try {
+                await this.saveRoiToServer(this.state.roi, meta);
+            } catch (e) {
+                console.warn("Backend save failed:", e);
+                // We'll proceed to show success locally but could warn
             }
 
             // Feedback
@@ -1724,99 +1757,41 @@ const App = {
     },
 
     startCamera() {
-        if (window.CameraController.isOn && window.CameraController.stream && window.CameraController.stream.active) {
-            // Already running, just ensure attached
-            this.attachStreamToVideo(window.CameraController.stream);
-            return;
+        const img = document.getElementById('liveCam');
+        if (!img) return;
+
+        // Use backend video feed
+        img.src = '/video_feed';
+        img.style.display = 'block';
+        window.CameraController.isOn = true;
+
+        // UI
+        const ph = document.getElementById('camPlaceholder');
+        if (ph) ph.style.display = 'none';
+
+        const chip = document.getElementById('camStatusChip');
+        if (chip) {
+            chip.className = 'status-chip connected';
+            chip.innerHTML = '<div class="status-indicator"></div> ON';
+            chip.style.backgroundColor = 'rgba(76, 175, 80, 0.1)';
+            chip.style.color = '#2e7d32';
         }
 
-        const constraints = {
-            video: window.CameraController.selectedDeviceId ?
-                { deviceId: { exact: window.CameraController.selectedDeviceId } } : true,
-            audio: false
-        };
-
-        navigator.mediaDevices.getUserMedia(constraints).then(stream => {
-            // Success
-            window.CameraController.stream = stream;
-            window.CameraController.isOn = true;
-            window.CameraController.lastError = null;
-
-            // Handle stream ended unexpectedly
-            if (stream.getTracks().length > 0) {
-                const track = stream.getTracks()[0];
-                track.onended = () => {
-                    console.log("Stream track ended.");
-                    // Only stop if we really are done.
-                    // This creates a robust check.
-                    this.stopCamera();
-                };
-            }
-
-            this.attachStreamToVideo(stream);
-
-        }).catch(err => {
-            console.error("Camera error:", err);
-            window.CameraController.isOn = false;
-            window.CameraController.lastError = err;
-            window.CameraController.stream = null;
-
-            const ph = document.getElementById('camPlaceholder');
-            if (ph) {
-                ph.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
-                ph.style.display = 'flex';
-            }
-        });
-    },
-
-    attachStreamToVideo(stream) {
-        const video = document.getElementById('liveCam');
-        if (!video) return;
-
-        try {
-            // Don't re-set if already same (avoids flicker)
-            if (video.srcObject !== stream) {
-                video.srcObject = stream;
-            }
-
-            // Allow play
-            video.play().catch(e => {
-                if (e.name !== 'AbortError') console.warn("Video play interrupted:", e);
-            });
-
-            // UI
-            const ph = document.getElementById('camPlaceholder');
-            if (ph) ph.style.display = 'none';
-
-            const chip = document.getElementById('camStatusChip');
-            if (chip) {
-                chip.className = 'status-chip connected';
-                chip.innerHTML = '<div class="status-indicator"></div> ON';
-                chip.style.backgroundColor = 'rgba(76, 175, 80, 0.1)';
-                chip.style.color = '#2e7d32';
-            }
-
-            const sourceChip = document.getElementById('camSourceChip');
-            if (sourceChip) sourceChip.style.display = 'flex';
-
-        } catch (e) {
-            console.error("Attach error:", e);
+        const sourceChip = document.getElementById('camSourceChip');
+        if (sourceChip) {
+            sourceChip.style.display = 'flex';
+            sourceChip.innerHTML = '<div class="status-indicator"></div> OpenCV Backend';
         }
     },
 
     stopCamera() {
-        // Stop Tracks
-        if (window.CameraController.stream) {
-            window.CameraController.stream.getTracks().forEach(track => track.stop());
-            window.CameraController.stream = null;
-        }
         window.CameraController.isOn = false;
 
         // UI Reset
-        const video = document.getElementById('liveCam');
-        if (video) {
-            video.pause();
-            video.srcObject = null;
+        const img = document.getElementById('liveCam');
+        if (img) {
+            img.src = '';
+            img.style.display = 'none';
         }
 
         const ph = document.getElementById('camPlaceholder');
@@ -1827,7 +1802,7 @@ const App = {
                     <i class="fa-solid fa-camera"></i>
                 </div>
                 <p><strong>Camera is OFF.</strong><br>Click Start Camera to preview.</p>
-                <p style="font-size: 0.8rem; margin-top: 10px; color: #888;">Runs locally in the browser. No audio, no recording, no uploads.</p>
+                <p style="font-size: 0.8rem; margin-top: 10px; color: #888;">Powered by OpenCV backend.</p>
             `;
         }
 

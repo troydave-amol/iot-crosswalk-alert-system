@@ -106,14 +106,15 @@
                     <div class="card">
                         <div class="card-title">Live Camera View</div>
                         <div class="video-wrapper">
-                            <video id="liveCam" autoplay playsinline muted></video>
+                            <img id="liveCam" src="" alt="Live Camera Feed"
+                                style="display:none; width: 100%; height: auto; object-fit: cover;">
                             <div id="camPlaceholder" class="cam-placeholder">
                                 <div style="font-size: 2rem; margin-bottom: 10px; color: #ccc;">
                                     <i class="fa-solid fa-camera"></i>
                                 </div>
                                 <p><strong>Camera is OFF.</strong><br>Click Start Camera to preview.</p>
-                                <p style="font-size: 0.8rem; margin-top: 10px; color: #888;">Runs locally in the
-                                    browser. No audio, no recording, no uploads.</p>
+                                <p style="font-size: 0.8rem; margin-top: 10px; color: #888;">Powered by OpenCV backend.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -137,7 +138,7 @@
                                     <div class="status-indicator"></div> OFF
                                 </div>
                                 <div class="status-chip connected" id="camSourceChip" style="display:none;">
-                                    <div class="status-indicator"></div> Webcam
+                                    <div class="status-indicator"></div> OpenCV Backend
                                 </div>
                             </div>
                         </div>
@@ -271,7 +272,8 @@
                             <option value="50">50</option>
                         </select>
                         <span id="resultCount" class="text-muted ml-3"
-                            style="font-size:0.9rem; margin-left:15px;">Showing 0 of 0 events</span>
+                            style="font-size:0.9rem; margin-left:15px;">Showing 0
+                            of 0 events</span>
                     </div>
                     <div class="page-nav">
                         <button class="btn btn-outline btn-sm" id="pagePrev" disabled><i
