@@ -329,7 +329,13 @@ const App = {
         status.roi_status = data.child_in_roi ? 'INSIDE' : 'OUTSIDE';
         status.latency_ms = data.latency || 0;
         status.last_update_str = new Date().toLocaleTimeString();
-        status.connection_status = "Connected";
+        if (data.source === "yolo") {
+            status.connection_status = "Live (YOLO)";
+            const mt = document.getElementById('mock-toggle');
+            if (mt) mt.style.display = 'none';
+        } else {
+            status.connection_status = "Connected";
+        }
 
         if (data.battery) power.battery_percent = data.battery;
         // If solar data comes in
@@ -1394,13 +1400,8 @@ const App = {
             img: null // Image object
         };
 
-        // 3. Load from LocalStorage
-        const savedRect = localStorage.getItem('roiRect');
+        // 3. Load from LocalStorage (image data only)
         const savedImgData = localStorage.getItem('roiImageData');
-
-        if (savedRect) {
-            this.state.roi = JSON.parse(savedRect);
-        }
 
         if (savedImgData) {
             this.loadImageToCanvas(savedImgData);
@@ -1409,6 +1410,37 @@ const App = {
             overlay.style.display = 'block';
             canvas.style.display = 'none';
         }
+
+        // 3b. Sync ROI rect from server (authoritative source)
+        fetch('/api/roi').then(r => r.json()).then(j => {
+            if (j.ok && j.roi) {
+                const sr = j.roi;
+                // Convert server x1,y1,x2,y2 to canvas x,y,w,h
+                this.state.roi = {
+                    x: sr.x1,
+                    y: sr.y1,
+                    w: sr.x2 - sr.x1,
+                    h: sr.y2 - sr.y1
+                };
+                // Also store the image dims for reference
+                localStorage.setItem('roiImageMeta', JSON.stringify({
+                    width: sr.image_w,
+                    height: sr.image_h
+                }));
+                localStorage.setItem('roiRect', JSON.stringify(this.state.roi));
+                this.drawRoi();
+                this.updateRoiCoords(this.state.roi);
+                console.log('[ROI] Synced from server:', sr);
+            }
+        }).catch(() => {
+            // Server unavailable — fall back to localStorage
+            const savedRect = localStorage.getItem('roiRect');
+            if (savedRect) {
+                this.state.roi = JSON.parse(savedRect);
+                this.drawRoi();
+                this.updateRoiCoords(this.state.roi);
+            }
+        });
 
         // 4. Event Listeners
 
@@ -1485,6 +1517,27 @@ const App = {
         // C) Buttons
         document.getElementById('btnSaveRoi')?.addEventListener('click', () => this.saveRoi());
         document.getElementById('btnResetRoi')?.addEventListener('click', () => this.resetRoi());
+
+        // D) Capture Frame
+        document.getElementById('btnCaptureFrame')?.addEventListener('click', () => {
+            const liveImg = document.getElementById('liveCam');
+            if (liveImg && liveImg.src && window.CameraController.isOn) {
+                const c = document.createElement('canvas');
+                c.width = liveImg.naturalWidth || 1280;
+                c.height = liveImg.naturalHeight || 720;
+                const ctx = c.getContext('2d');
+                try {
+                    ctx.drawImage(liveImg, 0, 0, c.width, c.height);
+                    const dataUrl = c.toDataURL('image/jpeg', 0.8);
+                    this.state.roi = null;
+                    this.loadImageToCanvas(dataUrl);
+                } catch (e) {
+                    alert("Stream error capturing frame. Please upload an image instead.");
+                }
+            } else {
+                alert("Camera is not running in Live View. Please Start Camera first.");
+            }
+        });
     },
 
     loadImageToCanvas(dataUrl) {
@@ -1591,14 +1644,17 @@ const App = {
     },
 
     async saveRoiToServer(roiRect, roiImageMeta) {
-        const payload = {
-            x1: roiRect.x || roiRect.x1 || 0,
-            y1: roiRect.y || roiRect.y1 || 0,
-            x2: (roiRect.x !== undefined ? roiRect.x + roiRect.w : roiRect.x2) || 0,
-            y2: (roiRect.y !== undefined ? roiRect.y + roiRect.h : roiRect.y2) || 0,
-            image_w: roiImageMeta?.width || roiImageMeta?.image_w || 0,
-            image_h: roiImageMeta?.height || roiImageMeta?.image_h || 0,
-        };
+        // Convert canvas {x,y,w,h} to server {x1,y1,x2,y2}
+        const hasXY = roiRect.x !== undefined && roiRect.y !== undefined;
+        const x1 = Math.round(hasXY ? roiRect.x : (roiRect.x1 ?? 0));
+        const y1 = Math.round(hasXY ? roiRect.y : (roiRect.y1 ?? 0));
+        const x2 = Math.round(hasXY ? roiRect.x + roiRect.w : (roiRect.x2 ?? 0));
+        const y2 = Math.round(hasXY ? roiRect.y + roiRect.h : (roiRect.y2 ?? 0));
+        const image_w = Math.round(roiImageMeta?.width ?? roiImageMeta?.image_w ?? 0);
+        const image_h = Math.round(roiImageMeta?.height ?? roiImageMeta?.image_h ?? 0);
+
+        const payload = { x1, y1, x2, y2, image_w, image_h };
+        console.log('[ROI] Saving to server:', payload);
 
         const res = await fetch("/api/roi", {
             method: "POST",
@@ -1608,7 +1664,7 @@ const App = {
 
         const j = await res.json().catch(() => ({}));
         if (!res.ok || !j.ok) {
-            throw new Error(j.error || "Failed to save ROI to server");
+            throw new Error(j.error || `HTTP ${res.status}`);
         }
     },
 
@@ -1641,25 +1697,37 @@ const App = {
             try {
                 await this.saveRoiToServer(this.state.roi, meta);
             } catch (e) {
-                console.warn("Backend save failed:", e);
-                // We'll proceed to show success locally but could warn
+                console.error("[ROI] Backend save failed:", e);
+                alert("ROI save failed: " + e.message + "\nCheck browser console for details.");
+                return;  // Don't show success if backend failed
             }
 
-            // Feedback
+            // Feedback — solid green button
             const btn = document.getElementById('btnSaveRoi');
             const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-check"></i> Saved';
-            btn.classList.replace('btn-primary', 'btn-success'); // Assuming bootstrap-like or we add style
-            // We need to define .btn-success or just style it
+            const originalBg = btn.style.backgroundColor;
+            const originalColor = btn.style.color;
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> Saved!';
             btn.style.backgroundColor = '#4CAF50';
             btn.style.color = 'white';
 
             setTimeout(() => {
                 btn.innerHTML = originalText;
-                btn.style.backgroundColor = '';
-                btn.style.color = '';
-                btn.classList.replace('btn-success', 'btn-primary');
-            }, 2000);
+                btn.style.backgroundColor = originalBg;
+                btn.style.color = originalColor;
+            }, 2500);
+
+            // Auto-refresh Live View so ROI updates without page reload
+            this.updateLiveRoiBadge();
+            if (window.CameraController.isOn) {
+                const img = document.getElementById('liveCam');
+                if (img && img.src && img.src.includes('/video_feed')) {
+                    // Force reconnect by briefly clearing and re-setting src
+                    const currentSrc = img.src;
+                    img.src = '';
+                    setTimeout(() => { img.src = currentSrc; }, 100);
+                }
+            }
 
         } catch (e) {
             console.error("Storage Error", e);
@@ -1701,8 +1769,67 @@ const App = {
         // Button Listeners
         document.getElementById('btnStartCam')?.addEventListener('click', () => this.startCamera());
         document.getElementById('btnStopCam')?.addEventListener('click', () => this.stopCamera());
+        document.getElementById('debugOverlayToggle')?.addEventListener('change', (e) => {
+            if (window.CameraController.isOn) {
+                const img = document.getElementById('liveCam');
+                if (img) img.src = '/video_feed?overlay=' + (e.target.checked ? "1" : "0");
+            }
+        });
+        // Default overlay to ON
+        const overlayToggle = document.getElementById('debugOverlayToggle');
+        if (overlayToggle) overlayToggle.checked = true;
 
         const select = document.getElementById('camDeviceSelect');
+        const typeSelect = document.getElementById('camSourceType');
+        const ipGroup = document.getElementById('ipCamInputGroup');
+        const locGroup = document.getElementById('localCamInputGroup');
+        const ipInput = document.getElementById('ipCamUrl');
+
+        if (typeSelect) {
+            // Load saved state
+            const savedType = localStorage.getItem('camSourceType') || 'ip';
+            typeSelect.value = savedType;
+            if (savedType === 'ip') {
+                if (ipGroup) ipGroup.style.display = 'block';
+                if (locGroup) locGroup.style.display = 'none';
+            } else {
+                if (ipGroup) ipGroup.style.display = 'none';
+                if (locGroup) locGroup.style.display = 'block';
+            }
+
+            const savedUrl = localStorage.getItem('ipCamUrl');
+            if (savedUrl && ipInput) ipInput.value = savedUrl;
+
+            typeSelect.addEventListener('change', (e) => {
+                const newType = e.target.value;
+                localStorage.setItem('camSourceType', newType);
+
+                if (newType === 'ip') {
+                    if (ipGroup) ipGroup.style.display = 'block';
+                    if (locGroup) locGroup.style.display = 'none';
+                } else {
+                    if (ipGroup) ipGroup.style.display = 'none';
+                    if (locGroup) locGroup.style.display = 'block';
+                }
+
+                // If camera is already ON, restart with new type
+                if (window.CameraController.isOn) {
+                    this.stopCamera();
+                    setTimeout(() => this.startCamera(), 300);
+                }
+            });
+        }
+
+        if (ipInput) {
+            ipInput.addEventListener('change', (e) => {
+                localStorage.setItem('ipCamUrl', e.target.value.trim());
+                if (window.CameraController.isOn && typeSelect && typeSelect.value === 'ip') {
+                    this.stopCamera();
+                    setTimeout(() => this.startCamera(), 300);
+                }
+            });
+        }
+
         if (select) {
             select.addEventListener('change', (e) => {
                 const newId = e.target.value;
@@ -1712,7 +1839,7 @@ const App = {
                 localStorage.setItem('camDeviceId', newId);
 
                 // If camera is already ON, restart with new device
-                if (window.CameraController.isOn) {
+                if (window.CameraController.isOn && typeSelect && typeSelect.value === 'local') {
                     this.stopCamera(); // Stop current
                     setTimeout(() => this.startCamera(), 300); // Restart
                 }
@@ -1723,7 +1850,6 @@ const App = {
         if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
             navigator.mediaDevices.enumerateDevices().then(devices => {
                 const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                const selectGroup = document.getElementById('camSelectGroup');
 
                 if (select) {
                     if (videoDevices.length > 0) {
@@ -1761,9 +1887,30 @@ const App = {
         if (!img) return;
 
         // Use backend video feed
-        img.src = '/video_feed';
+        const useOverlay = document.getElementById('debugOverlayToggle')?.checked ? "1" : "0";
+
+        let sourceParam = "";
+        const typeSelect = document.getElementById('camSourceType');
+
+        if (typeSelect && typeSelect.value === 'ip') {
+            const ipUrl = document.getElementById('ipCamUrl')?.value.trim();
+            if (ipUrl) {
+                sourceParam = encodeURIComponent(ipUrl);
+            }
+        } else {
+            // Local webcam index
+            const selectTarget = document.getElementById('camDeviceSelect');
+            if (selectTarget && selectTarget.selectedIndex >= 0) {
+                sourceParam = selectTarget.selectedIndex.toString();
+            } else {
+                sourceParam = "0"; // Default
+            }
+        }
+
+        img.src = '/video_feed?overlay=' + useOverlay + '&source=' + sourceParam;
         img.style.display = 'block';
         window.CameraController.isOn = true;
+        this.updateLiveRoiBadge();
 
         // UI
         const ph = document.getElementById('camPlaceholder');
@@ -1780,7 +1927,7 @@ const App = {
         const sourceChip = document.getElementById('camSourceChip');
         if (sourceChip) {
             sourceChip.style.display = 'flex';
-            sourceChip.innerHTML = '<div class="status-indicator"></div> OpenCV Backend';
+            sourceChip.innerHTML = '<div class="status-indicator"></div> IP Webcam + YOLO';
         }
     },
 
@@ -1871,6 +2018,22 @@ const App = {
             }
             chart.update();
         });
+    },
+
+    async updateLiveRoiBadge() {
+        try {
+            const res = await fetch("/api/roi");
+            if (res.ok) {
+                const j = await res.json();
+                if (j.ok && j.roi) {
+                    const b = document.getElementById('liveRoiBadge');
+                    if (b) {
+                        b.style.display = 'block';
+                        b.innerHTML = `<i class="fa-solid fa-crosshairs"></i> ROI Active: (${Math.round(j.roi.x1)}, ${Math.round(j.roi.y1)}) to (${Math.round(j.roi.x2)}, ${Math.round(j.roi.y2)})`;
+                    }
+                }
+            }
+        } catch (e) { }
     }
 };
 

@@ -65,6 +65,7 @@ class ChildLikeDetector:
         r = results[0]
         boxes = r.boxes
 
+        detections_out = []
         if boxes is not None and len(boxes) > 0:
             # boxes.xyxy: (N,4), boxes.conf: (N,), boxes.cls: (N,)
             xyxy = boxes.xyxy.cpu().numpy()
@@ -72,6 +73,11 @@ class ChildLikeDetector:
             cls  = boxes.cls.cpu().numpy().astype(int)
 
             for (x1, y1, x2, y2), c, k in zip(xyxy, conf, cls):
+                detections_out.append({
+                    "bbox": (int(x1), int(y1), int(x2), int(y2)),
+                    "conf": float(c),
+                    "cls": int(k)
+                })
                 # Only care about child_like class_id = 0
                 if k != 0:
                     continue
@@ -94,4 +100,5 @@ class ChildLikeDetector:
             "confidence": round(best_child_conf, 3),
             "child_in_roi": child_in_roi,
             "roi_status": roi_status,
+            "detections": detections_out,
         }

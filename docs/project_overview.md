@@ -77,3 +77,5 @@ Here is exactly what happens when you turn it on (by typing `python app.py` and 
 6.  **Viewing the History**: If you click the "Logs" or "Analytics" tabs on the dashboard, you instantly see beautiful graphs counting exactly how many times the lights turned on today.
 
 Everything talks to each other perfectly, ensuring kids cross safely and the system logs every successful detection!
+
+Think of ROI as: “Only care about detections inside this rectangle.”

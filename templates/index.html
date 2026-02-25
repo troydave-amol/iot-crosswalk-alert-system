@@ -105,6 +105,10 @@
                 <div class="camera-grid">
                     <div class="card">
                         <div class="card-title">Live Camera View</div>
+                        <div id="liveRoiBadge" class="status-chip"
+                            style="margin-top: 5px; display: none; background-color: rgba(76, 175, 80, 0.1); color: #2e7d32; width: fit-content; margin-bottom: 10px;">
+                            <i class="fa-solid fa-crosshairs"></i> ROI Active
+                        </div>
                         <div class="video-wrapper">
                             <img id="liveCam" src="" alt="Live Camera Feed"
                                 style="display:none; width: 100%; height: auto; object-fit: cover;">
@@ -127,9 +131,25 @@
                                 <button id="btnStopCam" class="btn btn-secondary">Stop Camera</button>
                             </div>
 
-                            <div class="control-group" id="camSelectGroup" style="display:none;">
-                                <div class="control-label">Source</div>
-                                <select id="camDeviceSelect" class="form-control"></select>
+                            <div class="control-group" id="camSelectGroup"
+                                style="display:flex; flex-direction:column; gap:8px;">
+                                <div class="control-label">Source Type</div>
+                                <select id="camSourceType" class="form-control">
+                                    <option value="ip">IP Webcam</option>
+                                    <option value="local">Local Webcam</option>
+                                </select>
+
+                                <div id="ipCamInputGroup" style="display:block;">
+                                    <div class="control-label" style="font-size:0.8rem;">IP Camera URL</div>
+                                    <input type="text" id="ipCamUrl" class="form-control"
+                                        placeholder="http://192.168.1.50:8080/video"
+                                        value="http://10.0.0.65:8080/video">
+                                </div>
+
+                                <div id="localCamInputGroup" style="display:none;">
+                                    <div class="control-label" style="font-size:0.8rem;">Device</div>
+                                    <select id="camDeviceSelect" class="form-control"></select>
+                                </div>
                             </div>
 
                             <div class="control-group">
@@ -140,6 +160,14 @@
                                 <div class="status-chip connected" id="camSourceChip" style="display:none;">
                                     <div class="status-indicator"></div> OpenCV Backend
                                 </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">Debug</div>
+                                <label class="checkbox-label" style="display:flex; align-items:center;">
+                                    <input type="checkbox" id="debugOverlayToggle" checked style="margin-right:8px;"> AI
+                                    Overlay (ROI + Boxes)
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -495,6 +523,9 @@
                         <h3 style="margin:0;">ROI Configuration</h3>
                         <div class="roi-actions">
                             <input type="file" id="roiImageInput" accept="image/*" style="display:none;">
+                            <button class="btn btn-outline btn-sm" id="btnCaptureFrame" style="margin-right: 5px;">
+                                <i class="fa-solid fa-camera"></i> Capture Frame
+                            </button>
                             <button class="btn btn-outline btn-sm"
                                 onclick="document.getElementById('roiImageInput').click()">
                                 <i class="fa-solid fa-upload"></i> Upload Image
@@ -510,9 +541,10 @@
                     </div>
 
                     <p class="mb-4 text-muted" style="font-size:0.9rem;">
-                        <strong>Instructions:</strong> Upload a reference image, then click and drag to draw the Region
-                        of Interest (ROI).
-                        This area defines where child detection triggers the warning.
+                        <strong>Instructions:</strong> Use "Capture Frame" to grab the current live camera view, or
+                        upload a reference image.
+                        Draw the Region of Interest (ROI) where warnings should trigger (crosswalk area).
+                        Click <strong>Save ROI</strong>. Go back to Live View and Click Start Camera to test.
                     </p>
 
                     <div class="roi-tool-container">

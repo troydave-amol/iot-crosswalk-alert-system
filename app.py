@@ -19,6 +19,11 @@ DEMO_SOURCE = r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\dataset
 ROI_PATH = Path("roi_config.json")
 USE_WEBCAM = True
 
+# Camera source: URL for IP Webcam, or integer for local webcam index
+# Switch between these by commenting/uncommenting:
+VIDEO_SOURCE = "http://10.0.0.65:8080/video"   # IP Webcam (Infinix Hot 11s)
+# VIDEO_SOURCE = 0                               # Local webcam (DirectShow)
+
 # DB Imports
 from db import init_db, insert_event, fetch_events, fetch_analytics_aggregates
 
@@ -136,6 +141,7 @@ def run_live_inference_loop(socketio):
             "child_in_roi": out["child_in_roi"],
             "roi_status": out["roi_status"],
             "warning_device_on": warning_device_on,
+            "source": "yolo"
         }
 
         print(f"[LIVE] status_update payload: {json.dumps(payload)}")
@@ -302,30 +308,38 @@ def _validate_roi_payload(d: dict):
     required = ["x1","y1","x2","y2","image_w","image_h"]
     for k in required:
         if k not in d:
-            return False, f"missing:{k}"
+            return False, f"missing:{k}", d
     try:
-        x1,y1,x2,y2 = int(d["x1"]), int(d["y1"]), int(d["x2"]), int(d["y2"])
-        iw,ih = int(d["image_w"]), int(d["image_h"])
+        iw, ih = int(d["image_w"]), int(d["image_h"])
     except Exception:
-        return False, "type_error"
+        return False, "type_error", d
 
     if iw <= 0 or ih <= 0:
-        return False, "bad_image_size"
-    if x2 <= x1 or y2 <= y1:
-        return False, "bad_rect"
-    if x1 < 0 or y1 < 0 or x2 > iw or y2 > ih:
-        # allow it but clamp is better; for now reject to avoid mismatched ROI
-        return False, "rect_out_of_bounds"
-    return True, ""
+        return False, "bad_image_size", d
+
+    # Clamp coordinates to image bounds (instead of rejecting edge cases)
+    x1 = max(0, min(int(round(d["x1"])), iw - 1))
+    y1 = max(0, min(int(round(d["y1"])), ih - 1))
+    x2 = max(x1 + 1, min(int(round(d["x2"])), iw))
+    y2 = max(y1 + 1, min(int(round(d["y2"])), ih))
+
+    # Build clean payload with integer values
+    clean = {
+        "x1": x1, "y1": y1, "x2": x2, "y2": y2,
+        "image_w": iw, "image_h": ih
+    }
+    return True, "", clean
 
 @app.post("/api/roi")
 def api_set_roi():
     d = request.get_json(silent=True) or {}
-    ok, err = _validate_roi_payload(d)
+    ok, err, clean = _validate_roi_payload(d)
     if not ok:
+        print(f"[ROI] Validation failed: {err} | payload={d}")
         return jsonify({"ok": False, "error": err}), 400
 
-    ROI_PATH.write_text(json.dumps(d, indent=2), encoding="utf-8")
+    ROI_PATH.write_text(json.dumps(clean, indent=2), encoding="utf-8")
+    print(f"[ROI] Saved: {clean}")
     return jsonify({"ok": True})
 
 live_thread_started = False
@@ -355,20 +369,46 @@ def handle_connect():
 
 @app.route("/video_feed")
 def video_feed_route():
-    return Response(gen_frames(), mimetype="multipart/x-mixed-replace; boundary=frame")
+    overlay = request.args.get("overlay", "1") == "1"  # ON by default
+    source_uri = request.args.get("source", "")
+    return Response(gen_frames(overlay=overlay, source_str=source_uri), mimetype="multipart/x-mixed-replace; boundary=frame")
 
-def gen_frames():
+def gen_frames(overlay=True, source_str=""):
     det = ChildLikeDetector(MODEL_PATH, conf_child=CHILD_CONF)
     warn_ctrl = WarningController(hold_seconds=WARNING_HOLD_SECONDS)
     last_emit = 0.0
     EMIT_EVERY_SEC = 0.10  # 10 updates/sec
 
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    # 1. Determine local vs IP camera
+    if source_str.isdigit():
+        video_src = int(source_str)
+        # Use DirectShow for local webcams on Windows for faster startup
+        cap = cv2.VideoCapture(video_src, cv2.CAP_DSHOW)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    elif source_str.startswith("http"):
+        video_src = source_str
+        cap = cv2.VideoCapture(video_src)
+    else:
+        # Fallback to configured VIDEO_SOURCE if none provided by frontend
+        if isinstance(VIDEO_SOURCE, int):
+            cap = cv2.VideoCapture(VIDEO_SOURCE, cv2.CAP_DSHOW)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        else:
+            cap = cv2.VideoCapture(VIDEO_SOURCE)
+        video_src = VIDEO_SOURCE
 
-    last_roi_reload = 0.0
+    if not cap.isOpened():
+        print(f"[LIVE] Cannot open video source: {video_src}")
+        return
+
+    last_roi_mtime = 0.0
     roi = None
+    last_detections = []
+    last_child_in_roi = False
+
+    print(f"[LIVE] gen_frames started | source={video_src} | overlay={overlay}")
 
     while True:
         ok, frame = cap.read()
@@ -379,14 +419,25 @@ def gen_frames():
         h, w = frame.shape[:2]
         now = time.time()
 
-        if (now - last_roi_reload) > 1.0:
-            roi = load_roi_for_frame(w, h)
-            last_roi_reload = now
+        # Reload ROI when roi_config.json changes (mtime-based for instant updates)
+        try:
+            if ROI_PATH.exists():
+                m = ROI_PATH.stat().st_mtime
+                if m != last_roi_mtime:
+                    roi = load_roi_for_frame(w, h)
+                    last_roi_mtime = m
+                    print(f"[LIVE] ROI reloaded: ({roi.x1},{roi.y1})-({roi.x2},{roi.y2})")
+            elif roi is None:
+                roi = load_roi_for_frame(w, h)  # default: whole frame
+        except Exception as e:
+            print(f"[LIVE] ROI reload error: {e}")
 
         if (now - last_emit) >= EMIT_EVERY_SEC:
             out = det.infer_frame(frame, roi)
             warning_requested = warn_ctrl.update(out["child_in_roi"])
             warning_device_on = bool(warning_requested)
+            last_detections = out.get("detections", [])
+            last_child_in_roi = out["child_in_roi"]
 
             payload = {
                 "timestamp_iso": out["timestamp_iso"],
@@ -395,9 +446,52 @@ def gen_frames():
                 "child_in_roi": out["child_in_roi"],
                 "roi_status": out["roi_status"],
                 "warning_device_on": warning_device_on,
+                "source": "yolo"
             }
             socketio.emit("status_update", payload)
             last_emit = now
+
+        # ----- Overlay Drawing -----
+        if overlay:
+            # A) ROI rectangle — light tint + solid border
+            if roi:
+                roi_overlay = frame.copy()
+                if last_child_in_roi:
+                    fill_color = (0, 0, 200)   # Red tint = WARNING
+                    border_color = (0, 0, 255)
+                else:
+                    fill_color = (0, 180, 0)   # Green tint = CLEAR
+                    border_color = (0, 255, 0)
+                cv2.rectangle(roi_overlay, (roi.x1, roi.y1), (roi.x2, roi.y2), fill_color, -1)
+                cv2.addWeighted(roi_overlay, 0.08, frame, 0.92, 0, frame)  # very light tint
+                cv2.rectangle(frame, (roi.x1, roi.y1), (roi.x2, roi.y2), border_color, 4)
+                # ROI label with background
+                roi_label = "ROI: CHILD DETECTED" if last_child_in_roi else "ROI: CLEAR"
+                (tw, th), _ = cv2.getTextSize(roi_label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
+                lx, ly = roi.x1, max(th + 10, roi.y1 - 10)
+                cv2.rectangle(frame, (lx, ly - th - 6), (lx + tw + 8, ly + 4), (0, 0, 0), -1)
+                cv2.putText(frame, roi_label, (lx + 4, ly),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, border_color, 2, cv2.LINE_AA)
+
+            # B) Detection bounding boxes
+            for d in last_detections:
+                x1, y1, x2, y2 = d["bbox"]
+                c = d["conf"]
+                k = d["cls"]
+                if k == 0:  # child_like
+                    color = (0, 255, 255)  # Cyan
+                    label = f"child_like {c:.2f}"
+                    thickness = 3
+                else:       # adult_like
+                    color = (255, 180, 50)  # Orange
+                    label = f"adult_like {c:.2f}"
+                    thickness = 2
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+                # Label: white text on black background
+                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+                cv2.rectangle(frame, (x1, max(0, y1 - th - 8)), (x1 + tw + 6, y1), (0, 0, 0), -1)
+                cv2.putText(frame, label, (x1 + 3, max(th + 3, y1 - 3)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
 
         ret, buffer = cv2.imencode('.jpg', frame)
         if ret:
