@@ -1338,3 +1338,42 @@ body.dark-mode .status-chip.neutral {
     background-color: #333;
     color: #aaa;
 }
+
+/* =========================================
+   SAVE ROI BUTTON STATES
+   ========================================= */
+.btn-saving {
+    opacity: 0.75;
+    pointer-events: none;
+}
+
+.btn-saved {
+    background: #22c55e !important;
+    border-color: #22c55e !important;
+    color: #fff !important;
+}
+
+.btn-error {
+    background: #ef4444 !important;
+    border-color: #ef4444 !important;
+    color: #fff !important;
+}
+
+/* Unsaved changes badge */
+.roi-unsaved-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8rem;
+    color: #b45309;
+    background: rgba(245, 158, 11, 0.12);
+    padding: 3px 10px;
+    border-radius: 10px;
+    margin-left: 8px;
+    animation: fadeIn 0.3s ease;
+}
+
+body.dark-mode .roi-unsaved-badge {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.2);
+}

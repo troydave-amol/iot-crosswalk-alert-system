@@ -289,9 +289,35 @@ const App = {
             this.socket.on('status_update', (data) => {
                 this.handleSocketData(data);
             });
+            this.socket.on('roi_updated', (msg) => {
+                this.handleRoiUpdated(msg);
+            });
         } catch (e) {
             console.log("Socket.IO not initialized (Mock Mode only).");
         }
+    },
+
+    handleRoiUpdated(msg) {
+        const roi = msg?.roi;
+        if (!roi) return;
+
+        // 1) Update the ROI Active badge on Live View immediately
+        const b = document.getElementById('liveRoiBadge');
+        if (b) {
+            b.style.display = 'block';
+            b.innerHTML = `<i class="fa-solid fa-crosshairs"></i> ROI Active: (${Math.round(roi.x1)}, ${Math.round(roi.y1)}) to (${Math.round(roi.x2)}, ${Math.round(roi.y2)})`;
+        }
+
+        // 2) Restart the MJPEG camera stream so the server-side overlay uses the new ROI
+        const img = document.getElementById('liveCam');
+        if (img && img.src && img.src.includes('/video_feed')) {
+            const base = img.src.split('?')[0];
+            const params = new URL(img.src, window.location.origin).searchParams;
+            params.set('t', Date.now());
+            img.src = `${base}?${params.toString()}`;
+        }
+
+        console.log('[ROI] Live View updated via socket:', roi);
     },
 
     handleSocketData(data) {
@@ -1428,6 +1454,7 @@ const App = {
                     height: sr.image_h
                 }));
                 localStorage.setItem('roiRect', JSON.stringify(this.state.roi));
+                this.roiDirty = false; // Server-synced = active
                 this.drawRoi();
                 this.updateRoiCoords(this.state.roi);
                 console.log('[ROI] Synced from server:', sr);
@@ -1449,10 +1476,13 @@ const App = {
             if (e.target.files && e.target.files[0]) {
                 const reader = new FileReader();
                 reader.onload = (evt) => {
-                    // Reset ROI on new image? Prompt says: "If user uploads a new image, clear the current ROI selection"
+                    // Reset ROI on new image
                     this.state.roi = null;
                     this.loadImageToCanvas(evt.target.result);
-
+                    // Mark dirty (new image = unsaved)
+                    this.roiDirty = true;
+                    const ub = document.getElementById('roiUnsavedBadge');
+                    if (ub) ub.style.display = 'inline-flex';
                     // Clear inputs just in case
                     e.target.value = '';
                 };
@@ -1502,6 +1532,10 @@ const App = {
                 this.normalizeRoi();
                 this.drawRoi();
                 this.updateRoiCoords(this.state.roi);
+                // Mark dirty
+                this.roiDirty = true;
+                const ub = document.getElementById('roiUnsavedBadge');
+                if (ub) ub.style.display = 'inline-flex';
             }
         });
 
@@ -1531,6 +1565,10 @@ const App = {
                     const dataUrl = c.toDataURL('image/jpeg', 0.8);
                     this.state.roi = null;
                     this.loadImageToCanvas(dataUrl);
+                    // Mark dirty (new capture = unsaved)
+                    this.roiDirty = true;
+                    const ub = document.getElementById('roiUnsavedBadge');
+                    if (ub) ub.style.display = 'inline-flex';
                 } catch (e) {
                     alert("Stream error capturing frame. Please upload an image instead.");
                 }
@@ -1614,16 +1652,28 @@ const App = {
             ctx.drawImage(img, 0, 0);
         }
 
-        // Draw Rect
+        // Draw Rect — Green = Active (saved), Red = Draft (unsaved)
         if (roi && (roi.w !== 0 || roi.h !== 0)) {
+            const isDraft = !!this.roiDirty;
+            const fillColor = isDraft ? 'rgba(239, 68, 68, 0.25)' : 'rgba(34, 197, 94, 0.25)';
+            const strokeColor = isDraft ? '#ef4444' : '#22c55e';
+
             // Fill
-            ctx.fillStyle = 'rgba(255, 146, 128, 0.3)'; // Primary accent tint
+            ctx.fillStyle = fillColor;
             ctx.fillRect(roi.x, roi.y, roi.w, roi.h);
 
             // Stroke
-            ctx.strokeStyle = '#FF9280';
+            ctx.strokeStyle = strokeColor;
             ctx.lineWidth = 3;
             ctx.strokeRect(roi.x, roi.y, roi.w, roi.h);
+
+            // Label
+            const label = isDraft ? 'DRAFT' : 'ACTIVE';
+            ctx.font = 'bold 14px Manrope, sans-serif';
+            ctx.fillStyle = strokeColor;
+            const labelX = roi.x + 6;
+            const labelY = roi.y > 22 ? roi.y - 8 : roi.y + 18;
+            ctx.fillText(label, labelX, labelY);
         }
     },
 
@@ -1656,15 +1706,29 @@ const App = {
         const payload = { x1, y1, x2, y2, image_w, image_h };
         console.log('[ROI] Saving to server:', payload);
 
-        const res = await fetch("/api/roi", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        });
+        // 10-second timeout so the button never gets stuck at "Saving..." forever
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok || !j.ok) {
-            throw new Error(j.error || `HTTP ${res.status}`);
+        try {
+            const res = await fetch("/api/roi", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok || !j.ok) {
+                throw new Error(j.error || `HTTP ${res.status}`);
+            }
+        } catch (e) {
+            clearTimeout(timeoutId);
+            if (e.name === 'AbortError') {
+                throw new Error('Server did not respond in time (10s). Is the camera stream blocking the server?');
+            }
+            throw e;
         }
     },
 
@@ -1674,12 +1738,14 @@ const App = {
             return;
         }
 
+        const btn = document.getElementById('btnSaveRoi');
+        const oldHTML = btn ? btn.innerHTML : '';
+
         try {
             // 1. ROI Rect
             localStorage.setItem('roiRect', JSON.stringify(this.state.roi));
 
             // 2. Image Data (only if new image loaded, or keep existing)
-            // If we have an image in memory (img.src is DataURL), save it.
             if (this.roiState.img && this.roiState.img.src.startsWith('data:')) {
                 localStorage.setItem('roiImageData', this.roiState.img.src);
             }
@@ -1693,48 +1759,63 @@ const App = {
                 meta = JSON.parse(localStorage.getItem('roiImageMeta') || "{}");
             }
 
-            // 4. Send to Backend
-            try {
-                await this.saveRoiToServer(this.state.roi, meta);
-            } catch (e) {
-                console.error("[ROI] Backend save failed:", e);
-                alert("ROI save failed: " + e.message + "\nCheck browser console for details.");
-                return;  // Don't show success if backend failed
+            // 4. Visual: Saving state
+            if (btn) {
+                btn.classList.remove('btn-saved', 'btn-error');
+                btn.classList.add('btn-saving');
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
             }
 
-            // Feedback — solid green button
-            const btn = document.getElementById('btnSaveRoi');
-            const originalText = btn.innerHTML;
-            const originalBg = btn.style.backgroundColor;
-            const originalColor = btn.style.color;
-            btn.innerHTML = '<i class="fa-solid fa-check"></i> Saved!';
-            btn.style.backgroundColor = '#4CAF50';
-            btn.style.color = 'white';
+            // 5. Send to Backend
+            await this.saveRoiToServer(this.state.roi, meta);
 
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.style.backgroundColor = originalBg;
-                btn.style.color = originalColor;
-            }, 2500);
+            // 6. Success feedback
+            if (btn) {
+                btn.classList.remove('btn-saving');
+                btn.classList.add('btn-saved');
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Saved \u2713';
+                setTimeout(() => {
+                    btn.classList.remove('btn-saved');
+                    btn.innerHTML = oldHTML;
+                }, 1200);
+            }
 
-            // Auto-refresh Live View so ROI updates without page reload
-            this.updateLiveRoiBadge();
-            if (window.CameraController.isOn) {
-                const img = document.getElementById('liveCam');
-                if (img && img.src && img.src.includes('/video_feed')) {
-                    // Force reconnect by briefly clearing and re-setting src
-                    const currentSrc = img.src;
-                    img.src = '';
-                    setTimeout(() => { img.src = currentSrc; }, 100);
+            // 7. Clear dirty flag & redraw ROI in "active" green
+            this.roiDirty = false;
+            this.drawRoi();
+            const ub = document.getElementById('roiUnsavedBadge');
+            if (ub) ub.style.display = 'none';
+
+            // Note: Live View badge + camera stream restart is now handled
+            // by the 'roi_updated' socket event emitted by the backend.
+            // Fallback for cases where socket is not connected:
+            if (!this.socket || !this.socket.connected) {
+                this.updateLiveRoiBadge();
+                if (window.CameraController.isOn) {
+                    const img = document.getElementById('liveCam');
+                    if (img && img.src && img.src.includes('/video_feed')) {
+                        const currentSrc = img.src;
+                        img.src = '';
+                        setTimeout(() => { img.src = currentSrc; }, 100);
+                    }
                 }
             }
 
         } catch (e) {
-            console.error("Storage Error", e);
+            console.error("[ROI] Save error:", e);
+
+            if (btn) {
+                btn.classList.remove('btn-saving');
+                btn.classList.add('btn-error');
+                btn.innerHTML = '<i class="fa-solid fa-xmark"></i> Save failed';
+                setTimeout(() => {
+                    btn.classList.remove('btn-error');
+                    btn.innerHTML = oldHTML;
+                }, 1800);
+            }
+
             if (e.name === 'QuotaExceededError') {
                 alert("Error: Image is too large to save in browser storage. Please use a smaller image/resolution.");
-            } else {
-                alert("Error saving settings.");
             }
         }
     },

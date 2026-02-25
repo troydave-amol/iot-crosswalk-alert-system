@@ -31,7 +31,7 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "dev-secret"
 # cors_allowed_origins="*" allows the frontend to connect from different ports
 # This is crucial for local dev where frontend might be served differently (though here it's same origin)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # --------------------------------------------------------------------------------
 # Global System State
@@ -340,6 +340,7 @@ def api_set_roi():
 
     ROI_PATH.write_text(json.dumps(clean, indent=2), encoding="utf-8")
     print(f"[ROI] Saved: {clean}")
+    socketio.emit("roi_updated", {"roi": clean})
     return jsonify({"ok": True})
 
 live_thread_started = False
@@ -610,4 +611,4 @@ if __name__ == "__main__":
     # t.start()
     
     # Run the Flask-SocketIO server
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)
