@@ -98,19 +98,25 @@ def init_db():
 def insert_event(payload):
     """
     Inserts a status update event into the database.
+    Provides defaults for power/derived fields that may not exist in live inference payloads.
     """
     conn = None
     try:
-        # Validate required fields (fail early if schema is wrong, but don't crash app)
-        required_keys = [
-            "timestamp_iso", "source", "child_in_roi", "roi_status", 
-            "confidence", "latency_ms", "warning_logic_on", "switch_enabled", 
-            "warning_device_on", "battery_percent", "solar_status"
+        # Core required fields — these MUST exist
+        core_keys = [
+            "timestamp_iso", "source", "child_in_roi", "roi_status",
+            "confidence", "latency_ms", "warning_device_on"
         ]
-        for key in required_keys:
+        for key in core_keys:
             if key not in payload:
                 print(f"DB INSERT FAILED: Missing key {key}")
                 return
+
+        # Derived / optional fields — provide defaults if missing
+        payload.setdefault("warning_logic_on", payload["child_in_roi"])
+        payload.setdefault("switch_enabled", True)
+        payload.setdefault("battery_percent", 0.0)
+        payload.setdefault("solar_status", "N/A")
 
         # Connect specifically to the database now
         conn = pymysql.connect(

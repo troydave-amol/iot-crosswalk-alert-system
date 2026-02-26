@@ -1,7 +1,5 @@
 import time
-import random
 from datetime import datetime, timezone
-from threading import Thread
 
 from flask import Flask, render_template, request, jsonify, Response
 from flask_socketio import SocketIO
@@ -15,9 +13,7 @@ from warning_controller import WarningController
 MODEL_PATH = r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\models\yolov8_childlike_best.pt"
 CHILD_CONF = 0.65
 WARNING_HOLD_SECONDS = 2.0
-DEMO_SOURCE = r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\datasets\jaad_source\JAAD\JAAD_clips\video_0005.mp4"
 ROI_PATH = Path("roi_config.json")
-USE_WEBCAM = True
 
 # Camera source: URL for IP Webcam, or integer for local webcam index
 # Switch between these by commenting/uncommenting:
@@ -32,34 +28,6 @@ app.config["SECRET_KEY"] = "dev-secret"
 # cors_allowed_origins="*" allows the frontend to connect from different ports
 # This is crucial for local dev where frontend might be served differently (though here it's same origin)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
-
-# --------------------------------------------------------------------------------
-# Global System State
-# --------------------------------------------------------------------------------
-# Holds the current state of the "virtual" edge device.
-# Fields match the strict JSON Contract in static/js/contract.js
-system_state = {
-    # -- Detection & ROI --
-    "child_in_roi": False,
-    "roi_status": "OUTSIDE",
-    "confidence": 0.0,
-    "latency_ms": 45,
-    
-    # -- Warning Logic --
-    "warning_logic_on": False,
-    "switch_enabled": True,  # Default: Master Switch is ON
-    "warning_device_on": False,
-    
-    # -- Power System --
-    "battery_percent": 85.0,
-    "solar_status": "Charging",  # "Charging" | "Not charging"
-    
-    # -- Optional / Context --
-    "scenario": "Normal",
-    "camera_status": "OK",
-    "edge_status": "OK",
-    "led_driver_status": "Ready"
-}
 
 # --------------------------------------------------------------------------------
 # Helper Functions
@@ -88,206 +56,6 @@ def load_roi_for_frame(frame_w: int, frame_h: int) -> ROI:
         x2=int(x2 * sx),
         y2=int(y2 * sy),
     )
-
-def run_live_inference_loop(socketio):
-    det = ChildLikeDetector(MODEL_PATH, conf_child=CHILD_CONF)
-    warn_ctrl = WarningController(hold_seconds=WARNING_HOLD_SECONDS)
-
-    cap = cv2.VideoCapture(DEMO_SOURCE)
-    if not cap.isOpened():
-        print(f"[LIVE] Cannot open source: {DEMO_SOURCE}")
-        return
-
-    # Read one frame to get resolution
-    ok, frame = cap.read()
-    if not ok or frame is None:
-        print("[LIVE] Cannot read first frame.")
-        cap.release()
-        return
-
-    h, w = frame.shape[:2]
-    roi = load_roi_for_frame(w, h)
-
-    # rewind for video sources (optional)
-    try:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-    except Exception:
-        pass
-
-    print(f"[LIVE] Started inference loop @ {w}x{h}, conf={CHILD_CONF}, hold={WARNING_HOLD_SECONDS}s")
-
-    while True:
-        ok, frame = cap.read()
-        if not ok or frame is None:
-            # loop video for demo
-            if isinstance(DEMO_SOURCE, str):
-                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                continue
-            break
-
-        out = det.infer_frame(frame, roi)
-
-        # Debounced warning request
-        warning_requested = warn_ctrl.update(out["child_in_roi"])
-
-        # For now, since hardware is Step 5.3:
-        warning_device_on = bool(warning_requested)
-
-        payload = {
-            # frozen contract fields
-            "timestamp_iso": out["timestamp_iso"],
-            "latency_ms": out["latency_ms"],
-            "confidence": out["confidence"],
-            "child_in_roi": out["child_in_roi"],
-            "roi_status": out["roi_status"],
-            "warning_device_on": warning_device_on,
-            "source": "yolo"
-        }
-
-        print(f"[LIVE] status_update payload: {json.dumps(payload)}")
-        socketio.emit("status_update", payload)
-
-        # throttle a bit (prevents CPU spikes)
-        socketio.sleep(0.05)  # ~20 updates/sec
-
-def build_status_payload():
-    """
-    Constructs the payload dictionary strictly adhering to the Data Contract.
-    Adds the required timestamp_iso and source metadata.
-    Does NOT modify global state.
-    """
-    payload = system_state.copy()
-    # Use UTC to align with DB storage best practices
-    payload["timestamp_iso"] = datetime.now(timezone.utc).isoformat()
-    payload["source"] = "backend" 
-    return payload
-
-def background_status_loop():
-    """
-    Simulates the Edge AI logic and Hardware IO.
-    Runs in a background thread and emits 'status_update' every 1 second.
-    """
-    print("Background simulation loop started.")
-    
-    # Simulation counters
-    tick = 0
-    child_present_timer = 0
-    
-    # State tracking for logging
-    last_logged = {
-        "child_in_roi": None,
-        "warning_device_on": None,
-        "switch_enabled": None,
-        "roi_status": None,
-        "solar_status": None,
-        "battery_percent": -1.0,
-        "last_log_time": 0
-    }
-
-    while True:
-        # --- 1. Simulate Inputs (Child Detection) ---
-        # Logic: Randomly trigger a detection event every now and then
-        if child_present_timer > 0:
-            child_present_timer -= 1
-            detected = True
-        else:
-            detected = False
-            # 10% chance to start a detection event if not currently detecting
-            # Occurs roughly every 10 seconds on average
-            if random.random() < 0.1: 
-                child_present_timer = random.randint(3, 8) # Duration: 3-8 seconds
-                detected = True
-
-        # --- 2. Update Detection State ---
-        system_state["child_in_roi"] = detected
-        system_state["roi_status"] = "INSIDE" if detected else "OUTSIDE"
-        if detected:
-             # High confidence when detected (0.75 - 0.99)
-            system_state["confidence"] = round(random.uniform(0.75, 0.99), 2)
-        else:
-            # Low confidence noise when clear (0.0 - 0.1)
-            system_state["confidence"] = round(random.uniform(0.0, 0.1), 2)
-            
-        system_state["latency_ms"] = random.randint(30, 80)
-
-        # --- 3. Apply Strict Warning Logic (Contract Rules) ---
-        
-        # Rule 1: warning_logic_on MUST equal child_in_roi
-        # simulation of the logic controller's output
-        system_state["warning_logic_on"] = system_state["child_in_roi"]
-        
-        # Rule 2: warning_device_on === (warning_logic_on && switch_enabled)
-        # simulation of the physical relay/MOSFET
-        system_state["warning_device_on"] = system_state["warning_logic_on"] and system_state["switch_enabled"]
-
-        # --- 4. Simulate Power System ---
-        # Logic: Solar charges during "day", drains at "night" or when warning is ON
-        # We'll simulate a day/night cycle every 40 ticks
-        is_sunny = (tick % 40) < 20 
-        
-        if is_sunny:
-            system_state["solar_status"] = "Charging"
-            # Charge up
-            system_state["battery_percent"] += 0.5
-        else:
-            system_state["solar_status"] = "Not charging"
-            # Drain
-            system_state["battery_percent"] -= 0.2
-
-        # Extra drain if warning light is ON
-        if system_state["warning_device_on"]:
-            system_state["battery_percent"] -= 0.1
-
-        # Clamp battery 0-100
-        system_state["battery_percent"] = max(0.0, min(100.0, round(system_state["battery_percent"], 1)))
-
-        # --- 5. Emit Status Update ---
-        payload = build_status_payload()
-        
-        # broadcast=True is default for emit() but explicit is better
-        socketio.emit("status_update", payload)
-
-        # --- 6. Persistent Logging Logic ---
-        try:
-            should_log = False
-            current_time = time.time()
-            
-            # Check meaningful changes
-            if (payload["child_in_roi"] != last_logged["child_in_roi"] or
-                payload["warning_device_on"] != last_logged["warning_device_on"] or
-                payload["switch_enabled"] != last_logged["switch_enabled"] or
-                payload["roi_status"] != last_logged["roi_status"] or
-                payload["solar_status"] != last_logged["solar_status"]):
-                should_log = True
-                
-            # Check significant battery change (>= 1.0%)
-            if abs(payload["battery_percent"] - last_logged["battery_percent"]) >= 1.0:
-                should_log = True
-
-            # Heartbeat force log every 60 seconds
-            if current_time - last_logged["last_log_time"] > 60:
-                should_log = True
-
-            if should_log:
-                insert_event(payload)
-                
-                # Update last logged state
-                last_logged["child_in_roi"] = payload["child_in_roi"]
-                last_logged["warning_device_on"] = payload["warning_device_on"]
-                last_logged["switch_enabled"] = payload["switch_enabled"]
-                last_logged["roi_status"] = payload["roi_status"]
-                last_logged["solar_status"] = payload["solar_status"]
-                last_logged["battery_percent"] = payload["battery_percent"]
-                last_logged["last_log_time"] = current_time
-
-        except Exception as e:
-            # Catch-all to ensure logging logic never crashes the status loop
-            print(f"Logging Logic Error: {e}")
-
-        
-        # Loop delay
-        tick += 1
-        time.sleep(1)
 
 # --------------------------------------------------------------------------------
 # Routes & Events
@@ -349,20 +117,21 @@ live_thread_started = False
 def handle_connect():
     """
     Triggered when a client connects (dashboard loads or refreshes).
-    Sends the immediate state so the dashboard populates instantly.
+    Sends a minimal camera-off status so the dashboard shows initial state.
     """
     print("Client connected")
-    payload = build_status_payload()
-    socketio.emit("status_update", payload)  # Single emit on connect (fixed duplicate)
-
-    global live_thread_started
-    if USE_WEBCAM:
-        return  # inference will run inside gen_frames()
-    if not live_thread_started:
-        live_thread_started = True
-        import threading
-        t = threading.Thread(target=run_live_inference_loop, args=(socketio,), daemon=True)
-        t.start()
+    # Emit a minimal "idle" status — no mock data, just safe defaults
+    idle_payload = {
+        "timestamp_iso": datetime.now(timezone.utc).isoformat(),
+        "child_in_roi": False,
+        "roi_status": "CLEAR",
+        "confidence": 0.0,
+        "latency_ms": 0,
+        "warning_device_on": False,
+        "source": "idle",
+        "camera_status": "OFF"
+    }
+    socketio.emit("status_update", idle_payload)
 
 # --------------------------------------------------------------------------------
 # API Routes
@@ -409,6 +178,14 @@ def gen_frames(overlay=True, source_str=""):
     last_detections = []
     last_child_in_roi = False
 
+    # --- DB Logging State (change-based + heartbeat) ---
+    last_logged = {
+        "child_in_roi": None,
+        "warning_device_on": None,
+        "last_log_time": 0.0
+    }
+    LOG_HEARTBEAT_SEC = 10.0  # heartbeat every 10 seconds while camera is running
+
     print(f"[LIVE] gen_frames started | source={video_src} | overlay={overlay}")
 
     while True:
@@ -451,6 +228,50 @@ def gen_frames(overlay=True, source_str=""):
             }
             socketio.emit("status_update", payload)
             last_emit = now
+
+            # --- DB Logging: change-based + heartbeat ---
+            try:
+                should_log = False
+
+                # Log on meaningful state changes
+                if (out["child_in_roi"] != last_logged["child_in_roi"] or
+                    warning_device_on != last_logged["warning_device_on"]):
+                    should_log = True
+
+                # Heartbeat: ensure at least one log every N seconds while running
+                if (now - last_logged["last_log_time"]) >= LOG_HEARTBEAT_SEC:
+                    should_log = True
+
+                if should_log:
+                    # Enrich payload with all fields insert_event() requires
+                    db_payload = {
+                        "timestamp_iso": out["timestamp_iso"],
+                        "source": "yolo",
+                        "child_in_roi": out["child_in_roi"],
+                        "roi_status": out["roi_status"],
+                        "confidence": out["confidence"],
+                        "latency_ms": out["latency_ms"],
+                        # Derived / contract fields
+                        "warning_logic_on": out["child_in_roi"],  # MUST equal child_in_roi
+                        "switch_enabled": True,                   # hardware switch — always on for now
+                        "warning_device_on": warning_device_on,
+                        # Power — no hardware yet, use honest defaults
+                        "battery_percent": 0.0,
+                        "solar_status": "N/A",
+                        # Context
+                        "scenario": "Live",
+                        "camera_status": "OK",
+                        "edge_status": "OK",
+                        "led_driver_status": "Ready"
+                    }
+                    insert_event(db_payload)
+
+                    # Update tracking state
+                    last_logged["child_in_roi"] = out["child_in_roi"]
+                    last_logged["warning_device_on"] = warning_device_on
+                    last_logged["last_log_time"] = now
+            except Exception as e:
+                print(f"[LIVE] DB logging error: {e}")
 
         # ----- Overlay Drawing -----
         if overlay:
@@ -606,9 +427,5 @@ if __name__ == "__main__":
     # Initialize DB (safe to run multiple times)
     init_db()
 
-    # Start the background simulation thread (DISABLED for live inference mode)
-    # t = Thread(target=background_status_loop, daemon=True)
-    # t.start()
-    
-    # Run the Flask-SocketIO server
+    # Run the Flask-SocketIO server (no mock thread — real data only)
     socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)

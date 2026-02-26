@@ -12,17 +12,16 @@ window.EventStore = {
         roi_status: 'OUTSIDE',
         latency_ms: 0,
         last_update_str: '---',
-        connection_status: 'Offline (Mock)',
+        connection_status: 'Connecting...',
         // Warning logic helpers
         switch_enabled: true
     },
     latestPayload: null,      // RAW Contract Payload (from Backend/Socket)
     contractValidation: null, // Validation Result
-    powerStatus: {    // Power System
-        solar_status: 'Charging',
-        solar_voltage: 24.1,
-        battery_percent: 85,
-        led_driver: 'Ready'
+    powerStatus: {    // Power System (hardware pending)
+        solar_status: 'N/A',
+        battery_percent: 0,
+        led_driver: 'N/A'
     },
     // DB Mode Store
     logsRows: [],           // Paginated DB results for Logs page
@@ -56,7 +55,6 @@ const App = {
     // ---------------------------------------------------------
     state: {
         // App Flags
-        mockMode: true,
         isConnected: false,
         lastSocketUpdate: 0,
 
@@ -92,13 +90,7 @@ const App = {
             totalPages: 1
         },
 
-        // Mock Engine State
-        mockEngine: {
-            crossingActive: false,
-            crossingTimer: 0,
-            nextBurstTime: 0,
-            powerDrainTimer: 0
-        },
+
 
         camera: { stream: null, selectedId: null },
         charts: {},
@@ -119,7 +111,7 @@ const App = {
         this.initTheme();
         this.setupNavigation();
         this.setupSocket();
-        this.setupMockEngine(); // Starts the 1s loop
+        this.setupTick(); // 1s tick for UI refresh and polling (no mock data)
         this.setupAnalytics();
 
         // Init Logs Controls
@@ -136,131 +128,33 @@ const App = {
         // Sidebar Init
         this.initSidebar();
 
-        // Mock Mode Toggle
-        document.getElementById('mock-toggle').addEventListener('click', (e) => {
-            this.setMockMode(!this.state.mockMode);
-        });
-
         // Initial Load for Logs if starting there
         if (window.location.hash === '#logs') {
             this.loadLogsFromDB();
         }
     },
 
-    // ... (Existing setMockMode, setupMockEngine, updateMockData, setupSocket, handleSocketData methods remain unchanged in this block) ...
-
-    setMockMode(enabled) {
-        this.state.mockMode = enabled;
-        const btn = document.getElementById('mock-toggle');
-        btn.textContent = enabled ? 'Mock Mode: ON' : 'Mock Mode: OFF';
-        btn.classList.toggle('btn-primary', enabled);
-        btn.classList.toggle('btn-outline', !enabled);
-
-        // If turning OFF, we wait for socket. If no socket data comes in 3s, watchdog will handle it.
-        this.updateConnectionStatus();
-    },
-
-    setupMockEngine() {
-        // Main System Tick (1Hz)
+    setupTick() {
+        // Main System Tick (1Hz) — UI refresh and auto-polling only. No mock data.
         setInterval(() => {
             const now = Date.now();
-
-            if (this.state.mockMode) {
-                this.updateMockData(now);
-            } else {
-                // Watchdog: If verify we haven't lost connection
-                if (now - this.state.lastSocketUpdate > 3000 && this.state.isConnected) {
-                    console.warn("Connection lost. Falling back to Mock Mode.");
-                    this.state.isConnected = false;
-                    this.setMockMode(true); // Auto-fallback
-                }
-            }
 
             // Always update UI on tick
             this.updateUI();
 
-
-            // Auto-refresh Logs if valid
+            // Auto-refresh Logs if on logs page
             if (window.location.hash === '#logs') {
-                this.renderLogsTable(true); // pass true to indicate auto-refresh if needed
+                this.renderLogsTable(true);
             }
 
-            // Analytics Live Update (Session/Mock: every 2s)
+            // Analytics Live Update (every 2s)
             if (window.location.hash === '#analytics') {
                 if (now - this.state.analytics.lastUpdate > 2000) {
-                    // DB polling is handled separately in setupNavigation's 30s interval.
-                    // This tick only updates the UI if already populated (avoids flicker).
                     this.state.analytics.lastUpdate = now;
                 }
             }
 
         }, 1000);
-    },
-
-    updateMockData(now) {
-        const engine = this.state.mockEngine;
-        const status = window.EventStore.systemStatus;
-        const power = window.EventStore.powerStatus;
-
-        // A) Burst Generator Logic
-        if (!engine.crossingActive && now > engine.nextBurstTime) {
-            if (Math.random() < 0.2) {
-                engine.crossingActive = true;
-                const duration = 3000 + Math.random() * 5000;
-                engine.crossingTimer = now + duration;
-            } else {
-                engine.nextBurstTime = now + 2000;
-            }
-        }
-
-        if (engine.crossingActive && now > engine.crossingTimer) {
-            engine.crossingActive = false;
-            engine.nextBurstTime = now + 5000 + Math.random() * 10000;
-        }
-
-        // B) Update Core Status
-        let detected = false;
-        if (engine.crossingActive) {
-            detected = Math.random() > 0.1;
-        } else {
-            detected = Math.random() > 0.98;
-        }
-
-        status.child_in_roi = detected;
-        status.roi_status = detected ? 'INSIDE' : 'OUTSIDE';
-
-        // CRITICAL: Warning Logic -> warning_on && switch_enabled
-        // (If switch is passed as true in mock usually)
-        status.warning_on = status.child_in_roi && status.switch_enabled;
-
-        // C) Confidence & Latency
-        if (status.child_in_roi) {
-            status.confidence = 0.75 + (Math.random() * 0.23);
-            status.latency_ms = 20 + Math.floor(Math.random() * 40);
-        } else {
-            status.confidence = 0.05 + (Math.random() * 0.20);
-            status.latency_ms = 0;
-        }
-
-        // D) Power System
-        if (now > engine.powerDrainTimer) {
-            const change = (Math.random() - 0.5) * 0.5;
-            power.battery_percent = Math.max(0, Math.min(100, power.battery_percent + change));
-            engine.powerDrainTimer = now + 5000;
-            power.solar_voltage = 23.5 + (Math.random() * 1.5);
-        }
-
-        // E) Log Generation
-        if (status.child_in_roi || Math.random() > 0.7) {
-            let scenario = engine.crossingActive ? "Crowded" : "Low activity";
-            if (Math.random() > 0.8) scenario = "Rain";
-            if (Math.random() > 0.9) scenario = "Night";
-
-            this.logEvent(status, scenario);
-        }
-
-        status.last_update_str = new Date().toLocaleTimeString();
-        status.connection_status = "Mock Running";
     },
 
     // ---------------------------------------------------------
@@ -321,7 +215,7 @@ const App = {
     },
 
     handleSocketData(data) {
-        // 1. Always process Contract Preview (DEV TOOL) - Updates 'Settings' page even in Mock Mode
+        // 1. Always process Contract Preview (DEV TOOL) - Updates 'Settings' page
         try {
             // Normalize & Validate
             const payload = DataContract.normalizeStatusUpdate(data);
@@ -337,35 +231,33 @@ const App = {
             console.error("Contract Preview Error:", e);
         }
 
-        if (this.state.mockMode) return;
-
+        // 2. Always update live status from socket data (no mock gating)
         this.state.isConnected = true;
         this.state.lastSocketUpdate = Date.now();
 
         const status = window.EventStore.systemStatus;
-        const power = window.EventStore.powerStatus;
 
         status.child_in_roi = data.child_in_roi;
-        // Server might send warning_on, or we derive it? 
-        // For now take server value, but ensure it respects switch locally just in case?
-        // Actually, if server controls it, we trust server.
-        // BUG-5 fix: backend emits 'warning_device_on', not 'warning_on'
         status.warning_on = data.warning_device_on ?? data.warning_on;
         status.confidence = data.confidence;
         status.roi_status = data.child_in_roi ? 'INSIDE' : 'OUTSIDE';
-        status.latency_ms = data.latency || 0;
+        status.latency_ms = data.latency_ms || data.latency || 0;
         status.last_update_str = new Date().toLocaleTimeString();
+
         if (data.source === "yolo") {
             status.connection_status = "Live (YOLO)";
-            const mt = document.getElementById('mock-toggle');
-            if (mt) mt.style.display = 'none';
+        } else if (data.source === "idle") {
+            status.connection_status = "Connected (Camera OFF)";
         } else {
             status.connection_status = "Connected";
         }
 
-        if (data.battery) power.battery_percent = data.battery;
-        // If solar data comes in
-        if (data.solar_voltage) power.solar_voltage = data.solar_voltage;
+        // Update connection chip
+        const connChip = document.getElementById('connection-chip');
+        if (connChip) {
+            connChip.innerHTML = `<div class="status-indicator"></div> ${status.connection_status}`;
+            connChip.className = `status-chip connected`;
+        }
 
         this.logEvent(status, data.scenario || "Live Feed");
         this.updateUI();
@@ -434,9 +326,8 @@ const App = {
 
     updateUI() {
         const status = window.EventStore.systemStatus;
-        const power = window.EventStore.powerStatus;
 
-        // Topbar
+        // Topbar connection chip
         const connChip = document.getElementById('connection-chip');
         if (connChip) {
             connChip.innerHTML = `<div class="status-indicator"></div> ${status.connection_status}`;
@@ -457,10 +348,13 @@ const App = {
 
         document.getElementById('live-latency').textContent = status.latency_ms + 'ms';
 
-        // Power System
-        document.getElementById('power-solar-status').textContent = `${power.solar_status} (${power.solar_voltage.toFixed(1)}V)`;
-        document.getElementById('power-battery-bar').style.width = `${power.battery_percent}%`;
-        document.getElementById('power-battery-text').textContent = `${Math.round(power.battery_percent)}%`;
+        // Power System — N/A (hardware pending)
+        const solarEl = document.getElementById('power-solar-status');
+        if (solarEl) solarEl.textContent = 'N/A — Hardware pending';
+        const battBar = document.getElementById('power-battery-bar');
+        if (battBar) battBar.style.width = '0%';
+        const battText = document.getElementById('power-battery-text');
+        if (battText) battText.textContent = 'N/A';
 
         this.renderLiveFeed();
     },
@@ -2043,6 +1937,16 @@ const App = {
         }
         const sourceChip = document.getElementById('camSourceChip');
         if (sourceChip) sourceChip.style.display = 'none';
+
+        // Reset live status cards to idle state
+        const status = window.EventStore.systemStatus;
+        status.child_in_roi = false;
+        status.warning_on = false;
+        status.confidence = 0.0;
+        status.roi_status = 'OUTSIDE';
+        status.latency_ms = 0;
+        status.connection_status = 'Camera OFF';
+        this.updateUI();
     },
 
     // ---------------------------------------------------------

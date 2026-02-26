@@ -7,25 +7,25 @@
 /**
  * @typedef {Object} StatusUpdatePayload
  * @property {string} timestamp_iso - ISO 8601 timestamp of the event (Required)
- * @property {string} [source] - "mock" | "edge" | "backend" (Optional but recommended)
+ * @property {string} [source] - "yolo" | "idle" | "backend" (Optional but recommended)
  * 
  * -- Detection & ROI --
  * @property {boolean} child_in_roi - True if child-class detected in ROI (Required)
- * @property {string} roi_status - "INSIDE" | "OUTSIDE" (Required)
+ * @property {string} roi_status - "INSIDE" | "OUTSIDE" | "CHILD_IN_ROI" | "CLEAR" (Required)
  * @property {number} confidence - 0.0 to 1.0 (Required)
  * @property {number} latency_ms - Integer >= 0 (Required)
  * 
  * -- Warning Logic --
- * @property {boolean} warning_logic_on - Internal logic state. MUST === child_in_roi (Required)
- * @property {boolean} switch_enabled - Physical/Software Master Switch state (Required)
- * @property {boolean} warning_device_on - Final Output. MUST === (warning_logic_on && switch_enabled) (Required)
+ * @property {boolean} [warning_logic_on] - Internal logic state. Derived from child_in_roi if absent
+ * @property {boolean} [switch_enabled] - Physical/Software Master Switch state. Default: true
+ * @property {boolean} warning_device_on - Final Output (Required)
  * 
- * -- Power System --
- * @property {number} battery_percent - 0 to 100 (Required)
- * @property {string} solar_status - "Charging" | "Not charging" (Required)
+ * -- Power System (Optional — hardware pending) --
+ * @property {number} [battery_percent] - 0 to 100 (Optional, N/A if no hardware)
+ * @property {string} [solar_status] - "Charging" | "Not charging" | "N/A" (Optional)
  * 
  * -- Optional --
- * @property {string} [scenario] - "Crowded" | "Low activity" | "Night" | "Rain" | "Normal"
+ * @property {string} [scenario] - "Crowded" | "Low activity" | "Night" | "Rain" | "Normal" | "Live"
  * @property {string} [camera_status] - "OK" | "OFF" | "ERROR"
  * @property {string} [edge_status] - "OK" | "ERROR"
  * @property {string} [led_driver_status] - "Ready" | "Fault"
@@ -74,46 +74,49 @@ const DataContract = {
         fastCheck('roi_status', 'string');
         fastCheck('confidence', 'number');
         fastCheck('latency_ms', 'number');
-        fastCheck('warning_logic_on', 'boolean');
-        fastCheck('switch_enabled', 'boolean');
         fastCheck('warning_device_on', 'boolean');
-        fastCheck('battery_percent', 'number');
-        fastCheck('solar_status', 'string');
+        // warning_logic_on, switch_enabled, battery_percent, solar_status are now optional
 
         if (errors.length > 0) return { ok: false, errors };
 
         // 2. Value Range & Enum Checks
         if (payload.confidence < 0 || payload.confidence > 1) errors.push(`Confidence out of range: ${payload.confidence}`);
         if (payload.latency_ms < 0) errors.push(`Latency must be >= 0`);
-        if (payload.battery_percent < 0 || payload.battery_percent > 100) errors.push(`Battery must be 0-100`);
+        if (typeof payload.battery_percent === 'number' && (payload.battery_percent < 0 || payload.battery_percent > 100)) {
+            errors.push(`Battery must be 0-100`);
+        }
 
-        const validRoiStatus = ['INSIDE', 'OUTSIDE'];
+        const validRoiStatus = ['INSIDE', 'OUTSIDE', 'CHILD_IN_ROI', 'CLEAR'];
         if (!validRoiStatus.includes(payload.roi_status)) errors.push(`Invalid roi_status: ${payload.roi_status}`);
 
-        const validSolar = ['Charging', 'Not charging'];
-        if (!validSolar.includes(payload.solar_status)) errors.push(`Invalid solar_status: ${payload.solar_status}`);
+        // Solar status validation (only if provided)
+        if (payload.solar_status) {
+            const validSolar = ['Charging', 'Not charging', 'N/A'];
+            if (!validSolar.includes(payload.solar_status)) errors.push(`Invalid solar_status: ${payload.solar_status}`);
+        }
 
-        // 3. Logic & Contract Rules
-        // Rule 1: warning_logic_on MUST equal child_in_roi
-        if (payload.warning_logic_on !== payload.child_in_roi) {
+        // 3. Logic & Contract Rules (only check if fields are present)
+        if (payload.warning_logic_on !== undefined && payload.warning_logic_on !== payload.child_in_roi) {
             errors.push(`Contract Violation: warning_logic_on (${payload.warning_logic_on}) !== child_in_roi (${payload.child_in_roi})`);
         }
 
-        // Rule 2: roi_status consistency
-        if (payload.child_in_roi && payload.roi_status !== 'INSIDE') {
+        // Rule 2: roi_status consistency (map both naming conventions)
+        const isInsideStatus = payload.roi_status === 'INSIDE' || payload.roi_status === 'CHILD_IN_ROI';
+        const isOutsideStatus = payload.roi_status === 'OUTSIDE' || payload.roi_status === 'CLEAR';
+        if (payload.child_in_roi && isOutsideStatus) {
             errors.push(`Contract Violation: child_in_roi is TRUE but roi_status is ${payload.roi_status}`);
         }
-        if (!payload.child_in_roi && payload.roi_status === 'INSIDE') {
-            // Technically a child could be INSIDE but not "detected" if confidence low? 
-            // The contract says: "if child_in_roi true -> roi_status must be 'INSIDE'. else -> 'OUTSIDE'"
-            // So we strictly enforce the inverse too for this specific contract.
-            errors.push(`Contract Violation: child_in_roi is FALSE but roi_status is INSIDE`);
+        if (!payload.child_in_roi && isInsideStatus) {
+            errors.push(`Contract Violation: child_in_roi is FALSE but roi_status is ${payload.roi_status}`);
         }
 
-        // Rule 3: warning_device_on logic
-        const expectedDeviceState = payload.warning_logic_on && payload.switch_enabled;
-        if (payload.warning_device_on !== expectedDeviceState) {
-            errors.push(`Contract Violation: warning_device_on (${payload.warning_device_on}) does not match (logic && switch)`);
+        // Rule 3: warning_device_on logic (only check if switch_enabled is present)
+        if (payload.switch_enabled !== undefined) {
+            const warnLogic = payload.warning_logic_on !== undefined ? payload.warning_logic_on : payload.child_in_roi;
+            const expectedDeviceState = warnLogic && payload.switch_enabled;
+            if (payload.warning_device_on !== expectedDeviceState) {
+                errors.push(`Contract Violation: warning_device_on (${payload.warning_device_on}) does not match (logic && switch)`);
+            }
         }
 
         return {
@@ -160,7 +163,7 @@ const DataContract = {
             warning_device_on: wDevice,
 
             battery_percent: (typeof raw.battery_percent === 'number') ? Math.max(0, Math.min(100, raw.battery_percent)) : 0,
-            solar_status: raw.solar_status || 'Not charging',
+            solar_status: raw.solar_status || 'N/A',
 
             // Optional / Passthrough
             scenario: raw.scenario || 'Normal',

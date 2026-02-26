@@ -61,9 +61,8 @@
             <div class="topbar-left">Smart Crosswalk Alert System for Real-Time Child Detection</div>
             <div class="topbar-right">
                 <div class="status-chip mock" id="connection-chip">
-                    <div class="status-indicator"></div> Offline (Mock)
+                    <div class="status-indicator"></div> Connecting...
                 </div>
-                <button class="btn btn-primary" id="mock-toggle">Mock Mode: ON</button>
                 <button class="btn btn-outline" id="theme-toggle" title="Toggle Dark/Light Mode">
                     <i class="fa-solid fa-moon"></i>
                 </button>
@@ -185,14 +184,14 @@
                         <div class="row mt-4">
                             <div class="flex-col">
                                 <small>Solar Status</small>
-                                <strong id="power-solar-status">Charging (24.1V)</strong>
+                                <strong id="power-solar-status">N/A — Hardware pending</strong>
                             </div>
                             <div class="flex-col mt-4">
                                 <small>Battery Level</small>
                                 <div class="power-bar-track">
-                                    <div id="power-battery-bar" class="power-bar-fill"></div>
+                                    <div id="power-battery-bar" class="power-bar-fill" style="width:0%"></div>
                                 </div>
-                                <small id="power-battery-text">85%</small>
+                                <small id="power-battery-text">N/A</small>
                             </div>
                         </div>
                     </div>
@@ -498,7 +497,7 @@
                         <h5 style="margin-bottom: 10px; color: #444;">Notes & Limitations</h5>
                         <ul style="font-size: 0.9rem; color: #666; padding-left: 20px; margin: 0;">
                             <li style="margin-bottom: 6px;"><strong>Prototype Summary:</strong> Metrics are based on
-                                mock data or controlled tests.</li>
+                                live prototype tests.</li>
                             <li style="margin-bottom: 6px;">The system does not estimate biological age; it classifies
                                 pedestrians as children using visual features commonly associated with school-age
                                 learners.</li>
