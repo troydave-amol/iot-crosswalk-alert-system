@@ -132,6 +132,14 @@ const App = {
         if (window.location.hash === '#logs') {
             this.loadLogsFromDB();
         }
+
+        // Warning Device Watchdog — auto-hide if no status_update in 2s
+        this._lastStatusTs = Date.now();
+        setInterval(() => {
+            if (Date.now() - this._lastStatusTs > 2000) {
+                this.setWarningUI(false, {});
+            }
+        }, 500);
     },
 
     setupTick() {
@@ -214,6 +222,36 @@ const App = {
         console.log('[ROI] Live View updated via socket:', roi);
     },
 
+    // ---------------------------------------------------------
+    // Visual Warning Device UI
+    // ---------------------------------------------------------
+    setWarningUI(isOn, payload) {
+        const banner = document.getElementById('warningBanner');
+        const overlay = document.getElementById('warningOverlay');
+        const bannerMeta = document.getElementById('warningBannerMeta');
+        const overlayMeta = document.getElementById('warningOverlayMeta');
+
+        if (!banner || !overlay) return;
+
+        if (isOn) {
+            banner.classList.remove('hidden');
+            overlay.classList.remove('hidden');
+
+            const conf = payload?.confidence != null
+                ? Number(payload.confidence).toFixed(3)
+                : '—';
+            const lat = payload?.latency_ms ?? payload?.latency ?? '—';
+            const roi = payload?.roi_status ?? '';
+            bannerMeta.textContent = `Conf: ${conf}  |  Latency: ${lat} ms  |  ROI: ${roi}`;
+            overlayMeta.textContent = `Conf: ${conf}  •  Latency: ${lat} ms  •  ROI: ${roi}`;
+        } else {
+            banner.classList.add('hidden');
+            overlay.classList.add('hidden');
+            if (bannerMeta) bannerMeta.textContent = '';
+            if (overlayMeta) overlayMeta.textContent = '';
+        }
+    },
+
     handleSocketData(data) {
         // 1. Always process Contract Preview (DEV TOOL) - Updates 'Settings' page
         try {
@@ -261,6 +299,11 @@ const App = {
 
         this.logEvent(status, data.scenario || "Live Feed");
         this.updateUI();
+
+        // 3. Visual Warning Device — toggle banner/overlay
+        this._lastStatusTs = Date.now();
+        const warningOn = Boolean(data?.warning_device_on ?? data?.warning_on);
+        this.setWarningUI(warningOn, data);
     },
 
     updateContractPreview() {

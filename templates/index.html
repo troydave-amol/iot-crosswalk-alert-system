@@ -18,6 +18,24 @@
 
 <body>
 
+    <!-- WARNING BANNER (top of page) -->
+    <div id="warningBanner" class="warning-banner hidden" aria-live="assertive">
+        <div class="warning-banner__inner">
+            <div class="warning-banner__title">⚠ SCHOOL ZONE</div>
+            <div class="warning-banner__msg">CHILD DETECTED – SLOW DOWN</div>
+            <div id="warningBannerMeta" class="warning-banner__meta"></div>
+        </div>
+    </div>
+
+    <!-- FULLSCREEN OVERLAY (visual warning device) -->
+    <div id="warningOverlay" class="warning-overlay hidden" aria-hidden="true">
+        <div class="warning-overlay__panel">
+            <div class="warning-overlay__title">⚠ SCHOOL ZONE</div>
+            <div class="warning-overlay__msg">CHILD DETECTED – SLOW DOWN</div>
+            <div id="warningOverlayMeta" class="warning-overlay__meta"></div>
+        </div>
+    </div>
+
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">

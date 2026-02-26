@@ -1377,3 +1377,135 @@ body.dark-mode .roi-unsaved-badge {
     color: #fbbf24;
     background: rgba(245, 158, 11, 0.2);
 }
+
+/* =========================================
+   VISUAL WARNING DEVICE UI
+   ========================================= */
+.hidden {
+    display: none !important;
+}
+
+/* Top banner */
+.warning-banner {
+    position: sticky;
+    top: 0;
+    z-index: 9999;
+    padding: 10px 14px;
+    border-bottom: 2px solid rgba(0, 0, 0, 0.15);
+    background: #f59e0b;
+    color: #111827;
+    animation: warnBlink 0.85s infinite;
+}
+
+.warning-banner__inner {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.warning-banner__title {
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    font-size: 14px;
+}
+
+.warning-banner__msg {
+    font-weight: 900;
+    font-size: 18px;
+}
+
+.warning-banner__meta {
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+/* Fullscreen overlay */
+.warning-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(245, 158, 11, 0.35);
+    backdrop-filter: blur(1px);
+    animation: warnPulse 1.1s infinite;
+    pointer-events: none;
+}
+
+.warning-overlay__panel {
+    background: rgba(17, 24, 39, 0.92);
+    border: 3px solid rgba(245, 158, 11, 0.95);
+    border-radius: 14px;
+    padding: 18px 22px;
+    width: min(720px, 92vw);
+    text-align: center;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.warning-overlay__title {
+    color: #fbbf24;
+    font-weight: 900;
+    font-size: 18px;
+    letter-spacing: 1px;
+}
+
+.warning-overlay__msg {
+    color: #ffffff;
+    font-weight: 900;
+    font-size: 28px;
+    margin-top: 6px;
+}
+
+.warning-overlay__meta {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 13px;
+    margin-top: 10px;
+}
+
+@keyframes warnBlink {
+
+    0%,
+    100% {
+        filter: brightness(1);
+    }
+
+    50% {
+        filter: brightness(0.55);
+    }
+}
+
+@keyframes warnPulse {
+
+    0%,
+    100% {
+        background: rgba(245, 158, 11, 0.28);
+    }
+
+    50% {
+        background: rgba(245, 158, 11, 0.42);
+    }
+}
+
+/* Dark-mode overrides */
+body.dark-mode .warning-banner {
+    background: #b45309;
+    color: #fff;
+    border-bottom-color: rgba(0, 0, 0, 0.3);
+}
+
+body.dark-mode .warning-overlay__panel {
+    background: rgba(0, 0, 0, 0.92);
+    border-color: #f59e0b;
+}
+
+/* Print: hide warning UI */
+@media print {
+
+    .warning-banner,
+    .warning-overlay {
+        display: none !important;
+    }
+}
