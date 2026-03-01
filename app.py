@@ -17,7 +17,7 @@ ROI_PATH = Path("roi_config.json")
 
 # Camera source: URL for IP Webcam, or integer for local webcam index
 # Switch between these by commenting/uncommenting:
-VIDEO_SOURCE = "http://10.0.0.65:8080/video"   # IP Webcam (Infinix Hot 11s)
+VIDEO_SOURCE = "http://192.168.1.29:8080/video"   # IP Webcam (Infinix Hot 11s)
 # VIDEO_SOURCE = 0                               # Local webcam (DirectShow)
 
 # DB Imports

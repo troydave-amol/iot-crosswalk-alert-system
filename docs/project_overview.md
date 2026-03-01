@@ -79,3 +79,16 @@ Here is exactly what happens when you turn it on (by typing `python app.py` and 
 Everything talks to each other perfectly, ensuring kids cross safely and the system logs every successful detection!
 
 Think of ROI as: “Only care about detections inside this rectangle.”
+
+### Correct workflow
+
+1. Go to **Settings → ROI**
+2. Use an image that matches your actual camera view:
+
+   * best: take a snapshot from your webcam feed
+   * or any still frame from your test video
+3. Draw a rectangle **only on the crosswalk area** (where pedestrians will be)
+4. Save ROI
+5. Go to **Live View**
+6. Make sure the place where your “child test content” appears (phone screen or person) is **inside the ROI box**
+7. Only then expect `child_in_roi = true`
