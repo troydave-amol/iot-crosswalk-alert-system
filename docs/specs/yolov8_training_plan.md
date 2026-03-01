@@ -43,6 +43,29 @@ freeze: 10  # freeze early backbone layers
 
 ---
 
+## Phase 2b: Mapping Fix + Retrain (young → child_like)
+
+The original exporter treated JAAD `young` (age_scalar=1) as `adult_like`, causing misclassification of school-age children. Fixed by mapping both `child` and `young` → `child_like`.
+
+**What changed:**
+- `export_jaad_childlike_yolo.py`: `map_age_to_class()` now maps `(0, 1) → child_like`, `(2, 3) → adult_like`
+- `cv_inference.py`: Added size-based fallback — `adult_like` detections with bbox ≤ 35% frame height also trigger warning
+
+**Automation script:** `scripts/retrain_childlike_v2.py`
+1. Clears old export + split
+2. Re-exports JAAD with corrected mapping
+3. Resplits dataset
+4. Fine-tunes 30 epochs from current best (`models/yolov8_childlike_best.pt`)
+5. Copies new `best.pt` back to `models/`
+
+```bash
+python scripts/retrain_childlike_v2.py
+```
+
+Config: `epochs=30`, `batch=8`, `freeze=10`, `patience=15`
+
+---
+
 ## Evaluation Targets (for Manuscript)
 
 | Metric | Target |

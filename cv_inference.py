@@ -34,11 +34,13 @@ class ChildLikeDetector:
         model_path: str,
         conf_child: float = 0.65,
         device: Optional[str] = None,
+        small_bbox_ratio: float = 0.35,
     ):
         self.model_path = model_path
         self.conf_child = conf_child
         self.model = YOLO(model_path)
         self.device = device  # e.g., "cpu" or "0" for GPU
+        self.small_bbox_ratio = small_bbox_ratio  # max bbox height / frame height for size fallback
 
     def infer_frame(self, frame_bgr: np.ndarray, roi: ROI) -> Dict[str, Any]:
         """
@@ -65,6 +67,8 @@ class ChildLikeDetector:
         r = results[0]
         boxes = r.boxes
 
+        frame_h = frame_bgr.shape[0]
+
         detections_out = []
         if boxes is not None and len(boxes) > 0:
             # boxes.xyxy: (N,4), boxes.conf: (N,), boxes.cls: (N,)
@@ -78,19 +82,29 @@ class ChildLikeDetector:
                     "conf": float(c),
                     "cls": int(k)
                 })
-                # Only care about child_like class_id = 0
-                if k != 0:
-                    continue
-                if float(c) < self.conf_child:
-                    continue
 
-                cx = (float(x1) + float(x2)) / 2.0
-                cy = (float(y1) + float(y2)) / 2.0
+                # --- Primary: child_like (class 0) with sufficient confidence ---
+                if k == 0 and float(c) >= self.conf_child:
+                    cx = (float(x1) + float(x2)) / 2.0
+                    cy = (float(y1) + float(y2)) / 2.0
+                    if roi.contains_point(cx, cy):
+                        child_in_roi = True
+                        if float(c) > best_child_conf:
+                            best_child_conf = float(c)
 
-                if roi.contains_point(cx, cy):
-                    child_in_roi = True
-                    if float(c) > best_child_conf:
-                        best_child_conf = float(c)
+                # --- Fallback: adult_like (class 1) with small bbox height ---
+                # Triggers warning if an adult_like box is small in the frame,
+                # indicating a likely child misclassified by the model.
+                # Still "visually classified" — uses body size in camera view.
+                elif k == 1 and float(c) >= self.conf_child:
+                    bbox_h = float(y2) - float(y1)
+                    if bbox_h <= frame_h * self.small_bbox_ratio:
+                        cx = (float(x1) + float(x2)) / 2.0
+                        cy = (float(y1) + float(y2)) / 2.0
+                        if roi.contains_point(cx, cy):
+                            child_in_roi = True
+                            if float(c) > best_child_conf:
+                                best_child_conf = float(c)
 
         roi_status = "CHILD_IN_ROI" if child_in_roi else "CLEAR"
 

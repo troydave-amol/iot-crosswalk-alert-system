@@ -12,6 +12,7 @@ from warning_controller import WarningController
 
 MODEL_PATH = r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\models\yolov8_childlike_best.pt"
 CHILD_CONF = 0.65
+SMALL_BBOX_RATIO = 0.35
 WARNING_HOLD_SECONDS = 2.0
 ROI_PATH = Path("roi_config.json")
 
@@ -144,7 +145,11 @@ def video_feed_route():
     return Response(gen_frames(overlay=overlay, source_str=source_uri), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 def gen_frames(overlay=True, source_str=""):
-    det = ChildLikeDetector(MODEL_PATH, conf_child=CHILD_CONF)
+    det = ChildLikeDetector(
+        MODEL_PATH,
+        conf_child=CHILD_CONF,
+        small_bbox_ratio=SMALL_BBOX_RATIO
+    )
     warn_ctrl = WarningController(hold_seconds=WARNING_HOLD_SECONDS)
     last_emit = 0.0
     EMIT_EVERY_SEC = 0.10  # 10 updates/sec

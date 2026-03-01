@@ -2,8 +2,14 @@ import os, random, shutil
 from pathlib import Path
 
 # ===== EDIT THESE PATHS IF NEEDED =====
-SRC = Path(r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\datasets\_archive\jaad_childlike_yolo")
-DST = Path(r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\datasets\jaad_childlike_ft")
+SRC = Path(os.environ.get(
+    "JAAD_CHILDLIKE_SRC",
+    r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\datasets\jaad_childlike_yolo"
+))
+DST = Path(os.environ.get(
+    "JAAD_CHILDLIKE_DST",
+    r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\datasets\jaad_childlike_ft"
+))
 
 SEED = 42
 
