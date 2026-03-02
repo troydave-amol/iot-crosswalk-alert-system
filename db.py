@@ -55,7 +55,7 @@ def init_db():
                 timestamp_iso DATETIME NOT NULL,
                 source VARCHAR(16) NOT NULL,
                 child_in_roi TINYINT(1) NOT NULL,
-                roi_status VARCHAR(8) NOT NULL,
+                roi_status VARCHAR(16) NOT NULL,
                 confidence FLOAT NOT NULL,
                 latency_ms INT NOT NULL,
                 warning_logic_on TINYINT(1) NOT NULL,
@@ -117,6 +117,7 @@ def insert_event(payload):
         payload.setdefault("switch_enabled", True)
         payload.setdefault("battery_percent", 0.0)
         payload.setdefault("solar_status", "N/A")
+        payload["roi_status"] = "CHILD_IN_ROI" if int(payload["child_in_roi"]) == 1 else "CLEAR"
 
         # Connect specifically to the database now
         conn = pymysql.connect(
