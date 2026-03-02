@@ -1,109 +1,83 @@
 # YOLOv8 Training Plan
 
 ## Model
-
-- Base: `yolov8n.pt` (nano — lightweight for edge/IoT deployment)
+- Base: `yolov8n.pt` (nano, edge-friendly)
 - Framework: Ultralytics YOLOv8
-- Task: Object detection (single class: `child`)
+- Task: object detection (`child_like`, `adult_like`)
 
----
-
-## Phase 1: Baseline (Person Detection)
-
-Train on CityPersons + JAAD to establish a strong pedestrian detector.
+## Phase 1: Baseline Person Detection
+Train on CityPersons + JAAD to establish pedestrian detection baseline.
 
 ```yaml
-# datasets/citypersons.yaml or jaad.yaml
 model: yolov8n.pt
 data: datasets/citypersons.yaml
 epochs: 50
 imgsz: 640
 batch: 16
-workers: 2  # CRITICAL: leave at 2 to prevent pagefile OOM on Windows
-device: 0  # GPU if available
+workers: 2
+device: 0
 ```
 
-**Output**: `runs/detect/train/weights/best.pt`
-Already completed — see `runs/detect/train/` for curves and metrics.
-
----
+Output: `runs/detect/train/weights/best.pt`
 
 ## Phase 2: Child-Class Fine-Tuning
-
 Fine-tune baseline on child-labeled dataset.
 
 ```yaml
-model: runs/detect/train/weights/best.pt  # from Phase 1
+model: runs/detect/train/weights/best.pt
 data: datasets/crosswalk_child.yaml
 epochs: 30
 imgsz: 640
 batch: 16
-freeze: 10  # freeze early backbone layers
+freeze: 10
 ```
 
----
+## Phase 2b: Mapping Fix + Retrain (`young` -> `child_like`)
+The JAAD exporter mapping was corrected so `child` and `young` map to `child_like`, while older groups map to `adult_like`.
 
-## Phase 2b: Mapping Fix + Retrain (young → child_like)
+Automation script: `scripts/retrain_childlike_v2.py`
+1. Clear old export and split
+2. Re-export JAAD with corrected mapping
+3. Re-split dataset
+4. Fine-tune from current best model
+5. Copy new `best.pt` into `models/`
 
-The original exporter treated JAAD `young` (age_scalar=1) as `adult_like`, causing misclassification of school-age children. Fixed by mapping both `child` and `young` → `child_like`.
+## Runtime Inference and Trigger Notes
+- Runtime trigger logic is child-only. `adult_like` fallback is disabled for warning decisions.
+- Runtime uses:
+  - `agnostic_nms=True`
+  - IoU threshold around `0.60`
+  - confidence gate (`LIVE_CHILD_CONF`)
+  - minimum bbox-height ratio gate (`LIVE_MIN_CHILD_BBOX_RATIO`, default `0.18`)
+  - ROI bottom-center inclusion check
+- Raw detector decisions are stabilized with a 3-of-5 temporal vote before setting canonical `child_in_roi`.
 
-**What changed:**
-- `export_jaad_childlike_yolo.py`: `map_age_to_class()` now maps `(0, 1) → child_like`, `(2, 3) → adult_like`
-- `cv_inference.py`: Added size-based fallback — `adult_like` detections with bbox ≤ 35% frame height also trigger warning
-
-**Automation script:** `scripts/retrain_childlike_v2.py`
-1. Clears old export + split
-2. Re-exports JAAD with corrected mapping
-3. Resplits dataset
-4. Fine-tunes 30 epochs from current best (`models/yolov8_childlike_best.pt`)
-5. Copies new `best.pt` back to `models/`
-
-```bash
-python scripts/retrain_childlike_v2.py
-```
-
-Config: `epochs=30`, `batch=8`, `freeze=10`, `patience=15`
-
----
-
-## Evaluation Targets (for Manuscript)
-
+## Evaluation Targets (Manuscript)
 | Metric | Target |
 |---|---|
 | Precision | >= 0.80 |
 | Recall | >= 0.75 |
 | mAP@0.5 | >= 0.80 |
-| Latency (inference) | <= 100ms per frame |
+| Inference latency | <= 100 ms/frame |
 
----
-
-## Evaluation Artifacts (Required for Submission)
-
-- `BoxPR_curve.png` — Precision-Recall curve
-- `BoxF1_curve.png` — F1-Confidence curve
-- `confusion_matrix_normalized.png` — Normalized confusion matrix
-- `results.csv` — Per-epoch training metrics
-- `val_batch0_pred.jpg` — Visual prediction sample
-
-These are already generated in `runs/detect/train/` for Phase 1.
-
----
+## Required Evaluation Artifacts
+- `BoxPR_curve.png`
+- `BoxF1_curve.png`
+- `confusion_matrix_normalized.png`
+- `results.csv`
+- `val_batch0_pred.jpg`
 
 ## ROI Integration
-
 After model evaluation:
 1. Load `best.pt` in Flask backend
 2. Run inference on camera frame
-3. Check if any `child` class bbox centroid falls inside the Crosswalk ROI polygon
-4. If YES → `warning_device_on = True`, `child_in_roi = True`
-5. Emit `status_update` via Socket.IO
-6. Log event to MySQL (only on state change)
-
----
+3. Build raw trigger candidates with confidence, min-size, and ROI checks
+4. Stabilize to canonical `child_in_roi`
+5. Set `warning_device_on` from canonical signal + hold/cooldown
+6. Emit `status_update` and log events to MySQL
 
 ## Edge Deployment Notes
-
-- Target device: Raspberry Pi or Jetson Nano (IoT edge)
-- Use TFLite or ONNX export if Pi deployment
-- Keep model as `yolov8n` (nano) for latency constraint
-- Latency must be measured end-to-end (capture → detection → emit → log)
+- Target: Raspberry Pi or Jetson Nano
+- Export to ONNX/TFLite if needed
+- Keep `yolov8n` for latency budget
+- Measure end-to-end latency (capture -> detect -> emit -> log)

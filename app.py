@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, Optional, Tuple, Union
 
+from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, Response
 from flask_socketio import SocketIO
 
@@ -12,7 +13,9 @@ import json
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 from cv_inference import ChildLikeDetector, ROI
-from warning_controller import WarningController
+from warning_controller import TemporalVoteStabilizer, WarningController
+
+load_dotenv()
 
 MODEL_PATH = r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\models\yolov8_childlike_best.pt"
 ROI_PATH = Path("roi_config.json")
@@ -32,10 +35,12 @@ def _env_int(name: str, default: int) -> int:
 
 
 CHILD_CONF = _env_float("LIVE_CHILD_CONF", 0.65)
-SMALL_BBOX_RATIO = 0.35
-WARNING_HOLD_SECONDS = 2.0
+MIN_CHILD_BBOX_RATIO = _env_float("LIVE_MIN_CHILD_BBOX_RATIO", 0.18)
+DOMINANCE_IOU = _env_float("LIVE_DOMINANCE_IOU", 0.70)
+WARNING_HOLD_SECONDS = _env_float("LIVE_WARNING_HOLD_SECONDS", 2.0)
+WARNING_MIN_TOGGLE_SEC = _env_float("LIVE_WARNING_MIN_TOGGLE_SEC", 0.75)
 YOLO_IMGSZ = _env_int("LIVE_YOLO_IMGSZ", 640)
-INFER_INTERVAL_SEC = _env_float("LIVE_INFER_INTERVAL_SEC", 0.10)
+INFER_INTERVAL_SEC = _env_float("LIVE_INFER_INTERVAL_SEC", 0.125)
 STREAM_FPS = max(1.0, _env_float("LIVE_STREAM_FPS", 25.0))
 CAM_WIDTH = _env_int("LIVE_CAM_WIDTH", 1280)
 CAM_HEIGHT = _env_int("LIVE_CAM_HEIGHT", 720)
@@ -146,8 +151,10 @@ def handle_connect():
     idle_payload = {
         "timestamp_iso": datetime.now(timezone.utc).isoformat(),
         "child_in_roi": False,
+        "child_in_roi_raw": False,
         "roi_status": "CLEAR",
         "confidence": 0.0,
+        "confidence_raw": 0.0,
         "latency_ms": 0,
         "warning_device_on": False,
         "source": "idle",
@@ -257,10 +264,15 @@ class LiveSession:
         self.detector = ChildLikeDetector(
             MODEL_PATH,
             conf_child=CHILD_CONF,
-            small_bbox_ratio=SMALL_BBOX_RATIO,
+            min_child_bbox_ratio=MIN_CHILD_BBOX_RATIO,
+            dominance_iou=DOMINANCE_IOU,
             imgsz=YOLO_IMGSZ,
         )
-        self.warn_ctrl = WarningController(hold_seconds=WARNING_HOLD_SECONDS)
+        self.stabilizer = TemporalVoteStabilizer(window_size=5, required_true=3)
+        self.warn_ctrl = WarningController(
+            hold_seconds=WARNING_HOLD_SECONDS,
+            min_toggle_interval_sec=WARNING_MIN_TOGGLE_SEC,
+        )
 
         self.cap: Optional[cv2.VideoCapture] = None
         self.stop_event = threading.Event()
@@ -297,7 +309,8 @@ class LiveSession:
 
         print(
             f"[LIVE] Session started | source={self.source_key} | conf_child={CHILD_CONF:.2f} "
-            f"| imgsz={YOLO_IMGSZ} | stream_fps={STREAM_FPS:.1f} | infer_interval={INFER_INTERVAL_SEC:.2f}s"
+            f"| imgsz={YOLO_IMGSZ} | min_bbox_ratio={MIN_CHILD_BBOX_RATIO:.2f} "
+            f"| stream_fps={STREAM_FPS:.1f} | infer_interval={INFER_INTERVAL_SEC:.3f}s"
         )
 
     def stop(self):
@@ -431,7 +444,21 @@ class LiveSession:
             self._refresh_roi(w, h)
             roi = self.roi or ROI(0, 0, w - 1, h - 1)
 
-            out = self.detector.infer_frame(frame, roi)
+            out_raw = self.detector.infer_frame(frame, roi)
+            child_in_roi_stable, confidence_stable = self.stabilizer.update(
+                out_raw.get("child_in_roi_raw", False),
+                out_raw.get("confidence_raw", 0.0),
+            )
+            out = {
+                "timestamp_iso": out_raw["timestamp_iso"],
+                "latency_ms": out_raw["latency_ms"],
+                "confidence": confidence_stable,
+                "child_in_roi": bool(child_in_roi_stable),
+                "roi_status": "CHILD_IN_ROI" if child_in_roi_stable else "CLEAR",
+                "confidence_raw": out_raw.get("confidence_raw", 0.0),
+                "child_in_roi_raw": bool(out_raw.get("child_in_roi_raw", False)),
+                "detections": out_raw.get("detections", []),
+            }
             warning_device_on = bool(self.warn_ctrl.update(out["child_in_roi"]))
 
             payload = {
@@ -439,6 +466,8 @@ class LiveSession:
                 "latency_ms": out["latency_ms"],
                 "confidence": out["confidence"],
                 "child_in_roi": out["child_in_roi"],
+                "confidence_raw": out["confidence_raw"],
+                "child_in_roi_raw": out["child_in_roi_raw"],
                 "roi_status": out["roi_status"],
                 "warning_device_on": warning_device_on,
                 "source": "yolo",
@@ -450,7 +479,12 @@ class LiveSession:
             except Exception as e:
                 print(f"[LIVE] DB logging error ({self.source_key}): {e}")
 
-            annotated = _draw_overlay(frame.copy(), roi, out.get("detections", []), out["child_in_roi"])
+            annotated = _draw_overlay(
+                frame.copy(),
+                roi,
+                out.get("detections", []),
+                out["child_in_roi"],
+            )
             with self.state_lock:
                 self.latest_frame_annotated = annotated
 

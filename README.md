@@ -40,7 +40,24 @@ Frontend-focused dashboard for the IoT-Based Smart School-Zone Crosswalk Alert S
   - `LIVE_CAM_HEIGHT=720`
   - `LIVE_YOLO_IMGSZ=640`
   - `LIVE_STREAM_FPS=25`
-  - `LIVE_INFER_INTERVAL_SEC=0.10` (about 10 inference updates/sec)
+  - `LIVE_INFER_INTERVAL_SEC=0.125` (about 8 inference updates/sec)
 - Confidence threshold guidance:
   - Production: `LIVE_CHILD_CONF=0.65`
   - Sunny-scene testing: `LIVE_CHILD_CONF=0.60`
+
+### Detection Stabilization Defaults
+- Inference uses `agnostic_nms=True` with `iou=0.60` to suppress cross-class overlap duplicates.
+- Trigger logic uses child detections only (`adult_like` fallback disabled).
+- Trigger eligibility requires:
+  - `class == child_like`
+  - `confidence >= LIVE_CHILD_CONF`
+  - `bbox_height >= LIVE_MIN_CHILD_BBOX_RATIO * frame_height` (default `0.18`)
+  - bbox bottom-center point inside ROI
+- Temporal stabilization uses `3-of-5` voting before warning logic.
+- Warning logic keeps `LIVE_WARNING_HOLD_SECONDS=2.0` and anti-chatter `LIVE_WARNING_MIN_TOGGLE_SEC=0.75`.
+
+### Socket Status Debug Fields
+- `status_update` keeps canonical fields (`child_in_roi`, `confidence`, `warning_device_on`, etc.).
+- Optional debug fields are also emitted:
+  - `child_in_roi_raw`
+  - `confidence_raw`
