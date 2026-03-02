@@ -1783,6 +1783,146 @@ const App = {
     // ---------------------------------------------------------
 
     // Camera Logic
+    normalizeIpCameraUrl(rawValue) {
+        let value = (rawValue || '').trim();
+        if (!value) return '';
+
+        // Allow users to type only host:port/path; default to HTTP for IP Webcam apps.
+        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value)) {
+            value = `http://${value.replace(/^\/+/, '')}`;
+        }
+
+        try {
+            const parsed = new URL(value);
+            if (!parsed.pathname || parsed.pathname === '/') {
+                parsed.pathname = '/video';
+            }
+            return parsed.toString();
+        } catch (_) {
+            return value;
+        }
+    },
+
+    getSelectedCameraSourceInfo() {
+        const typeSelect = document.getElementById('camSourceType');
+        const sourceType = typeSelect ? typeSelect.value : 'local';
+
+        if (sourceType === 'ip') {
+            const ipInput = document.getElementById('ipCamUrl');
+            const ipUrl = this.normalizeIpCameraUrl(ipInput?.value || '');
+            if (ipInput) ipInput.value = ipUrl;
+            if (ipUrl) localStorage.setItem('ipCamUrl', ipUrl);
+            return { sourceParam: ipUrl, sourceLabel: 'IP Webcam' };
+        }
+
+        const selectTarget = document.getElementById('camDeviceSelect');
+        const localIndex = (selectTarget && selectTarget.value !== '')
+            ? selectTarget.value.toString()
+            : "0";
+        return { sourceParam: localIndex, sourceLabel: 'USB Webcam' };
+    },
+
+    buildVideoFeedUrl(useOverlay, sourceParam = null) {
+        const info = sourceParam == null ? this.getSelectedCameraSourceInfo() : { sourceParam };
+        const params = new URLSearchParams();
+        params.set('overlay', useOverlay ? "1" : "0");
+        params.set('source', info.sourceParam);
+        return '/video_feed?' + params.toString();
+    },
+
+    setCameraStatusChip(mode, text) {
+        const chip = document.getElementById('camStatusChip');
+        if (!chip) return;
+
+        if (mode === 'on') {
+            chip.className = 'status-chip connected';
+            chip.style.backgroundColor = 'rgba(76, 175, 80, 0.1)';
+            chip.style.color = '#2e7d32';
+        } else if (mode === 'starting') {
+            chip.className = 'status-chip';
+            chip.style.backgroundColor = 'rgba(255, 152, 0, 0.12)';
+            chip.style.color = '#b26a00';
+        } else if (mode === 'error') {
+            chip.className = 'status-chip';
+            chip.style.backgroundColor = 'rgba(211, 47, 47, 0.12)';
+            chip.style.color = '#b71c1c';
+        } else {
+            chip.className = 'status-chip mock';
+            chip.style.backgroundColor = '#eee';
+            chip.style.color = '#666';
+        }
+
+        chip.innerHTML = `<div class="status-indicator"></div> ${text}`;
+    },
+
+    setCameraSourceChip(show, text = '') {
+        const sourceChip = document.getElementById('camSourceChip');
+        if (!sourceChip) return;
+        sourceChip.style.display = show ? 'flex' : 'none';
+        if (show) {
+            sourceChip.innerHTML = `<div class="status-indicator"></div> ${text}`;
+        }
+    },
+
+    _clearCameraLoadWatch() {
+        if (this._camLoadTimeout) {
+            clearTimeout(this._camLoadTimeout);
+            this._camLoadTimeout = null;
+        }
+    },
+
+    async loadLocalCameraOptions(select, selectGroup) {
+        if (!select) return;
+
+        let backendCams = [];
+        try {
+            const res = await fetch('/api/cameras/probe?max=8');
+            if (res.ok) {
+                const j = await res.json();
+                if (j?.ok && Array.isArray(j.cameras)) {
+                    backendCams = j.cameras.filter(c => Number.isInteger(c.index));
+                }
+            }
+        } catch (e) {
+            console.warn('[Camera] Probe fetch failed:', e);
+        }
+
+        if (backendCams.length > 0) {
+            select.innerHTML = backendCams.map(cam => {
+                const resText = (cam.width > 0 && cam.height > 0)
+                    ? ` (${cam.width}x${cam.height})`
+                    : '';
+                const okText = cam.ok ? '' : ' (open failed)';
+                return `<option value="${cam.index}">Camera ${cam.index}${resText}${okText}</option>`;
+            }).join('');
+
+            const savedIndex = localStorage.getItem('camDeviceId');
+            const hasSaved = savedIndex && backendCams.some(c => String(c.index) === String(savedIndex));
+            const selectedValue = hasSaved ? String(savedIndex) : String(backendCams[0].index);
+
+            select.value = selectedValue;
+            window.CameraController.selectedDeviceId = selectedValue;
+            localStorage.setItem('camDeviceId', selectedValue);
+            if (selectGroup) selectGroup.style.display = 'flex';
+            return;
+        }
+
+        // Fallback: keep numeric indexes so backend still receives OpenCV-compatible source values.
+        const fallbackCount = 6;
+        select.innerHTML = Array.from({ length: fallbackCount }, (_, idx) =>
+            `<option value="${idx}">Camera ${idx}</option>`
+        ).join('');
+        const savedIndex = localStorage.getItem('camDeviceId');
+        if (savedIndex && Number.isInteger(Number(savedIndex))) {
+            select.value = savedIndex;
+        } else {
+            select.value = '0';
+        }
+        window.CameraController.selectedDeviceId = select.value;
+        localStorage.setItem('camDeviceId', select.value);
+        if (selectGroup) selectGroup.style.display = 'flex';
+    },
+
     initCamera() {
         // Button Listeners
         document.getElementById('btnStartCam')?.addEventListener('click', () => this.startCamera());
@@ -1790,7 +1930,7 @@ const App = {
         document.getElementById('debugOverlayToggle')?.addEventListener('change', (e) => {
             if (window.CameraController.isOn) {
                 const img = document.getElementById('liveCam');
-                if (img) img.src = '/video_feed?overlay=' + (e.target.checked ? "1" : "0");
+                if (img) img.src = this.buildVideoFeedUrl(e.target.checked);
             }
         });
         // Default overlay to ON
@@ -1798,15 +1938,32 @@ const App = {
         if (overlayToggle) overlayToggle.checked = true;
 
         const select = document.getElementById('camDeviceSelect');
+        const selectGroup = document.getElementById('camSelectGroup');
         const typeSelect = document.getElementById('camSourceType');
         const ipGroup = document.getElementById('ipCamInputGroup');
         const locGroup = document.getElementById('localCamInputGroup');
         const ipInput = document.getElementById('ipCamUrl');
 
         if (typeSelect) {
-            // Load saved state
-            const savedType = localStorage.getItem('camSourceType') || 'ip';
+            const migrationKey = 'camSourceTypeMigratedToLocalV1';
+            let savedType = localStorage.getItem('camSourceType');
+
+            // One-time migration: USB webcam becomes the default unless user explicitly changed it after migration.
+            if (!localStorage.getItem(migrationKey)) {
+                if (!savedType || savedType === 'ip') {
+                    savedType = 'local';
+                    localStorage.setItem('camSourceType', savedType);
+                }
+                localStorage.setItem(migrationKey, '1');
+            }
+
+            if (!savedType) {
+                savedType = 'local';
+                localStorage.setItem('camSourceType', savedType);
+            }
+
             typeSelect.value = savedType;
+
             if (savedType === 'ip') {
                 if (ipGroup) ipGroup.style.display = 'block';
                 if (locGroup) locGroup.style.display = 'none';
@@ -1815,8 +1972,8 @@ const App = {
                 if (locGroup) locGroup.style.display = 'block';
             }
 
-            const savedUrl = localStorage.getItem('ipCamUrl');
-            if (savedUrl && ipInput) ipInput.value = savedUrl;
+            const savedUrl = localStorage.getItem('ipCamUrl') || '';
+            if (ipInput) ipInput.value = savedUrl;
 
             typeSelect.addEventListener('change', (e) => {
                 const newType = e.target.value;
@@ -1839,12 +1996,27 @@ const App = {
         }
 
         if (ipInput) {
-            ipInput.addEventListener('change', (e) => {
-                localStorage.setItem('ipCamUrl', e.target.value.trim());
-                if (window.CameraController.isOn && typeSelect && typeSelect.value === 'ip') {
+            const persistIpUrl = (rawValue, restartIfActive) => {
+                const normalized = this.normalizeIpCameraUrl(rawValue);
+                ipInput.value = normalized;
+                if (normalized) localStorage.setItem('ipCamUrl', normalized);
+                else localStorage.removeItem('ipCamUrl');
+
+                if (restartIfActive && window.CameraController.isOn && typeSelect && typeSelect.value === 'ip') {
                     this.stopCamera();
                     setTimeout(() => this.startCamera(), 300);
                 }
+            };
+
+            ipInput.addEventListener('change', (e) => {
+                persistIpUrl(e.target.value, true);
+            });
+
+            ipInput.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                persistIpUrl(e.target.value, true);
+                e.target.blur();
             });
         }
 
@@ -1864,34 +2036,7 @@ const App = {
             });
         }
 
-        // Enumerate Devices
-        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-            navigator.mediaDevices.enumerateDevices().then(devices => {
-                const videoDevices = devices.filter(device => device.kind === 'videoinput');
-
-                if (select) {
-                    if (videoDevices.length > 0) {
-                        select.innerHTML = videoDevices.map(device =>
-                            `<option value="${device.deviceId}">${device.label || `Camera ${select.length + 1}`}</option>`
-                        ).join('');
-
-                        if (videoDevices.length > 1) selectGroup.style.display = 'block';
-
-                        // Restore selection or default
-                        const savedId = window.CameraController.selectedDeviceId;
-                        if (savedId && videoDevices.some(d => d.deviceId === savedId)) {
-                            select.value = savedId;
-                        } else {
-                            // Default to first
-                            window.CameraController.selectedDeviceId = videoDevices[0].deviceId;
-                        }
-                    } else {
-                        // No devices
-                        select.innerHTML = '<option disabled>No cameras found</option>';
-                    }
-                }
-            }).catch(e => console.warn("Camera enum error:", e));
-        }
+        this.loadLocalCameraOptions(select, selectGroup);
 
         // On Load Persistence Check
         // If the implementation supports hot-reloading or we want to be safe:
@@ -1904,57 +2049,101 @@ const App = {
         const img = document.getElementById('liveCam');
         if (!img) return;
 
-        // Use backend video feed
-        const useOverlay = document.getElementById('debugOverlayToggle')?.checked ? "1" : "0";
-
-        let sourceParam = "";
-        const typeSelect = document.getElementById('camSourceType');
-
-        if (typeSelect && typeSelect.value === 'ip') {
-            const ipUrl = document.getElementById('ipCamUrl')?.value.trim();
-            if (ipUrl) {
-                sourceParam = encodeURIComponent(ipUrl);
-            }
-        } else {
-            // Local webcam index
-            const selectTarget = document.getElementById('camDeviceSelect');
-            if (selectTarget && selectTarget.selectedIndex >= 0) {
-                sourceParam = selectTarget.selectedIndex.toString();
-            } else {
-                sourceParam = "0"; // Default
-            }
-        }
-
-        img.src = '/video_feed?overlay=' + useOverlay + '&source=' + sourceParam;
-        img.style.display = 'block';
-        window.CameraController.isOn = true;
-        this.updateLiveRoiBadge();
-
-        // UI
+        const useOverlay = !!document.getElementById('debugOverlayToggle')?.checked;
+        const sourceType = document.getElementById('camSourceType')?.value || 'local';
+        const sourceInfo = this.getSelectedCameraSourceInfo();
         const ph = document.getElementById('camPlaceholder');
-        if (ph) ph.style.display = 'none';
 
-        const chip = document.getElementById('camStatusChip');
-        if (chip) {
-            chip.className = 'status-chip connected';
-            chip.innerHTML = '<div class="status-indicator"></div> ON';
-            chip.style.backgroundColor = 'rgba(76, 175, 80, 0.1)';
-            chip.style.color = '#2e7d32';
+        if (sourceType === 'ip' && !sourceInfo.sourceParam) {
+            window.CameraController.isOn = false;
+            window.CameraController.lastError = 'Please enter an IP camera URL.';
+            this.setCameraStatusChip('error', 'IP URL REQUIRED');
+            this.setCameraSourceChip(true, 'IP Webcam URL is empty');
+            if (ph) {
+                ph.style.display = 'flex';
+                ph.innerHTML = `
+                    <div style="font-size: 2rem; margin-bottom: 10px; color: #d32f2f;">
+                        <i class="fa-solid fa-link-slash"></i>
+                    </div>
+                    <p><strong>IP Camera URL is required.</strong><br>Enter host:port/video, then Start Camera.</p>
+                `;
+            }
+            return;
         }
 
-        const sourceChip = document.getElementById('camSourceChip');
-        if (sourceChip) {
-            sourceChip.style.display = 'flex';
-            sourceChip.innerHTML = '<div class="status-indicator"></div> IP Webcam + YOLO';
+        const loadToken = Date.now().toString();
+
+        this._clearCameraLoadWatch();
+        this._camLoadToken = loadToken;
+        window.CameraController.isOn = false;
+        window.CameraController.lastError = null;
+
+        // Starting state
+        if (ph) {
+            ph.style.display = 'flex';
+            ph.innerHTML = `
+                <div style="font-size: 2rem; margin-bottom: 10px; color: #ccc;">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                </div>
+                <p><strong>Starting camera...</strong><br>Waiting for first frame.</p>
+            `;
         }
+        img.style.display = 'none';
+        this.setCameraStatusChip('starting', 'STARTING');
+        this.setCameraSourceChip(true, `${sourceInfo.sourceLabel} + YOLO`);
+
+        const onLoaded = () => {
+            if (this._camLoadToken !== loadToken) return;
+            this._clearCameraLoadWatch();
+            window.CameraController.isOn = true;
+            window.CameraController.lastError = null;
+            img.style.display = 'block';
+            if (ph) ph.style.display = 'none';
+            this.setCameraStatusChip('on', 'ON');
+            this.setCameraSourceChip(true, `${sourceInfo.sourceLabel} + YOLO`);
+            this.updateLiveRoiBadge();
+        };
+
+        const onError = () => {
+            if (this._camLoadToken !== loadToken) return;
+            this._clearCameraLoadWatch();
+            window.CameraController.isOn = false;
+            window.CameraController.lastError = `Failed to open camera source (${sourceInfo.sourceLabel}).`;
+            img.style.display = 'none';
+            img.src = '';
+            this.setCameraStatusChip('error', 'ERROR');
+            this.setCameraSourceChip(true, `${sourceInfo.sourceLabel} stream failed`);
+            if (ph) {
+                ph.style.display = 'flex';
+                ph.innerHTML = `
+                    <div style="font-size: 2rem; margin-bottom: 10px; color: #d32f2f;">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <p><strong>Camera stream failed.</strong></p>
+                `;
+            }
+        };
+
+        img.onload = onLoaded;
+        img.onerror = onError;
+
+        this._camLoadTimeout = setTimeout(() => {
+            if (this._camLoadToken === loadToken) onError();
+        }, 8000);
+
+        img.src = this.buildVideoFeedUrl(useOverlay, sourceInfo.sourceParam) + '&t=' + Date.now();
     },
 
     stopCamera() {
+        this._camLoadToken = null;
+        this._clearCameraLoadWatch();
         window.CameraController.isOn = false;
 
         // UI Reset
         const img = document.getElementById('liveCam');
         if (img) {
+            img.onload = null;
+            img.onerror = null;
             img.src = '';
             img.style.display = 'none';
         }
@@ -1971,15 +2160,8 @@ const App = {
             `;
         }
 
-        const chip = document.getElementById('camStatusChip');
-        if (chip) {
-            chip.className = 'status-chip mock';
-            chip.innerHTML = '<div class="status-indicator"></div> OFF';
-            chip.style.backgroundColor = '#eee';
-            chip.style.color = '#666';
-        }
-        const sourceChip = document.getElementById('camSourceChip');
-        if (sourceChip) sourceChip.style.display = 'none';
+        this.setCameraStatusChip('off', 'OFF');
+        this.setCameraSourceChip(false);
 
         // Reset live status cards to idle state
         const status = window.EventStore.systemStatus;

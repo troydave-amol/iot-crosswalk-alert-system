@@ -35,12 +35,14 @@ class ChildLikeDetector:
         conf_child: float = 0.65,
         device: Optional[str] = None,
         small_bbox_ratio: float = 0.35,
+        imgsz: int = 640,
     ):
         self.model_path = model_path
         self.conf_child = conf_child
         self.model = YOLO(model_path)
         self.device = device  # e.g., "cpu" or "0" for GPU
         self.small_bbox_ratio = small_bbox_ratio  # max bbox height / frame height for size fallback
+        self.imgsz = int(imgsz)
 
     def infer_frame(self, frame_bgr: np.ndarray, roi: ROI) -> Dict[str, Any]:
         """
@@ -53,6 +55,7 @@ class ChildLikeDetector:
             source=frame_bgr,
             conf=0.25,          # base filter; we enforce child threshold separately
             iou=0.5,
+            imgsz=self.imgsz,
             verbose=False,
             device=self.device
         )
@@ -86,8 +89,8 @@ class ChildLikeDetector:
                 # --- Primary: child_like (class 0) with sufficient confidence ---
                 if k == 0 and float(c) >= self.conf_child:
                     cx = (float(x1) + float(x2)) / 2.0
-                    cy = (float(y1) + float(y2)) / 2.0
-                    if roi.contains_point(cx, cy):
+                    # Use center-bottom point of bbox for ROI (feet on the crosswalk)
+                    if roi.contains_point(cx, float(y2)):
                         child_in_roi = True
                         if float(c) > best_child_conf:
                             best_child_conf = float(c)
@@ -100,8 +103,8 @@ class ChildLikeDetector:
                     bbox_h = float(y2) - float(y1)
                     if bbox_h <= frame_h * self.small_bbox_ratio:
                         cx = (float(x1) + float(x2)) / 2.0
-                        cy = (float(y1) + float(y2)) / 2.0
-                        if roi.contains_point(cx, cy):
+                        # Use center-bottom point of bbox for ROI
+                        if roi.contains_point(cx, float(y2)):
                             child_in_roi = True
                             if float(c) > best_child_conf:
                                 best_child_conf = float(c)

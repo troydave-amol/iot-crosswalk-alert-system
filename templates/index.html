@@ -152,18 +152,18 @@
                                 style="display:flex; flex-direction:column; gap:8px;">
                                 <div class="control-label">Source Type</div>
                                 <select id="camSourceType" class="form-control">
-                                    <option value="ip">IP Webcam</option>
-                                    <option value="local">Local Webcam</option>
+                                    <option value="local" selected>USB Webcam (Recommended)</option>
+                                    <option value="ip">IP Webcam (Optional)</option>
                                 </select>
 
-                                <div id="ipCamInputGroup" style="display:block;">
+                                <div id="ipCamInputGroup" style="display:none;">
                                     <div class="control-label" style="font-size:0.8rem;">IP Camera URL</div>
                                     <input type="text" id="ipCamUrl" class="form-control"
-                                        placeholder="http://192.168.1.29:8080/video"
-                                        value="http://192.168.1.29:8080/video">
+                                        placeholder="192.168.1.29:8080/video"
+                                        autocomplete="off" autocapitalize="none" spellcheck="false">
                                 </div>
 
-                                <div id="localCamInputGroup" style="display:none;">
+                                <div id="localCamInputGroup" style="display:block;">
                                     <div class="control-label" style="font-size:0.8rem;">Device</div>
                                     <select id="camDeviceSelect" class="form-control"></select>
                                 </div>

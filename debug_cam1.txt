@@ -1,0 +1,12 @@
+Starting tests
+Testing ANY
+  ANY + MJPG: 15 attempts failed
+  ANY + YUY2: 15 attempts failed
+  ANY + YUYV: 15 attempts failed
+  ANY + : 15 attempts failed
+Testing MSMF
+  MSMF + MJPG: 15 attempts failed
+  MSMF + YUY2: 15 attempts failed
+  MSMF + YUYV: 15 attempts failed
+  MSMF + : 15 attempts failed
+Done

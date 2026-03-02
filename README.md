@@ -33,3 +33,14 @@ Frontend-focused dashboard for the IoT-Based Smart School-Zone Crosswalk Alert S
 ## Configuration
 - **Database**: Check `.env` for database settings (defaults to strict mock mode if DB unavailable).
 - **Mock Mode**: Can be toggled ON/OFF in the dashboard top bar.
+
+### Live View Performance Profile
+- Default live settings now target smooth streaming with decoupled inference:
+  - `LIVE_CAM_WIDTH=1280`
+  - `LIVE_CAM_HEIGHT=720`
+  - `LIVE_YOLO_IMGSZ=640`
+  - `LIVE_STREAM_FPS=25`
+  - `LIVE_INFER_INTERVAL_SEC=0.10` (about 10 inference updates/sec)
+- Confidence threshold guidance:
+  - Production: `LIVE_CHILD_CONF=0.65`
+  - Sunny-scene testing: `LIVE_CHILD_CONF=0.60`
