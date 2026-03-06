@@ -1,9 +1,9 @@
 import unittest
-from unittest.mock import patch
 
 import numpy as np
 
 from cv_inference import ChildLikeDetector, ROI, _bbox_iou
+import warning_controller
 from warning_controller import TemporalVoteStabilizer, WarningController
 
 
@@ -41,6 +41,21 @@ class _FakeModel:
     def predict(self, **kwargs):
         self.last_predict_kwargs = kwargs
         return [self._result]
+
+
+class _TimeSequence:
+    def __init__(self, values):
+        self._values = iter(values)
+        self._original_time_fn = None
+
+    def __enter__(self):
+        self._original_time_fn = warning_controller.time.time
+        warning_controller.time.time = lambda: next(self._values)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        warning_controller.time.time = self._original_time_fn
+        return False
 
 
 def _build_detector(fake_model, conf_child=0.65, min_child_bbox_ratio=0.18, dominance_iou=0.70):
@@ -150,14 +165,14 @@ class DominanceIoUTests(unittest.TestCase):
 class WarningControllerTests(unittest.TestCase):
     def test_hold_keeps_warning_on_then_allows_off(self):
         wc = WarningController(hold_seconds=2.0, min_toggle_interval_sec=0.0)
-        with patch("warning_controller.time.time", side_effect=[1.0, 2.0, 3.2]):
+        with _TimeSequence([1.0, 2.0, 3.2]):
             self.assertTrue(wc.update(True))   # turns ON
             self.assertTrue(wc.update(False))  # still ON due to hold
             self.assertFalse(wc.update(False))  # hold elapsed -> OFF
 
     def test_min_toggle_interval_blocks_rapid_flip(self):
         wc = WarningController(hold_seconds=0.0, min_toggle_interval_sec=0.75)
-        with patch("warning_controller.time.time", side_effect=[1.0, 1.2, 1.9]):
+        with _TimeSequence([1.0, 1.2, 1.9]):
             self.assertTrue(wc.update(True))    # ON
             self.assertTrue(wc.update(False))   # blocked by min toggle interval
             self.assertFalse(wc.update(False))  # enough time elapsed -> OFF

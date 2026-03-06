@@ -147,7 +147,7 @@ def handle_connect():
     Sends a minimal camera-off status so the dashboard shows initial state.
     """
     print("Client connected")
-    # Emit a minimal "idle" status - no mock data, just safe defaults
+    # Emit a minimal "idle" status with safe defaults.
     idle_payload = {
         "timestamp_iso": datetime.now(timezone.utc).isoformat(),
         "child_in_roi": False,
@@ -739,5 +739,5 @@ if __name__ == "__main__":
     # Initialize DB (safe to run multiple times)
     init_db()
 
-    # Run the Flask-SocketIO server (no mock thread - real data only)
+    # Run the Flask-SocketIO server.
     socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)

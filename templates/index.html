@@ -78,7 +78,7 @@
         <header class="topbar">
             <div class="topbar-left">Smart Crosswalk Alert System for Real-Time Child Detection</div>
             <div class="topbar-right">
-                <div class="status-chip mock" id="connection-chip">
+                <div class="status-chip disconnected" id="connection-chip">
                     <div class="status-indicator"></div> Connecting...
                 </div>
                 <button class="btn btn-outline" id="theme-toggle" title="Toggle Dark/Light Mode">
@@ -171,7 +171,7 @@
 
                             <div class="control-group">
                                 <div class="control-label">Status</div>
-                                <div class="status-chip mock" id="camStatusChip">
+                                <div class="status-chip disconnected" id="camStatusChip">
                                     <div class="status-indicator"></div> OFF
                                 </div>
                                 <div class="status-chip connected" id="camSourceChip" style="display:none;">
@@ -649,7 +649,7 @@
                         </div>
                         <div style="flex: 1; min-width: 250px;">
                             <h5 style="margin-bottom: 8px;">Validation Status</h5>
-                            <div id="contract-valid-badge" class="status-chip mock">Waiting...</div>
+                            <div id="contract-valid-badge" class="status-chip disconnected">Waiting...</div>
                             <ul id="contract-errors-list"
                                 style="margin-top: 10px; color: #d32f2f; font-size: 0.85rem; padding-left: 20px;"></ul>
                         </div>

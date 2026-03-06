@@ -3,7 +3,7 @@
 Frontend-focused dashboard for the IoT-Based Smart School-Zone Crosswalk Alert System.
 
 ## Features
-- **Live View**: Real-time mock data visualization.
+- **Live View**: Real-time YOLO status visualization.
 - **Logs**: Event history with filtering and CSV export.
 - **Analytics**: Key performance indicators and charts.
 - **Reports**: Printable system summary.
@@ -31,8 +31,7 @@ Frontend-focused dashboard for the IoT-Based Smart School-Zone Crosswalk Alert S
     [http://127.0.0.1:5000](http://127.0.0.1:5000)
 
 ## Configuration
-- **Database**: Check `.env` for database settings (defaults to strict mock mode if DB unavailable).
-- **Mock Mode**: Can be toggled ON/OFF in the dashboard top bar.
+- **Database**: Check `.env` for database settings. If DB is unavailable, API endpoints return `503` and the dashboard shows unavailable-state warnings.
 
 ### Live View Performance Profile
 - Default live settings now target smooth streaming with decoupled inference:

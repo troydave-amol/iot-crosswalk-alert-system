@@ -239,7 +239,7 @@ body.sidebar-open .backdrop {
     gap: 6px;
 }
 
-.status-chip.mock {
+.status-chip.disconnected {
     background-color: #eee;
     color: #666;
 }
@@ -1049,7 +1049,7 @@ body.dark-mode .cam-placeholder {
     color: #888;
 }
 
-body.dark-mode .status-chip.mock {
+body.dark-mode .status-chip.disconnected {
     background-color: #333;
     color: #bbb;
 }

@@ -111,7 +111,7 @@ const App = {
         this.initTheme();
         this.setupNavigation();
         this.setupSocket();
-        this.setupTick(); // 1s tick for UI refresh and polling (no mock data)
+        this.setupTick(); // 1s tick for UI refresh and polling (live data only)
         this.setupAnalytics();
 
         // Init Logs Controls
@@ -143,7 +143,7 @@ const App = {
     },
 
     setupTick() {
-        // Main System Tick (1Hz) — UI refresh and auto-polling only. No mock data.
+        // Main system tick (1Hz) for UI refresh and auto-polling.
         setInterval(() => {
             const now = Date.now();
 
@@ -185,7 +185,7 @@ const App = {
                 const badge = document.getElementById('contract-valid-badge');
                 if (badge) {
                     badge.textContent = "Disconnected";
-                    badge.className = "status-chip mock";
+                    badge.className = "status-chip disconnected";
                 }
             });
             this.socket.on('status_update', (data) => {
@@ -195,7 +195,7 @@ const App = {
                 this.handleRoiUpdated(msg);
             });
         } catch (e) {
-            console.log("Socket.IO not initialized (Mock Mode only).");
+            console.log("Socket.IO not initialized.");
         }
     },
 
@@ -269,7 +269,7 @@ const App = {
             console.error("Contract Preview Error:", e);
         }
 
-        // 2. Always update live status from socket data (no mock gating)
+        // 2. Always update live status from socket data
         this.state.isConnected = true;
         this.state.lastSocketUpdate = Date.now();
 
@@ -319,7 +319,7 @@ const App = {
 
         if (!payload) {
             previewBox.textContent = "Waiting for data...";
-            validBadge.className = "status-chip mock";
+            validBadge.className = "status-chip disconnected";
             validBadge.textContent = "Waiting...";
             return;
         }
@@ -374,7 +374,7 @@ const App = {
         const connChip = document.getElementById('connection-chip');
         if (connChip) {
             connChip.innerHTML = `<div class="status-indicator"></div> ${status.connection_status}`;
-            connChip.className = `status-chip ${this.state.isConnected ? 'connected' : 'mock'}`;
+            connChip.className = `status-chip ${this.state.isConnected ? 'connected' : 'disconnected'}`;
         }
         document.getElementById('last-update').textContent = `Last Update: ${status.last_update_str}`;
 
@@ -666,7 +666,7 @@ const App = {
 
         return window.EventStore.events.filter(log => {
             // Date Check
-            // Note: log.rawTimestamp is needed. If existing logs don't have it, we use mock default.
+            // Note: log.rawTimestamp is needed. If missing, use a safe fallback value.
             // But we just added rawTimestamp to logEvent. For old logs in session they might miss it.
             // Fallback: assume old logs match if no rawTimestamp (or clear them).
             const ts = log.rawTimestamp || log.id;
@@ -1847,7 +1847,7 @@ const App = {
             chip.style.backgroundColor = 'rgba(211, 47, 47, 0.12)';
             chip.style.color = '#b71c1c';
         } else {
-            chip.className = 'status-chip mock';
+            chip.className = 'status-chip disconnected';
             chip.style.backgroundColor = '#eee';
             chip.style.color = '#666';
         }
