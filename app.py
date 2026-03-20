@@ -17,7 +17,8 @@ from warning_controller import TemporalVoteStabilizer, WarningController
 
 load_dotenv()
 
-MODEL_PATH = r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\models\yolov8_childlike_best.pt"
+PROJECT_ROOT = Path(__file__).resolve().parent
+DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "manual_crosswalk_detector.pt"
 ROI_PATH = Path("roi_config.json")
 
 def _env_float(name: str, default: float) -> float:
@@ -34,6 +35,17 @@ def _env_int(name: str, default: int) -> int:
         return int(default)
 
 
+def _resolve_model_path() -> Path:
+    raw = (os.getenv("MODEL_PATH") or "").strip()
+    if not raw:
+        return DEFAULT_MODEL_PATH
+
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    return path
+
+
 CHILD_CONF = _env_float("LIVE_CHILD_CONF", 0.65)
 MIN_CHILD_BBOX_RATIO = _env_float("LIVE_MIN_CHILD_BBOX_RATIO", 0.18)
 DOMINANCE_IOU = _env_float("LIVE_DOMINANCE_IOU", 0.70)
@@ -44,6 +56,7 @@ INFER_INTERVAL_SEC = _env_float("LIVE_INFER_INTERVAL_SEC", 0.125)
 STREAM_FPS = max(1.0, _env_float("LIVE_STREAM_FPS", 25.0))
 CAM_WIDTH = _env_int("LIVE_CAM_WIDTH", 1280)
 CAM_HEIGHT = _env_int("LIVE_CAM_HEIGHT", 720)
+MODEL_PATH = _resolve_model_path()
 
 # Default to local USB webcam for stable, low-latency demo behavior.
 # IP webcam remains available via /video_feed?source=http://... from the UI.
@@ -148,19 +161,7 @@ def handle_connect():
     """
     print("Client connected")
     # Emit a minimal "idle" status with safe defaults.
-    idle_payload = {
-        "timestamp_iso": datetime.now(timezone.utc).isoformat(),
-        "child_in_roi": False,
-        "child_in_roi_raw": False,
-        "roi_status": "CLEAR",
-        "confidence": 0.0,
-        "confidence_raw": 0.0,
-        "latency_ms": 0,
-        "warning_device_on": False,
-        "source": "idle",
-        "camera_status": "OFF"
-    }
-    socketio.emit("status_update", idle_payload)
+    socketio.emit("status_update", _build_idle_payload(camera_status="OFF"))
 
 # --------------------------------------------------------------------------------
 # Live Pipeline
@@ -213,7 +214,23 @@ def _resolve_video_source(source_str: str) -> Tuple[str, str, Union[int, str]]:
     return f"ip:{VIDEO_SOURCE}", "ip", VIDEO_SOURCE
 
 
-def _draw_overlay(frame, roi: ROI, detections, child_in_roi: bool):
+def _build_idle_payload(camera_status: str, edge_status: str = "OK") -> dict:
+    return {
+        "timestamp_iso": datetime.now(timezone.utc).isoformat(),
+        "child_in_roi": False,
+        "child_in_roi_raw": False,
+        "roi_status": "CLEAR",
+        "confidence": 0.0,
+        "confidence_raw": 0.0,
+        "latency_ms": 0,
+        "warning_device_on": False,
+        "source": "idle",
+        "camera_status": camera_status,
+        "edge_status": edge_status,
+    }
+
+
+def _draw_overlay(frame, roi: ROI, detections, child_in_roi: bool, status_note: Optional[str] = None):
     if roi:
         roi_overlay = frame.copy()
         if child_in_roi:
@@ -231,6 +248,22 @@ def _draw_overlay(frame, roi: ROI, detections, child_in_roi: bool):
         lx, ly = roi.x1, max(th + 10, roi.y1 - 10)
         cv2.rectangle(frame, (lx, ly - th - 6), (lx + tw + 8, ly + 4), (0, 0, 0), -1)
         cv2.putText(frame, roi_label, (lx + 4, ly), cv2.FONT_HERSHEY_SIMPLEX, 0.8, border_color, 2, cv2.LINE_AA)
+
+    if status_note:
+        (tw, th), _ = cv2.getTextSize(status_note, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+        pad = 10
+        top = 16
+        cv2.rectangle(frame, (pad, top), (pad + tw + 16, top + th + 16), (0, 120, 255), -1)
+        cv2.putText(
+            frame,
+            status_note,
+            (pad + 8, top + th + 4),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
 
     for d in detections:
         x1, y1, x2, y2 = d["bbox"]
@@ -261,13 +294,9 @@ class LiveSession:
         self.source_value = source_value
         self.viewer_count = 0
 
-        self.detector = ChildLikeDetector(
-            MODEL_PATH,
-            conf_child=CHILD_CONF,
-            min_child_bbox_ratio=MIN_CHILD_BBOX_RATIO,
-            dominance_iou=DOMINANCE_IOU,
-            imgsz=YOLO_IMGSZ,
-        )
+        self.detector: Optional[ChildLikeDetector] = None
+        self.detector_error: Optional[str] = None
+        self._load_detector()
         self.stabilizer = TemporalVoteStabilizer(window_size=5, required_true=3)
         self.warn_ctrl = WarningController(
             hold_seconds=WARNING_HOLD_SECONDS,
@@ -297,6 +326,27 @@ class LiveSession:
         self.last_perf_capture = 0
         self.last_perf_infer = 0
 
+    def _load_detector(self):
+        if not MODEL_PATH.exists():
+            self.detector = None
+            self.detector_error = f"manual model not found at {MODEL_PATH}"
+            print(f"[LIVE] Detector unavailable | source={self.source_key} | {self.detector_error}")
+            return
+
+        try:
+            self.detector = ChildLikeDetector(
+                str(MODEL_PATH),
+                conf_child=CHILD_CONF,
+                min_child_bbox_ratio=MIN_CHILD_BBOX_RATIO,
+                dominance_iou=DOMINANCE_IOU,
+                imgsz=YOLO_IMGSZ,
+            )
+            self.detector_error = None
+        except Exception as exc:
+            self.detector = None
+            self.detector_error = f"{type(exc).__name__}: {exc}"
+            print(f"[LIVE] Detector load failed | source={self.source_key} | {self.detector_error}")
+
     def start(self):
         self.cap = self._open_capture()
         if not self.cap.isOpened():
@@ -307,10 +357,12 @@ class LiveSession:
         self.capture_thread.start()
         self.inference_thread.start()
 
+        detector_state = "ready" if self.detector is not None else f"pending ({self.detector_error})"
         print(
             f"[LIVE] Session started | source={self.source_key} | conf_child={CHILD_CONF:.2f} "
             f"| imgsz={YOLO_IMGSZ} | min_bbox_ratio={MIN_CHILD_BBOX_RATIO:.2f} "
-            f"| stream_fps={STREAM_FPS:.1f} | infer_interval={INFER_INTERVAL_SEC:.3f}s"
+            f"| stream_fps={STREAM_FPS:.1f} | infer_interval={INFER_INTERVAL_SEC:.3f}s "
+            f"| detector={detector_state}"
         )
 
     def stop(self):
@@ -443,6 +495,20 @@ class LiveSession:
             h, w = frame.shape[:2]
             self._refresh_roi(w, h)
             roi = self.roi or ROI(0, 0, w - 1, h - 1)
+
+            if self.detector is None:
+                payload = _build_idle_payload(camera_status="OK", edge_status="ERROR")
+                socketio.emit("status_update", payload)
+                annotated = _draw_overlay(
+                    frame.copy(),
+                    roi,
+                    [],
+                    False,
+                    status_note="MODEL NOT READY",
+                )
+                with self.state_lock:
+                    self.latest_frame_annotated = annotated
+                continue
 
             out_raw = self.detector.infer_frame(frame, roi)
             child_in_roi_stable, confidence_stable = self.stabilizer.update(

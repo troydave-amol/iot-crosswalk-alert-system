@@ -2,11 +2,9 @@
 name: smart-crosswalk
 description: |
   Full-stack AI agent skill for the IoT-Based Smart School-Zone Crosswalk Alert System capstone project.
-  Use this skill when working on any part of the project including YOLOv8 model training/fine-tuning
-  for child pedestrian detection, dataset preparation (CityPersons/JAAD), Flask+MySQL backend,
-  Socket.IO live dashboard, analytics range filters, API endpoint validation, ROI trigger logic,
-  or report generation. Enforces project scope (visual warning only, no SMS/audio/age
-  estimation/face recognition).
+  Use this skill for manual dataset preparation, YOLOv8 training from site-collected data,
+  Flask+MySQL backend work, Socket.IO dashboard updates, analytics validation, ROI trigger logic,
+  and report generation. Enforces project scope: visual warning only, no SMS/audio/age estimation/face recognition.
 ---
 
 # Smart Crosswalk Capstone
@@ -17,130 +15,80 @@ description: |
 **Client**: Traffic Management Center (TMC), Casisang Central School crosswalk, Barangay Casisang, Malaybalay City
 **Stack**: YOLOv8 + Flask + MySQL + Socket.IO + HTML/JS dashboard
 
----
-
 ## Non-Negotiable Scope Rules
 
-Before executing ANY task, verify it fits these constraints:
+- Detection wording must remain: visually classified as children based on body size, proportions, and school-age appearance
+- Warning output must remain visual only
+- No SMS, no audio, no face recognition, no biological age claims
+- Warning turns ON only when a child-classified pedestrian is inside the Crosswalk ROI
 
-- Detection = "visually classified as children based on body size, proportions, and school-age appearance" (NEVER "detect 13 years old and below")
-- Warning output = visual only (LED sign/lightbox/beacon)
-- NO SMS, NO audio/sirens/buzzers, NO face recognition, NO speed detection, NO biological age estimation
-- Warning ON only when a child-classified pedestrian is inside the Crosswalk ROI; OFF otherwise
+## Active Dataset Policy
 
-If a request breaks scope, stop and ask for clarification or refuse.
+The active workflow is manual-dataset-only.
 
----
-
-## 3-Layer Architecture
-
-| Layer | Role | Location |
-|---|---|---|
-| **Directive** | What to do (SOPs) | `docs/specs/` |
-| **Orchestration** | Decision-making (YOU) | — |
-| **Execution** | Deterministic scripts | `scripts/` |
-
-Always check `scripts/` for an existing script before creating a new one.
-
----
+- Working dataset root: `datasets/site_dataset_v1/`
+- Ignore removed legacy datasets and prior training artifacts in active decisions
+- Do not rely on an old detector as a valid deliverable
 
 ## Workflow Decision Tree
 
-**What are you working on?**
-
-- Dataset / annotations → Follow **Dataset Workflow** below
-- Model training / evaluation → Follow **Training Workflow** below
-- Backend / API → Follow **Backend Workflow** below
-- Dashboard / frontend → Follow **Frontend Workflow** below
-- Analytics correctness → Follow **Analytics Validation Workflow** below
-
----
+- Dataset / annotations -> follow Dataset Workflow
+- Model training / evaluation -> follow Training Workflow
+- Backend / API -> follow Backend Workflow
+- Dashboard / frontend -> follow Frontend Workflow
+- Analytics correctness -> follow Analytics Validation Workflow
 
 ## Dataset Workflow
 
-1. Identify dataset folder structure under `datasets/`
-2. Confirm annotation format (YOLO `.txt` labels or convert)
-3. Validate labels with `scripts/validate_labels.py` (bounds check, missing labels)
-4. Update or create `datasets/<name>.yaml` (see `datasets/citypersons.yaml` as reference)
-5. Create train/val/test split via `scripts/split_dataset.py`
-6. For child-class fine-tuning: follow annotation guideline — see `docs/specs/annotation_guideline_child_class.md`
-
-**Active datasets:**
-- `datasets/citypersons/` — pedestrian baseline (~8,479 files)
-- `datasets/jaad/` — road/crosswalk behavior context (~4,777 files)
-- `datasets/crosswalk_child.yaml` — child-class fine-tune config (in progress)
-
----
+1. Confirm `datasets/site_dataset_v1/` structure exists
+2. Use `frames_selected/` + `labels/` as the labeling source of truth
+3. Validate labels with `scripts/validate_labels.py --dataset site_dataset_v1`
+4. Export train/val/test via `scripts/split_dataset.py --dataset site_dataset_v1`
+5. Use `docs/specs/annotation_guideline_child_class.md` for class rules
 
 ## Training Workflow
 
-1. Baseline model: `models/yolov8n.pt`
-2. Existing training run: `models/runs/detect/train/` — contains weights, curves, confusion matrix
-3. For fine-tuning child class: use `datasets/crosswalk_child.yaml`
-4. Evaluate: precision/recall/F1 + latency (ms) — must go into manuscript
-5. See `docs/specs/yolov8_training_plan.md` for full training parameters and evaluation targets
-
----
+1. Train only from `datasets/site_dataset_v1/exports/yolo/data.yaml`
+2. Save approved best weights to `models/manual_crosswalk_detector.pt`
+3. Save training artifacts under `runs/`
+4. Record evaluation metrics for the manuscript
+5. See `docs/specs/yolov8_training_plan.md`
 
 ## Backend Workflow
 
-Flask app: `app.py` | DB layer: `db.py`
+Flask app: `app.py`
+DB layer: `db.py`
 
-Key endpoints that must remain stable:
+Critical requirements:
 
-| Endpoint | Contract |
-|---|---|
-| `GET /api/events` | range filter, pagination (total+rows), 503 on DB error |
-| `GET /api/analytics` | SQL-accurate aggregates, includes metadata |
-| `GET /api/health` | returns `{"ok": true}` even if DB is down |
-
-See `docs/specs/api_events_contract.md` for full field definitions and range rules.
-
-**Self-anneal loop for backend bugs:**
-1. Reproduce with minimal steps
-2. Identify root cause (logs/SQL/network proof)
-3. Fix deterministically
-4. Add regression test in `scripts/` (see `scripts/smoke_test_api.py`, `scripts/verify_db.py`)
-5. Update relevant directive in `docs/specs/`
-
----
+- `/api/events` must keep correct range filtering and pagination
+- `/api/analytics` must stay SQL-accurate
+- missing model must not crash live view; system should fail safe with warning OFF
 
 ## Frontend Workflow
 
-Dashboard pages: Live View, Logs, Analytics, Reports, Settings
-Entry: `templates/index.html` | Styles/JS: `static/`
+Entry: `templates/index.html`
+Assets: `static/`
 
-**Range filter rules (must always hold):**
-- 15m ⊆ 1h ⊆ today ⊆ all
-- Totals must satisfy nested subsets for events/warnings/detections
-- All pages fetch from `/api/events` — NO session-log fallback
+Keep these rules:
 
----
+- 15m subset 1h subset today subset all
+- dashboard numbers must match backend API
+- live payloads must remain contract-valid even when detection is idle
 
 ## Analytics Validation Workflow
 
-When analytics numbers look wrong:
-1. Run raw SQL on MySQL to get ground truth
-2. Compare to `/api/analytics` or `/api/events` response for same range
-3. Compare API response to dashboard KPI display
-4. If any mismatch → treat as bug until proven otherwise
-
-**Canonical field names** (use these everywhere):
-
-```
-timestamp_iso, warning_device_on, child_in_roi, confidence, latency_ms, scenario (optional)
-```
-
-Legacy field `warning_on` is fallback only.
-
----
+1. compute SQL truth
+2. compare against `/api/analytics`
+3. compare against dashboard KPIs
+4. treat mismatches as bugs until proven otherwise
 
 ## Resources
 
-- `docs/specs/api_events_contract.md` — Full API field specs and range rules
-- `docs/specs/api_analytics_aggregates.md` — Analytics endpoint contract and validation rules
-- `docs/specs/annotation_guideline_child_class.md` — Child-class labeling rules (inclusion/exclusion, bbox, occlusion)
-- `docs/specs/yolov8_training_plan.md` — YOLOv8 training parameters and evaluation targets
-- `docs/specs/dataset_prepare_citypersons.md` — Dataset preparation SOP
-- `docs/specs/roi_logic_and_trigger_rules.md` — ROI trigger logic rules
-- `scripts/` — All deterministic scripts (validate_labels, split_dataset, verify_db, generate_report, smoke_test_api, setup_datasets)
+- `docs/specs/dataset_prepare_manual_crosswalk.md`
+- `docs/specs/annotation_guideline_child_class.md`
+- `docs/specs/yolov8_training_plan.md`
+- `docs/specs/api_events_contract.md`
+- `docs/specs/api_analytics_aggregates.md`
+- `docs/specs/roi_logic_and_trigger_rules.md`
+- `scripts/`

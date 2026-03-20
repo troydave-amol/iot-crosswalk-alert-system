@@ -1,43 +1,43 @@
 """
-scripts/validate_labels.py
-----------------------------
-Validates YOLO-format label files for a given dataset under datasets/.
+Validate YOLO-format label files for a manual dataset under datasets/.
 
 Usage:
-    python scripts/validate_labels.py --dataset citypersons
-    python scripts/validate_labels.py --dataset jaad
+    python scripts/validate_labels.py --dataset site_dataset_v1
+    python scripts/validate_labels.py --dataset site_dataset_v1 --images-subdir exports/yolo/images --labels-subdir exports/yolo/labels
 
 Outputs:
-    reports/<dataset>_label_validation.csv   — one row per issue found
-    Console summary of totals
+    reports/<dataset>_label_validation.csv
 """
+
+from __future__ import annotations
 
 import argparse
 import csv
-import os
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATASETS_DIR = PROJECT_ROOT / "datasets"
-REPORTS_DIR  = PROJECT_ROOT / "reports"
+REPORTS_DIR = PROJECT_ROOT / "reports"
 
 
-def validate_dataset(dataset_name: str) -> list[dict]:
-    """
-    Walk images/ and labels/ for the given dataset.
-    Returns a list of issue dicts.
-    """
-    dataset_dir = DATASETS_DIR / dataset_name
-    images_dir  = dataset_dir / "images"
-    labels_dir  = dataset_dir / "labels"
+def validate_dataset(
+    dataset_name: str,
+    images_subdir: str = "frames_selected",
+    labels_subdir: str = "labels",
+) -> list[dict]:
+    dataset_path = Path(dataset_name)
+    if dataset_path.is_absolute():
+        raise ValueError("--dataset must be a path relative to datasets/")
+
+    dataset_dir = DATASETS_DIR / dataset_path
+    images_dir = dataset_dir / images_subdir
+    labels_dir = dataset_dir / labels_subdir
 
     if not images_dir.exists():
-        raise FileNotFoundError(f"images/ not found: {images_dir}")
+        raise FileNotFoundError(f"images directory not found: {images_dir}")
     if not labels_dir.exists():
-        raise FileNotFoundError(f"labels/ not found: {labels_dir}")
+        raise FileNotFoundError(f"labels directory not found: {labels_dir}")
 
     image_exts = {".jpg", ".jpeg", ".png", ".bmp"}
     issues = []
@@ -45,33 +45,32 @@ def validate_dataset(dataset_name: str) -> list[dict]:
     image_files = [f for f in images_dir.rglob("*") if f.suffix.lower() in image_exts]
 
     for img_path in image_files:
-        # Derive expected label path (same relative structure, .txt extension)
         rel = img_path.relative_to(images_dir)
         label_path = labels_dir / rel.with_suffix(".txt")
 
-        # -- Missing label file --
         if not label_path.exists():
-            issues.append({
-                "image": str(img_path.relative_to(PROJECT_ROOT)),
-                "label": str(label_path.relative_to(PROJECT_ROOT)),
-                "issue": "missing_label_file",
-                "line":  "",
-                "detail": "No corresponding .txt label file found",
-            })
+            issues.append(
+                {
+                    "image": str(img_path.relative_to(PROJECT_ROOT)),
+                    "label": str(label_path.relative_to(PROJECT_ROOT)),
+                    "issue": "missing_label_file",
+                    "line": "",
+                    "detail": "No corresponding .txt label file found",
+                }
+            )
             continue
 
-        # -- Parse label file --
-        with open(label_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-
+        lines = label_path.read_text(encoding="utf-8").splitlines()
         if not lines:
-            issues.append({
-                "image":  str(img_path.relative_to(PROJECT_ROOT)),
-                "label":  str(label_path.relative_to(PROJECT_ROOT)),
-                "issue":  "empty_label_file",
-                "line":   "",
-                "detail": "Label file exists but is empty",
-            })
+            issues.append(
+                {
+                    "image": str(img_path.relative_to(PROJECT_ROOT)),
+                    "label": str(label_path.relative_to(PROJECT_ROOT)),
+                    "issue": "empty_label_file",
+                    "line": "",
+                    "detail": "Label file exists but is empty",
+                }
+            )
             continue
 
         for lineno, raw in enumerate(lines, start=1):
@@ -80,71 +79,98 @@ def validate_dataset(dataset_name: str) -> list[dict]:
                 continue
             parts = raw.split()
             if len(parts) != 5:
-                issues.append({
-                    "image":  str(img_path.relative_to(PROJECT_ROOT)),
-                    "label":  str(label_path.relative_to(PROJECT_ROOT)),
-                    "issue":  "malformed_line",
-                    "line":   lineno,
-                    "detail": f"Expected 5 values, got {len(parts)}: {raw!r}",
-                })
+                issues.append(
+                    {
+                        "image": str(img_path.relative_to(PROJECT_ROOT)),
+                        "label": str(label_path.relative_to(PROJECT_ROOT)),
+                        "issue": "malformed_line",
+                        "line": lineno,
+                        "detail": f"Expected 5 values, got {len(parts)}: {raw!r}",
+                    }
+                )
                 continue
 
             try:
-                cls, cx, cy, w, h = int(parts[0]), float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4])
+                int(parts[0])
+                cx, cy, w, h = float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4])
             except ValueError:
-                issues.append({
-                    "image":  str(img_path.relative_to(PROJECT_ROOT)),
-                    "label":  str(label_path.relative_to(PROJECT_ROOT)),
-                    "issue":  "parse_error",
-                    "line":   lineno,
-                    "detail": f"Cannot parse values: {raw!r}",
-                })
+                issues.append(
+                    {
+                        "image": str(img_path.relative_to(PROJECT_ROOT)),
+                        "label": str(label_path.relative_to(PROJECT_ROOT)),
+                        "issue": "parse_error",
+                        "line": lineno,
+                        "detail": f"Cannot parse values: {raw!r}",
+                    }
+                )
                 continue
 
-            # -- Out-of-bounds check --
-            for name, val in [("cx", cx), ("cy", cy), ("w", w), ("h", h)]:
-                if not (0.0 <= val <= 1.0):
-                    issues.append({
-                        "image":  str(img_path.relative_to(PROJECT_ROOT)),
-                        "label":  str(label_path.relative_to(PROJECT_ROOT)),
-                        "issue":  "out_of_bounds",
-                        "line":   lineno,
-                        "detail": f"{name}={val:.4f} is outside [0, 1]",
-                    })
+            for name, value in (("cx", cx), ("cy", cy), ("w", w), ("h", h)):
+                if not (0.0 <= value <= 1.0):
+                    issues.append(
+                        {
+                            "image": str(img_path.relative_to(PROJECT_ROOT)),
+                            "label": str(label_path.relative_to(PROJECT_ROOT)),
+                            "issue": "out_of_bounds",
+                            "line": lineno,
+                            "detail": f"{name}={value:.4f} is outside [0, 1]",
+                        }
+                    )
 
     return issues
 
 
 def save_report(issues: list[dict], dataset_name: str) -> Path:
     REPORTS_DIR.mkdir(exist_ok=True)
-    out_path = REPORTS_DIR / f"{dataset_name}_label_validation.csv"
+    dataset_slug = "_".join(Path(dataset_name).parts)
+    out_path = REPORTS_DIR / f"{dataset_slug}_label_validation.csv"
     fieldnames = ["image", "label", "issue", "line", "detail"]
-    with open(out_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+    with out_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(issues)
     return out_path
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Validate YOLO label files.")
-    parser.add_argument("--dataset", required=True, help="Dataset name under datasets/")
+    parser.add_argument(
+        "--dataset",
+        required=True,
+        help="Dataset path under datasets/, for example site_dataset_v1",
+    )
+    parser.add_argument(
+        "--images-subdir",
+        default="frames_selected",
+        help="Image folder inside the dataset root (default: frames_selected)",
+    )
+    parser.add_argument(
+        "--labels-subdir",
+        default="labels",
+        help="Label folder inside the dataset root (default: labels)",
+    )
     args = parser.parse_args()
 
     print(f"Validating dataset: {args.dataset}")
-    issues = validate_dataset(args.dataset)
+    issues = validate_dataset(
+        args.dataset,
+        images_subdir=args.images_subdir,
+        labels_subdir=args.labels_subdir,
+    )
 
     if not issues:
-        print("✅ No issues found.")
-    else:
-        report_path = save_report(issues, args.dataset)
-        by_type: dict[str, int] = {}
-        for issue in issues:
-            by_type[issue["issue"]] = by_type.get(issue["issue"], 0) + 1
-        print(f"⚠️  {len(issues)} issue(s) found:")
-        for k, v in sorted(by_type.items()):
-            print(f"   {k}: {v}")
-        print(f"Report saved to: {report_path}")
+        print("[OK] No issues found.")
+        return
+
+    report_path = save_report(issues, args.dataset)
+    by_type: dict[str, int] = {}
+    for issue in issues:
+        by_type[issue["issue"]] = by_type.get(issue["issue"], 0) + 1
+
+    print(f"[WARN] {len(issues)} issue(s) found:")
+    for issue_type, count in sorted(by_type.items()):
+        print(f"   {issue_type}: {count}")
+    print(f"Report saved to: {report_path}")
 
 
 if __name__ == "__main__":

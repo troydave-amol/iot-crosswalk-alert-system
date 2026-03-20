@@ -1,58 +1,62 @@
 # YOLOv8 Training Plan
 
-## Model
-- Base: `yolov8n.pt` (nano, edge-friendly)
-- Framework: Ultralytics YOLOv8
-- Task: object detection (`child_like`, `adult_like`)
+## Current Status
 
-## Phase 1: Baseline Person Detection
-Train on CityPersons + JAAD to establish pedestrian detection baseline.
+As of March 20, 2026, there is no approved active detector in the repository. Training must restart from the manually gathered site dataset only.
+
+## Dataset
+
+Active export:
+
+- `datasets/site_dataset_v1/exports/yolo/data.yaml`
+
+Expected classes:
+
+- `0: child_like`
+- `1: adult_like`
+
+## Training Preconditions
+
+Do not start training until all of these are true:
+
+1. `frames_selected/` has enough varied site footage
+2. labels pass `scripts/validate_labels.py`
+3. `exports/yolo/` has a clean train/val/test split
+4. the manuscript language matches the annotation guideline
+
+## Baseline Training Configuration
+
+Use a fresh YOLOv8 nano checkpoint downloaded at training time, not an old repo-carried weight file.
 
 ```yaml
 model: yolov8n.pt
-data: datasets/citypersons.yaml
+data: datasets/site_dataset_v1/exports/yolo/data.yaml
 epochs: 50
 imgsz: 640
 batch: 16
 workers: 2
 device: 0
+project: runs
+name: manual_site_v1
 ```
 
-Output: `runs/detect/train/weights/best.pt`
+## Output Targets
 
-## Phase 2: Child-Class Fine-Tuning
-Fine-tune baseline on child-labeled dataset.
+- best model copied to `models/manual_crosswalk_detector.pt`
+- full run artifacts stored in `runs/manual_site_v1/`
+- evaluation summary saved under `reports/`
 
-```yaml
-model: runs/detect/train/weights/best.pt
-data: datasets/crosswalk_child.yaml
-epochs: 30
-imgsz: 640
-batch: 16
-freeze: 10
-```
+## Runtime Integration
 
-## Phase 2b: Mapping Fix + Retrain (`young` -> `child_like`)
-The JAAD exporter mapping was corrected so `child` and `young` map to `child_like`, while older groups map to `adult_like`.
+After a new model is approved:
 
-Automation script: `scripts/retrain_childlike_v2.py`
-1. Clear old export and split
-2. Re-export JAAD with corrected mapping
-3. Re-split dataset
-4. Fine-tune from current best model
-5. Copy new `best.pt` into `models/`
+1. place it at `models/manual_crosswalk_detector.pt` or set `MODEL_PATH`
+2. run the live app
+3. confirm ROI-trigger behavior on real or recorded site footage
+4. verify DB events and analytics still match the emitted live state
 
-## Runtime Inference and Trigger Notes
-- Runtime trigger logic is child-only. `adult_like` fallback is disabled for warning decisions.
-- Runtime uses:
-  - `agnostic_nms=True`
-  - IoU threshold around `0.60`
-  - confidence gate (`LIVE_CHILD_CONF`)
-  - minimum bbox-height ratio gate (`LIVE_MIN_CHILD_BBOX_RATIO`, default `0.18`)
-  - ROI bottom-center inclusion check
-- Raw detector decisions are stabilized with a 3-of-5 temporal vote before setting canonical `child_in_roi`.
+## Evaluation Targets
 
-## Evaluation Targets (Manuscript)
 | Metric | Target |
 |---|---|
 | Precision | >= 0.80 |
@@ -61,23 +65,16 @@ Automation script: `scripts/retrain_childlike_v2.py`
 | Inference latency | <= 100 ms/frame |
 
 ## Required Evaluation Artifacts
+
+- `results.csv`
 - `BoxPR_curve.png`
 - `BoxF1_curve.png`
 - `confusion_matrix_normalized.png`
-- `results.csv`
-- `val_batch0_pred.jpg`
+- representative validation predictions
 
-## ROI Integration
-After model evaluation:
-1. Load `best.pt` in Flask backend
-2. Run inference on camera frame
-3. Build raw trigger candidates with confidence, min-size, and ROI checks
-4. Stabilize to canonical `child_in_roi`
-5. Set `warning_device_on` from canonical signal + hold/cooldown
-6. Emit `status_update` and log events to MySQL
+## Deployment Notes
 
-## Edge Deployment Notes
-- Target: Raspberry Pi or Jetson Nano
-- Export to ONNX/TFLite if needed
-- Keep `yolov8n` for latency budget
-- Measure end-to-end latency (capture -> detect -> emit -> log)
+- keep the live warning logic child-only inside ROI
+- keep anti-flicker stabilization enabled
+- measure end-to-end latency from capture to dashboard update
+- do not claim biological age estimation in any report or demo

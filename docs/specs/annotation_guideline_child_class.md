@@ -1,85 +1,73 @@
 # Child-Class Annotation Guideline
 
-## Labeling Principle (Use Everywhere)
+## Labeling Principle
 
-ALWAYS use:
-> "visually classified as children based on body size, proportions, and school-age appearance"
+Always use:
 
-NEVER use:
-> "detect 13 years old and below" (biological age claim — out of scope)
+> visually classified as children based on body size, proportions, and school-age appearance
 
----
+Never use:
 
-## Class Definition
+> detect 13 years old and below
 
-**Class 0: child**
-A pedestrian who appears to be a school-age child based on:
-- Body proportions: shorter stature, larger head-to-body ratio compared to adults
-- School context cues: backpack, school uniform, smaller frame
-- Approximate height relative to environment (e.g., below vehicle window line)
+## Classes
 
----
+- `0: child_like`
+- `1: adult_like`
 
-## Inclusion Rules
+The project is still scoped to triggering warnings from child-like detections only. Adults are labeled to improve negative examples and reduce false positives.
 
-Label as `child` when:
-- Full or mostly visible body (>50% visible) shows child proportions
-- Visible in the crosswalk or approach zone
-- Adequate image resolution to assess proportions (min ~20px height in image)
+## Child-Like Inclusion Rules
 
----
+Label as `child_like` when:
+
+- the pedestrian appears school-age based on visible body proportions
+- at least half of the body is visible
+- the person is in or approaching the crosswalk zone
+- the frame is clear enough to assess stature and proportions
+
+## Adult-Like Inclusion Rules
+
+Label as `adult_like` when:
+
+- the pedestrian is clearly adult-looking
+- the person is in or approaching the same crosswalk scene
+- visibility is sufficient for a usable negative example
 
 ## Exclusion Rules
 
-Do NOT label (mark as difficult or skip):
-- Adults, even if carrying children
-- Ambiguous cases — if unsure, use `uncertain` tag or skip
-- Children on bicycles (out of scope for pedestrian detection)
-- Mannequins, dolls, school signs
+Do not label, or move the frame to review/reject, when:
 
----
+- the subject is too far away to judge reliably
+- motion blur destroys the silhouette
+- heavy occlusion hides most of the body
+- the subject is riding a bicycle or motorcycle
+- the object is a poster, mannequin, sign, or reflection
 
-## Ambiguous Cases → "skip/uncertain"
+## Ambiguous Cases
 
-When the following apply, skip the annotation:
-- Person is too far away (<20px bounding box height)
-- Heavy occlusion (>70% of body blocked)
-- Motion blur makes proportions unclear
-- Adult of short stature that could be confused
+Skip or mark uncertain when:
 
----
+- child versus adult is genuinely unclear
+- only a small body fragment is visible
+- glare, rain, or darkness makes proportions unreadable
+- a short adult could easily be mistaken for a child
 
 ## Bounding Box Rules
 
-- Draw the bbox tightly around the entire visible body
-- Include head fully
-- Do NOT extend bbox to include shadows or carried items that extend far
-- For partially visible pedestrians at frame edge: include only the visible portion
+- draw the box tightly around the visible body
+- include the full head when visible
+- do not stretch the box to include shadows
+- if the body is cut by the frame edge, box only the visible portion
 
----
+## Minimum Quality Bar
 
-## Occlusion Rules
+Prefer rejection instead of weak labels when:
 
-| Occlusion Level | Action |
-|---|---|
-| 0–30% | Annotate normally |
-| 30–70% | Annotate if proportions still assessable |
-| >70% | Skip (mark uncertain) |
+- bbox height would be below roughly 20 px
+- the frame is a duplicate of a clearer nearby frame
+- the subject is too small for a defensible class label
 
----
+## Source Policy
 
-## Ignore Cases
-
-Do not annotate if:
-- Person is behind glass (glare making proportions unclear)
-- Very small object (<20px height)
-- Pedestrian is clearly adult
-- Out of the crosswalk ROI and not approaching
-
----
-
-## Dataset Sources
-
-- **CityPersons**: Use as pedestrian baseline — NOT child/adult labeled by default. Re-label child instances meeting the inclusion rules above.
-- **JAAD**: Provides road/crosswalk behavioral context. Apply same labeling rules.
-- **Custom collection**: Priority source for child-class fine-tuning.
+The active annotation source is the manually gathered crosswalk footage in `datasets/site_dataset_v1/`. Do not mix legacy external datasets into the active labeling workflow.
