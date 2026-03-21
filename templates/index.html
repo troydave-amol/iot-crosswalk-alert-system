@@ -131,60 +131,59 @@
                                 style="display:none; width: 100%; height: auto; object-fit: cover;">
                             <div id="camPlaceholder" class="cam-placeholder">
                                 <div style="font-size: 2rem; margin-bottom: 10px; color: #ccc;">
-                                    <i class="fa-solid fa-camera"></i>
+                                    <i class="fa-solid fa-spinner fa-spin"></i>
                                 </div>
-                                <p><strong>Camera is OFF.</strong><br>Click Start Camera to preview.</p>
-                                <p style="font-size: 0.8rem; margin-top: 10px; color: #888;">Powered by OpenCV backend.
+                                <p><strong>Connecting to CCTV...</strong><br>Waiting for Hikvision stream.</p>
+                                <p style="font-size: 0.8rem; margin-top: 10px; color: #888;">Auto-connect on startup.
                                 </p>
                             </div>
                         </div>
                     </div>
                     <div class="card">
-                        <div class="card-title">Camera Controls</div>
+                        <div class="card-title"><i class="fa-solid fa-tower-broadcast" style="margin-right: 6px;"></i>System Status</div>
                         <div class="cam-controls">
                             <div class="control-group">
-                                <div class="control-label">Actions</div>
-                                <button id="btnStartCam" class="btn btn-primary">Start Camera</button>
-                                <button id="btnStopCam" class="btn btn-secondary">Stop Camera</button>
-                            </div>
-
-                            <div class="control-group" id="camSelectGroup"
-                                style="display:flex; flex-direction:column; gap:8px;">
-                                <div class="control-label">Source Type</div>
-                                <select id="camSourceType" class="form-control">
-                                    <option value="local" selected>USB Webcam (Recommended)</option>
-                                    <option value="ip">IP Webcam (Optional)</option>
-                                </select>
-
-                                <div id="ipCamInputGroup" style="display:none;">
-                                    <div class="control-label" style="font-size:0.8rem;">IP Camera URL</div>
-                                    <input type="text" id="ipCamUrl" class="form-control"
-                                        placeholder="192.168.1.29:8080/video"
-                                        autocomplete="off" autocapitalize="none" spellcheck="false">
-                                </div>
-
-                                <div id="localCamInputGroup" style="display:block;">
-                                    <div class="control-label" style="font-size:0.8rem;">Device</div>
-                                    <select id="camDeviceSelect" class="form-control"></select>
+                                <div class="control-label">Camera</div>
+                                <div class="status-chip disconnected" id="sysStatusCamera">
+                                    <div class="status-indicator"></div> Checking...
                                 </div>
                             </div>
 
                             <div class="control-group">
-                                <div class="control-label">Status</div>
-                                <div class="status-chip disconnected" id="camStatusChip">
-                                    <div class="status-indicator"></div> OFF
-                                </div>
-                                <div class="status-chip connected" id="camSourceChip" style="display:none;">
-                                    <div class="status-indicator"></div> OpenCV Backend
+                                <div class="control-label">Stream</div>
+                                <div class="status-chip disconnected" id="sysStatusStream">
+                                    <div class="status-indicator"></div> Waiting
                                 </div>
                             </div>
 
                             <div class="control-group">
-                                <div class="control-label">Debug</div>
+                                <div class="control-label">AI Inference</div>
+                                <div class="status-chip disconnected" id="sysStatusAI">
+                                    <div class="status-indicator"></div> Checking...
+                                </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">Warning Output</div>
+                                <div class="status-chip disconnected" id="sysStatusWarning">
+                                    <div class="status-indicator"></div> Standby
+                                </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">Last Frame</div>
+                                <small id="sysLastFrame" class="text-muted">---</small>
+                            </div>
+
+                            <div class="control-group" style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;">
+                                <div class="control-label">Options</div>
                                 <label class="checkbox-label" style="display:flex; align-items:center;">
                                     <input type="checkbox" id="debugOverlayToggle" checked style="margin-right:8px;"> AI
                                     Overlay (ROI + Boxes)
                                 </label>
+                                <button id="btnReconnect" class="btn btn-outline btn-sm" style="margin-top: 8px;">
+                                    <i class="fa-solid fa-rotate-right"></i> Reconnect
+                                </button>
                             </div>
                         </div>
                     </div>

@@ -2,7 +2,7 @@ import os
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Dict, Optional, Tuple, Union
+from typing import Optional, Union
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, Response
@@ -11,7 +11,6 @@ from flask_socketio import SocketIO
 import cv2
 import json
 from pathlib import Path
-from urllib.parse import urlparse, urlunparse
 from cv_inference import ChildLikeDetector, ROI
 from warning_controller import TemporalVoteStabilizer, WarningController
 
@@ -20,6 +19,7 @@ load_dotenv()
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "manual_crosswalk_detector.pt"
 ROI_PATH = Path("roi_config.json")
+
 
 def _env_float(name: str, default: float) -> float:
     try:
@@ -54,13 +54,23 @@ WARNING_MIN_TOGGLE_SEC = _env_float("LIVE_WARNING_MIN_TOGGLE_SEC", 0.75)
 YOLO_IMGSZ = _env_int("LIVE_YOLO_IMGSZ", 640)
 INFER_INTERVAL_SEC = _env_float("LIVE_INFER_INTERVAL_SEC", 0.125)
 STREAM_FPS = max(1.0, _env_float("LIVE_STREAM_FPS", 25.0))
-CAM_WIDTH = _env_int("LIVE_CAM_WIDTH", 1280)
-CAM_HEIGHT = _env_int("LIVE_CAM_HEIGHT", 720)
+CAM_WIDTH = _env_int("LIVE_CAM_WIDTH", 640)
+CAM_HEIGHT = _env_int("LIVE_CAM_HEIGHT", 360)
 MODEL_PATH = _resolve_model_path()
 
-# Default to local USB webcam for stable, low-latency demo behavior.
-# IP webcam remains available via /video_feed?source=http://... from the UI.
-VIDEO_SOURCE: Union[int, str] = 0
+# Hikvision CCTV — single fixed camera source (auto-connect on boot)
+HIKVISION_RTSP_URL = (os.getenv("HIKVISION_RTSP_URL") or "").strip()
+HIKVISION_RECONNECT_SEC = _env_float("HIKVISION_RECONNECT_SEC", 5.0)
+
+# FFMPEG low-latency flags for RTSP capture (must be set before VideoCapture)
+# - rtsp_transport=tcp: reliable delivery (same as Hikvision's own viewer)
+# - fflags=nobuffer: don't buffer input packets
+# - flags=low_delay: minimize decode latency
+# - analyzeduration/probesize: start decoding faster
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+    "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|analyzeduration;100000|probesize;100000"
+)
+
 
 # DB Imports
 from db import init_db, insert_event, fetch_events, fetch_analytics_aggregates
@@ -127,6 +137,7 @@ def _validate_roi_payload(d: dict):
     if iw <= 0 or ih <= 0:
         return False, "bad_image_size", d
 
+
     # Clamp coordinates to image bounds (instead of rejecting edge cases)
     x1 = max(0, min(int(round(d["x1"])), iw - 1))
     y1 = max(0, min(int(round(d["y1"])), ih - 1))
@@ -157,61 +168,22 @@ def api_set_roi():
 def handle_connect():
     """
     Triggered when a client connects (dashboard loads or refreshes).
-    Sends a minimal camera-off status so the dashboard shows initial state.
+    Sends the current camera status so the dashboard shows the real state.
     """
     print("Client connected")
-    # Emit a minimal "idle" status with safe defaults.
-    socketio.emit("status_update", _build_idle_payload(camera_status="OFF"))
+    # Send current camera status immediately
+    if hikvision_session is not None:
+        cam_status = "OK" if hikvision_session.camera_online else "OFFLINE"
+        socketio.emit("status_update", _build_idle_payload(camera_status=cam_status))
+        socketio.emit("camera_status", hikvision_session.get_status())
+    else:
+        socketio.emit("status_update", _build_idle_payload(camera_status="OFFLINE"))
 
 # --------------------------------------------------------------------------------
 # Live Pipeline
 # --------------------------------------------------------------------------------
 
-def _normalize_ip_camera_source(source_str: str) -> Optional[str]:
-    source_clean = (source_str or "").strip()
-    if not source_clean:
-        return None
-
-    # Allow "192.168.1.29:8080/video" style inputs by assuming HTTP.
-    candidate = source_clean
-    has_scheme = "://" in candidate
-    if not has_scheme:
-        candidate = f"http://{candidate.lstrip('/')}"
-
-    try:
-        parsed = urlparse(candidate)
-        if parsed.scheme in ("http", "https"):
-            # Common IP webcam default path.
-            if parsed.path in ("", "/"):
-                parsed = parsed._replace(path="/video")
-            return urlunparse(parsed)
-        if parsed.scheme in ("rtsp", "rtmp"):
-            return candidate
-    except Exception:
-        pass
-
-    if has_scheme and candidate.lower().startswith(("http://", "https://", "rtsp://", "rtmp://")):
-        return candidate
-    return None
-
-
-def _resolve_video_source(source_str: str) -> Tuple[str, str, Union[int, str]]:
-    source_clean = (source_str or "").strip()
-    if source_clean.isdigit():
-        idx = int(source_clean)
-        return f"local:{idx}", "local", idx
-
-    normalized_ip = _normalize_ip_camera_source(source_clean)
-    if normalized_ip:
-        return f"ip:{normalized_ip}", "ip", normalized_ip
-
-    if isinstance(VIDEO_SOURCE, int):
-        return f"local:{VIDEO_SOURCE}", "local", VIDEO_SOURCE
-
-    default_ip = _normalize_ip_camera_source(str(VIDEO_SOURCE))
-    if default_ip:
-        return f"ip:{default_ip}", "ip", default_ip
-    return f"ip:{VIDEO_SOURCE}", "ip", VIDEO_SOURCE
+# (Multi-source camera helpers removed — Hikvision is the sole source)
 
 
 def _build_idle_payload(camera_status: str, edge_status: str = "OK") -> dict:
@@ -288,11 +260,16 @@ def _draw_overlay(frame, roi: ROI, detections, child_in_roi: bool, status_note: 
 class LiveSession:
     LOG_HEARTBEAT_SEC = 10.0
 
-    def __init__(self, source_key: str, source_kind: str, source_value: Union[int, str]):
-        self.source_key = source_key
-        self.source_kind = source_kind
-        self.source_value = source_value
-        self.viewer_count = 0
+    def __init__(self, rtsp_url: str, reconnect_sec: float = 5.0):
+        self.rtsp_url = rtsp_url
+        self.reconnect_sec = reconnect_sec
+        self.source_key = "hikvision"
+
+        # Camera / stream state
+        self.camera_online = False
+        self.stream_connected = False
+        self.reconnect_attempts = 0
+        self.last_frame_time: float = 0.0
 
         self.detector: Optional[ChildLikeDetector] = None
         self.detector_error: Optional[str] = None
@@ -330,7 +307,7 @@ class LiveSession:
         if not MODEL_PATH.exists():
             self.detector = None
             self.detector_error = f"manual model not found at {MODEL_PATH}"
-            print(f"[LIVE] Detector unavailable | source={self.source_key} | {self.detector_error}")
+            print(f"[LIVE] Detector unavailable | {self.detector_error}")
             return
 
         try:
@@ -345,22 +322,45 @@ class LiveSession:
         except Exception as exc:
             self.detector = None
             self.detector_error = f"{type(exc).__name__}: {exc}"
-            print(f"[LIVE] Detector load failed | source={self.source_key} | {self.detector_error}")
+            print(f"[LIVE] Detector load failed | {self.detector_error}")
+
+    def get_status(self) -> dict:
+        """Return a snapshot of camera/AI status for the dashboard."""
+        return {
+            "camera_online": self.camera_online,
+            "stream_connected": self.stream_connected,
+            "ai_running": self.detector is not None,
+            "ai_error": self.detector_error,
+            "reconnect_attempts": self.reconnect_attempts,
+            "last_frame_time": self.last_frame_time,
+            "rtsp_url_masked": self._mask_url(self.rtsp_url),
+        }
+
+    @staticmethod
+    def _mask_url(url: str) -> str:
+        """Hide password in RTSP URL for display."""
+        if "@" in url:
+            prefix, rest = url.split("@", 1)
+            scheme_end = prefix.find("://")
+            if scheme_end >= 0:
+                return prefix[:scheme_end + 3] + "***:***@" + rest
+        return url
 
     def start(self):
-        self.cap = self._open_capture()
-        if not self.cap.isOpened():
-            raise RuntimeError(f"Cannot open video source: {self.source_key}")
-
-        self.capture_thread = threading.Thread(target=self._capture_loop, name=f"capture-{self.source_key}", daemon=True)
-        self.inference_thread = threading.Thread(target=self._inference_loop, name=f"infer-{self.source_key}", daemon=True)
+        self.capture_thread = threading.Thread(
+            target=self._capture_loop, name="capture-hikvision", daemon=True
+        )
+        self.inference_thread = threading.Thread(
+            target=self._inference_loop, name="infer-hikvision", daemon=True
+        )
         self.capture_thread.start()
         self.inference_thread.start()
 
         detector_state = "ready" if self.detector is not None else f"pending ({self.detector_error})"
         print(
-            f"[LIVE] Session started | source={self.source_key} | conf_child={CHILD_CONF:.2f} "
-            f"| imgsz={YOLO_IMGSZ} | min_bbox_ratio={MIN_CHILD_BBOX_RATIO:.2f} "
+            f"[LIVE] Hikvision session started | url={self._mask_url(self.rtsp_url)} "
+            f"| conf_child={CHILD_CONF:.2f} | imgsz={YOLO_IMGSZ} "
+            f"| min_bbox_ratio={MIN_CHILD_BBOX_RATIO:.2f} "
             f"| stream_fps={STREAM_FPS:.1f} | infer_interval={INFER_INTERVAL_SEC:.3f}s "
             f"| detector={detector_state}"
         )
@@ -377,7 +377,9 @@ class LiveSession:
         with self.state_lock:
             self.latest_frame_raw = None
             self.latest_frame_annotated = None
-        print(f"[LIVE] Session stopped | source={self.source_key}")
+        self.camera_online = False
+        self.stream_connected = False
+        print(f"[LIVE] Hikvision session stopped")
 
     def get_stream_frame(self, overlay: bool):
         with self.state_lock:
@@ -385,30 +387,79 @@ class LiveSession:
                 return self.latest_frame_annotated
             return self.latest_frame_raw
 
-    def _open_capture(self):
-        if self.source_kind == "local":
-            cap = cv2.VideoCapture(int(self.source_value))
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
-            cap.set(cv2.CAP_PROP_FPS, 30)
-            return cap
-
-        cap = cv2.VideoCapture(self.source_value)
+    def _open_capture(self) -> cv2.VideoCapture:
+        # Use FFMPEG backend with low-latency RTSP flags
+        cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
+        # Low-latency: minimize RTSP buffering
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        # Set resolution to match .env
+        if CAM_WIDTH > 0:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
+        if CAM_HEIGHT > 0:
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
         return cap
 
+
     def _capture_loop(self):
+        """Auto-connect and auto-reconnect loop for Hikvision RTSP stream."""
         while not self.stop_event.is_set():
-            if self.cap is None:
-                time.sleep(0.02)
-                continue
+            # --- Connect / Reconnect ---
+            if self.cap is None or not self.cap.isOpened():
+                self.camera_online = False
+                self.stream_connected = False
+                self.reconnect_attempts += 1
+                _emit_camera_status(self)
+                print(
+                    f"[LIVE] Connecting to Hikvision... "
+                    f"(attempt {self.reconnect_attempts})"
+                )
+                try:
+                    if self.cap is not None:
+                        self.cap.release()
+                    self.cap = self._open_capture()
+                    if self.cap.isOpened():
+                        self.camera_online = True
+                        self.stream_connected = True
+                        self.reconnect_attempts = 0
+                        _emit_camera_status(self)
+                        print("[LIVE] Hikvision stream connected")
+                    else:
+                        print(
+                            f"[LIVE] Hikvision stream failed — "
+                            f"retrying in {self.reconnect_sec}s"
+                        )
+                        self.cap.release()
+                        self.cap = None
+                        self.stop_event.wait(self.reconnect_sec)
+                        continue
+                except Exception as exc:
+                    print(f"[LIVE] Hikvision connect error: {exc}")
+                    if self.cap is not None:
+                        try:
+                            self.cap.release()
+                        except Exception:
+                            pass
+                    self.cap = None
+                    self.stop_event.wait(self.reconnect_sec)
+                    continue
+
+            # --- Read frames ---
             ok, frame = self.cap.read()
             if not ok or frame is None:
-                time.sleep(0.02)
+                print("[LIVE] Hikvision frame read failed — will reconnect")
+                self.cap.release()
+                self.cap = None
+                self.camera_online = False
+                self.stream_connected = False
+                _emit_camera_status(self)
+                self.stop_event.wait(self.reconnect_sec)
                 continue
+
             with self.state_lock:
                 self.latest_frame_raw = frame
+            self.last_frame_time = time.time()
             self.capture_frames += 1
+
 
     def _refresh_roi(self, frame_w: int, frame_h: int):
         try:
@@ -558,40 +609,16 @@ class LiveSession:
             self._log_perf(last_latency_ms=out["latency_ms"])
 
 
-class LiveSessionManager:
-    def __init__(self):
-        self._lock = threading.Lock()
-        self._sessions: Dict[str, LiveSession] = {}
-
-    def acquire(self, source_str: str) -> LiveSession:
-        source_key, source_kind, source_value = _resolve_video_source(source_str)
-        with self._lock:
-            session = self._sessions.get(source_key)
-            if session is None:
-                session = LiveSession(source_key, source_kind, source_value)
-                session.start()
-                self._sessions[source_key] = session
-            session.viewer_count += 1
-            viewers = session.viewer_count
-        print(f"[LIVE] Viewer joined | source={source_key} | viewers={viewers}")
-        return session
-
-    def release(self, source_key: str):
-        session_to_stop = None
-        with self._lock:
-            session = self._sessions.get(source_key)
-            if session is None:
-                return
-            session.viewer_count = max(0, session.viewer_count - 1)
-            viewers = session.viewer_count
-            if viewers == 0:
-                session_to_stop = self._sessions.pop(source_key)
-        print(f"[LIVE] Viewer left | source={source_key} | viewers={viewers}")
-        if session_to_stop is not None:
-            session_to_stop.stop()
+# Singleton Hikvision session — initialized at startup
+hikvision_session: Optional[LiveSession] = None
 
 
-live_sessions = LiveSessionManager()
+def _emit_camera_status(session: LiveSession):
+    """Push camera status to all connected dashboard clients."""
+    try:
+        socketio.emit("camera_status", session.get_status())
+    except Exception:
+        pass
 
 
 # --------------------------------------------------------------------------------
@@ -600,40 +627,64 @@ live_sessions = LiveSessionManager()
 
 @app.route("/video_feed")
 def video_feed_route():
+    """MJPEG stream from the single Hikvision session (always-on)."""
     overlay = request.args.get("overlay", "1") == "1"
-    source_uri = request.args.get("source", "")
-    try:
-        session = live_sessions.acquire(source_uri)
-    except Exception as e:
-        print(f"[LIVE] Cannot start session: {e}")
-        return Response(status=503)
-    return Response(gen_frames(session, overlay=overlay), mimetype="multipart/x-mixed-replace; boundary=frame")
+    if hikvision_session is None:
+        return Response("Camera not configured", status=503)
+    return Response(
+        gen_frames(hikvision_session, overlay=overlay),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
 
 
 def gen_frames(session: LiveSession, overlay: bool = True):
     frame_interval = 1.0 / STREAM_FPS
     last_perf_log = time.time()
+    last_frame_sent = time.time()
+    last_frame_id = None  # Track frame identity to skip duplicates
     stream_count = 0
+    MAX_WAIT_NO_FRAME = 10.0  # seconds — if no frame for this long, close connection
+
+    # JPEG encode params: quality 70 is visually fine at dashboard viewport sizes
+    # but encodes 3-4x faster and produces 3-4x smaller files than default (95)
+    encode_params = [cv2.IMWRITE_JPEG_QUALITY, 70]
+
     try:
         while not session.stop_event.is_set():
             t0 = time.perf_counter()
 
             frame = session.get_stream_frame(overlay=overlay)
             if frame is None:
-                time.sleep(0.01)
+                # Check if we've waited too long without any frame
+                if (time.time() - last_frame_sent) > MAX_WAIT_NO_FRAME:
+                    print("[LIVE] gen_frames: no frame for 10s — closing MJPEG connection")
+                    return  # Close HTTP connection so browser can detect error + retry
+                time.sleep(0.02)
                 continue
 
-            ret, buffer = cv2.imencode(".jpg", frame)
+            # Skip re-encoding if the frame object hasn't changed
+            frame_id = id(frame)
+            if frame_id == last_frame_id:
+                time.sleep(0.01)
+                continue
+            last_frame_id = frame_id
+
+            last_frame_sent = time.time()
+            ret, buffer = cv2.imencode(".jpg", frame, encode_params)
             if ret:
                 stream_count += 1
                 frame_bytes = buffer.tobytes()
-                yield (b"--frame\r\n"
-                       b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
+                )
 
             now = time.time()
             if (now - last_perf_log) >= 5.0:
                 stream_fps = stream_count / max(0.001, now - last_perf_log)
-                print(f"[LIVE][PERF] source={session.source_key} stream_fps={stream_fps:.1f} overlay={int(overlay)}")
+                print(
+                    f"[LIVE][PERF] stream_fps={stream_fps:.1f} overlay={int(overlay)}"
+                )
                 stream_count = 0
                 last_perf_log = now
 
@@ -641,62 +692,51 @@ def gen_frames(session: LiveSession, overlay: bool = True):
             sleep_for = frame_interval - elapsed
             if sleep_for > 0:
                 time.sleep(sleep_for)
-    finally:
-        live_sessions.release(session.source_key)
+    except GeneratorExit:
+        pass
 
 
-def _probe_local_cameras(max_index: int = 8):
-    cameras = []
-    max_index = max(1, min(int(max_index), 16))
-
-    for idx in range(max_index):
-        cap = cv2.VideoCapture(idx)
-        opened = cap.isOpened()
-        if not opened:
-            cap.release()
-            continue
-
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
-        ok, frame = cap.read()
-
-        width = 0
-        height = 0
-        if ok and frame is not None:
-            height, width = frame.shape[:2]
-        else:
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
-
-        cap.release()
-        cameras.append({
-            "index": idx,
-            "ok": bool(ok),
-            "width": int(width),
-            "height": int(height),
+@app.get("/api/camera/status")
+def api_camera_status():
+    """Returns the current Hikvision camera / AI pipeline status."""
+    if hikvision_session is None:
+        return jsonify({
+            "ok": True,
+            "camera_online": False,
+            "stream_connected": False,
+            "ai_running": False,
+            "ai_error": "No HIKVISION_RTSP_URL configured",
+            "reconnect_attempts": 0,
+            "last_frame_time": 0,
+            "rtsp_url_masked": "",
         })
+    return jsonify({"ok": True, **hikvision_session.get_status()})
 
-    return cameras
 
+@app.post("/api/camera/reconnect")
+def api_camera_reconnect():
+    """Force the Hikvision session to reconnect (only if actually broken)."""
+    if hikvision_session is None:
+        return jsonify({"ok": False, "error": "No session"}), 503
 
-@app.get("/api/cameras/probe")
-def api_cameras_probe():
-    """
-    Probe local camera indices so frontend device selection matches OpenCV index mapping.
-    """
-    try:
-        max_arg = int(request.args.get("max", 8))
-    except (TypeError, ValueError):
-        max_arg = 8
+    # If camera is already online and streaming, don't destroy the connection.
+    # Just return OK so the frontend can safely re-attach.
+    if hikvision_session.camera_online and hikvision_session.stream_connected:
+        print("[LIVE] Reconnect requested but camera is already online — skipping")
+        return jsonify({"ok": True, "action": "already_online"})
 
-    cameras = _probe_local_cameras(max_index=max_arg)
-    return jsonify({
-        "ok": True,
-        "max_checked": max(1, min(int(max_arg), 16)),
-        "count": len(cameras),
-        "cameras": cameras,
-        "timestamp_iso": datetime.now(timezone.utc).isoformat(),
-    })
+    # Camera is genuinely offline/broken — force reconnect
+    if hikvision_session.cap is not None:
+        try:
+            hikvision_session.cap.release()
+        except Exception:
+            pass
+        hikvision_session.cap = None
+    hikvision_session.camera_online = False
+    hikvision_session.stream_connected = False
+    print("[LIVE] Manual reconnect requested — forcing capture reset")
+    return jsonify({"ok": True, "action": "reconnecting"})
+
 
 
 @app.route("/api/health")
@@ -805,5 +845,17 @@ if __name__ == "__main__":
     # Initialize DB (safe to run multiple times)
     init_db()
 
+    # Auto-start Hikvision CCTV session on boot
+    if HIKVISION_RTSP_URL:
+        hikvision_session = LiveSession(
+            rtsp_url=HIKVISION_RTSP_URL,
+            reconnect_sec=HIKVISION_RECONNECT_SEC,
+        )
+        hikvision_session.start()
+        print(f"[BOOT] Hikvision session auto-started")
+    else:
+        print("[BOOT] WARNING: HIKVISION_RTSP_URL not set — camera disabled")
+
     # Run the Flask-SocketIO server.
     socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)
+

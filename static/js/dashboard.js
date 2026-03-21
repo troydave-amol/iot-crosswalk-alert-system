@@ -37,13 +37,14 @@ window.EventStore = {
     ;
 
 // ---------------------------------------------------------
-// CAMERA CONTROLLER (Global Persistence)
+// CAMERA STATE (Hikvision — single source, auto-connect)
 // ---------------------------------------------------------
-window.CameraController = {
-    stream: null,
-    isOn: false,
-    selectedDeviceId: localStorage.getItem('camDeviceId') || null,
-    lastError: null
+window.CameraState = {
+    isConnected: false,
+    isReconnecting: false,
+    reconnectTimer: null,
+    statusPollTimer: null,
+    lastStatus: null,
 };
 
 const App = {
@@ -285,7 +286,8 @@ const App = {
         if (data.source === "yolo") {
             status.connection_status = "Live (YOLO)";
         } else if (data.source === "idle") {
-            status.connection_status = "Connected (Camera OFF)";
+            const camStatus = data.camera_status || "OFFLINE";
+            status.connection_status = camStatus === "OFFLINE" ? "Camera Offline" : "Connected";
         } else {
             status.connection_status = "Connected";
         }
@@ -916,24 +918,9 @@ const App = {
                 }
             }
 
-            // Camera Persistence Logic
+            // Hikvision: MJPEG is always-on, just ensure img src is set on return
             if (hash === 'live') {
-                // Return to Live View: Verify & Re-attach
-                const cam = window.CameraController;
-                // Check if we have an active stream logic
-                if (cam.isOn && cam.stream) {
-                    // Double check stream effectively
-                    if (cam.stream.active || (cam.stream.getTracks().length > 0 && cam.stream.getTracks()[0].readyState === 'live')) {
-                        console.log("Restoring active camera stream...");
-                        this.attachStreamToVideo(cam.stream);
-                    } else {
-                        console.warn("Stream inactive on return. stopping.");
-                        this.stopCamera();
-                    }
-                }
-            } else {
-                // Navigate away: Camera stays ON (tracks active).
-                // UI is hidden by CSS. We do nothing here to stop it.
+                this.ensureLiveStream();
             }
         };
         window.addEventListener('hashchange', handleHashChange);
@@ -1782,396 +1769,239 @@ const App = {
     // Legacy / Shared
     // ---------------------------------------------------------
 
-    // Camera Logic
-    normalizeIpCameraUrl(rawValue) {
-        let value = (rawValue || '').trim();
-        if (!value) return '';
+    // ---------------------------------------------------------
+    // Hikvision Camera — Auto-connect (no manual controls)
+    // ---------------------------------------------------------
 
-        // Allow users to type only host:port/path; default to HTTP for IP Webcam apps.
-        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value)) {
-            value = `http://${value.replace(/^\/+/, '')}`;
-        }
-
-        try {
-            const parsed = new URL(value);
-            if (!parsed.pathname || parsed.pathname === '/') {
-                parsed.pathname = '/video';
-            }
-            return parsed.toString();
-        } catch (_) {
-            return value;
-        }
-    },
-
-    getSelectedCameraSourceInfo() {
-        const typeSelect = document.getElementById('camSourceType');
-        const sourceType = typeSelect ? typeSelect.value : 'local';
-
-        if (sourceType === 'ip') {
-            const ipInput = document.getElementById('ipCamUrl');
-            const ipUrl = this.normalizeIpCameraUrl(ipInput?.value || '');
-            if (ipInput) ipInput.value = ipUrl;
-            if (ipUrl) localStorage.setItem('ipCamUrl', ipUrl);
-            return { sourceParam: ipUrl, sourceLabel: 'IP Webcam' };
-        }
-
-        const selectTarget = document.getElementById('camDeviceSelect');
-        const localIndex = (selectTarget && selectTarget.value !== '')
-            ? selectTarget.value.toString()
-            : "0";
-        return { sourceParam: localIndex, sourceLabel: 'USB Webcam' };
-    },
-
-    buildVideoFeedUrl(useOverlay, sourceParam = null) {
-        const info = sourceParam == null ? this.getSelectedCameraSourceInfo() : { sourceParam };
+    buildVideoFeedUrl(useOverlay) {
         const params = new URLSearchParams();
-        params.set('overlay', useOverlay ? "1" : "0");
-        params.set('source', info.sourceParam);
+        params.set('overlay', useOverlay ? '1' : '0');
         return '/video_feed?' + params.toString();
     },
 
-    setCameraStatusChip(mode, text) {
-        const chip = document.getElementById('camStatusChip');
-        if (!chip) return;
-
-        if (mode === 'on') {
-            chip.className = 'status-chip connected';
-            chip.style.backgroundColor = 'rgba(76, 175, 80, 0.1)';
-            chip.style.color = '#2e7d32';
-        } else if (mode === 'starting') {
-            chip.className = 'status-chip';
-            chip.style.backgroundColor = 'rgba(255, 152, 0, 0.12)';
-            chip.style.color = '#b26a00';
-        } else if (mode === 'error') {
-            chip.className = 'status-chip';
-            chip.style.backgroundColor = 'rgba(211, 47, 47, 0.12)';
-            chip.style.color = '#b71c1c';
-        } else {
-            chip.className = 'status-chip disconnected';
-            chip.style.backgroundColor = '#eee';
-            chip.style.color = '#666';
-        }
-
-        chip.innerHTML = `<div class="status-indicator"></div> ${text}`;
-    },
-
-    setCameraSourceChip(show, text = '') {
-        const sourceChip = document.getElementById('camSourceChip');
-        if (!sourceChip) return;
-        sourceChip.style.display = show ? 'flex' : 'none';
-        if (show) {
-            sourceChip.innerHTML = `<div class="status-indicator"></div> ${text}`;
-        }
-    },
-
-    _clearCameraLoadWatch() {
-        if (this._camLoadTimeout) {
-            clearTimeout(this._camLoadTimeout);
-            this._camLoadTimeout = null;
-        }
-    },
-
-    async loadLocalCameraOptions(select, selectGroup) {
-        if (!select) return;
-
-        let backendCams = [];
-        try {
-            const res = await fetch('/api/cameras/probe?max=8');
-            if (res.ok) {
-                const j = await res.json();
-                if (j?.ok && Array.isArray(j.cameras)) {
-                    backendCams = j.cameras.filter(c => Number.isInteger(c.index));
-                }
-            }
-        } catch (e) {
-            console.warn('[Camera] Probe fetch failed:', e);
-        }
-
-        if (backendCams.length > 0) {
-            select.innerHTML = backendCams.map(cam => {
-                const resText = (cam.width > 0 && cam.height > 0)
-                    ? ` (${cam.width}x${cam.height})`
-                    : '';
-                const okText = cam.ok ? '' : ' (open failed)';
-                return `<option value="${cam.index}">Camera ${cam.index}${resText}${okText}</option>`;
-            }).join('');
-
-            const savedIndex = localStorage.getItem('camDeviceId');
-            const hasSaved = savedIndex && backendCams.some(c => String(c.index) === String(savedIndex));
-            const selectedValue = hasSaved ? String(savedIndex) : String(backendCams[0].index);
-
-            select.value = selectedValue;
-            window.CameraController.selectedDeviceId = selectedValue;
-            localStorage.setItem('camDeviceId', selectedValue);
-            if (selectGroup) selectGroup.style.display = 'flex';
-            return;
-        }
-
-        // Fallback: keep numeric indexes so backend still receives OpenCV-compatible source values.
-        const fallbackCount = 6;
-        select.innerHTML = Array.from({ length: fallbackCount }, (_, idx) =>
-            `<option value="${idx}">Camera ${idx}</option>`
-        ).join('');
-        const savedIndex = localStorage.getItem('camDeviceId');
-        if (savedIndex && Number.isInteger(Number(savedIndex))) {
-            select.value = savedIndex;
-        } else {
-            select.value = '0';
-        }
-        window.CameraController.selectedDeviceId = select.value;
-        localStorage.setItem('camDeviceId', select.value);
-        if (selectGroup) selectGroup.style.display = 'flex';
-    },
-
     initCamera() {
-        // Button Listeners
-        document.getElementById('btnStartCam')?.addEventListener('click', () => this.startCamera());
-        document.getElementById('btnStopCam')?.addEventListener('click', () => this.stopCamera());
+        // AI Overlay toggle
         document.getElementById('debugOverlayToggle')?.addEventListener('change', (e) => {
-            if (window.CameraController.isOn) {
+            if (window.CameraState.isConnected) {
                 const img = document.getElementById('liveCam');
-                if (img) img.src = this.buildVideoFeedUrl(e.target.checked);
+                if (img) img.src = this.buildVideoFeedUrl(e.target.checked) + '&t=' + Date.now();
             }
         });
-        // Default overlay to ON
         const overlayToggle = document.getElementById('debugOverlayToggle');
         if (overlayToggle) overlayToggle.checked = true;
 
-        const select = document.getElementById('camDeviceSelect');
-        const selectGroup = document.getElementById('camSelectGroup');
-        const typeSelect = document.getElementById('camSourceType');
-        const ipGroup = document.getElementById('ipCamInputGroup');
-        const locGroup = document.getElementById('localCamInputGroup');
-        const ipInput = document.getElementById('ipCamUrl');
+        // Reconnect button — smart behavior based on current state
+        document.getElementById('btnReconnect')?.addEventListener('click', async () => {
+            const btn = document.getElementById('btnReconnect');
+            if (btn) btn.disabled = true;
 
-        if (typeSelect) {
-            const migrationKey = 'camSourceTypeMigratedToLocalV1';
-            let savedType = localStorage.getItem('camSourceType');
-
-            // One-time migration: USB webcam becomes the default unless user explicitly changed it after migration.
-            if (!localStorage.getItem(migrationKey)) {
-                if (!savedType || savedType === 'ip') {
-                    savedType = 'local';
-                    localStorage.setItem('camSourceType', savedType);
-                }
-                localStorage.setItem(migrationKey, '1');
-            }
-
-            if (!savedType) {
-                savedType = 'local';
-                localStorage.setItem('camSourceType', savedType);
-            }
-
-            typeSelect.value = savedType;
-
-            if (savedType === 'ip') {
-                if (ipGroup) ipGroup.style.display = 'block';
-                if (locGroup) locGroup.style.display = 'none';
-            } else {
-                if (ipGroup) ipGroup.style.display = 'none';
-                if (locGroup) locGroup.style.display = 'block';
-            }
-
-            const savedUrl = localStorage.getItem('ipCamUrl') || '';
-            if (ipInput) ipInput.value = savedUrl;
-
-            typeSelect.addEventListener('change', (e) => {
-                const newType = e.target.value;
-                localStorage.setItem('camSourceType', newType);
-
-                if (newType === 'ip') {
-                    if (ipGroup) ipGroup.style.display = 'block';
-                    if (locGroup) locGroup.style.display = 'none';
+            try {
+                if (window.CameraState.isConnected) {
+                    // Camera is already online — seamless refresh (no spinner)
+                    console.log('[Camera] Soft refresh (camera already online)');
+                    const img = document.getElementById('liveCam');
+                    if (img) {
+                        const useOverlay = !!document.getElementById('debugOverlayToggle')?.checked;
+                        img.src = this.buildVideoFeedUrl(useOverlay) + '&t=' + Date.now();
+                    }
                 } else {
-                    if (ipGroup) ipGroup.style.display = 'none';
-                    if (locGroup) locGroup.style.display = 'block';
+                    // Camera is offline — ask backend to force reconnect
+                    console.log('[Camera] Requesting backend reconnect...');
+                    await fetch('/api/camera/reconnect', { method: 'POST' });
+                    // Wait for backend to re-establish RTSP, then reconnect MJPEG
+                    setTimeout(() => this.connectLiveStream(), 2000);
                 }
+            } catch (e) {
+                console.warn('[Camera] Reconnect failed:', e);
+                this.connectLiveStream();
+            }
 
-                // If camera is already ON, restart with new type
-                if (window.CameraController.isOn) {
-                    this.stopCamera();
-                    setTimeout(() => this.startCamera(), 300);
-                }
+            // Re-enable button after 3s to prevent spam
+            setTimeout(() => { if (btn) btn.disabled = false; }, 3000);
+        });
+
+        // SocketIO camera_status listener
+        if (this.socket) {
+            this.socket.on('camera_status', (data) => {
+                window.CameraState.lastStatus = data;
+                this.updateSystemStatusPanel(data);
             });
         }
 
-        if (ipInput) {
-            const persistIpUrl = (rawValue, restartIfActive) => {
-                const normalized = this.normalizeIpCameraUrl(rawValue);
-                ipInput.value = normalized;
-                if (normalized) localStorage.setItem('ipCamUrl', normalized);
-                else localStorage.removeItem('ipCamUrl');
+        // Auto-connect on init
+        this.connectLiveStream();
 
-                if (restartIfActive && window.CameraController.isOn && typeSelect && typeSelect.value === 'ip') {
-                    this.stopCamera();
-                    setTimeout(() => this.startCamera(), 300);
-                }
-            };
-
-            ipInput.addEventListener('change', (e) => {
-                persistIpUrl(e.target.value, true);
-            });
-
-            ipInput.addEventListener('keydown', (e) => {
-                if (e.key !== 'Enter') return;
-                e.preventDefault();
-                persistIpUrl(e.target.value, true);
-                e.target.blur();
-            });
-        }
-
-        if (select) {
-            select.addEventListener('change', (e) => {
-                const newId = e.target.value;
-                if (window.CameraController.selectedDeviceId === newId) return; // No change
-
-                window.CameraController.selectedDeviceId = newId;
-                localStorage.setItem('camDeviceId', newId);
-
-                // If camera is already ON, restart with new device
-                if (window.CameraController.isOn && typeSelect && typeSelect.value === 'local') {
-                    this.stopCamera(); // Stop current
-                    setTimeout(() => this.startCamera(), 300); // Restart
-                }
-            });
-        }
-
-        this.loadLocalCameraOptions(select, selectGroup);
-
-        // On Load Persistence Check
-        // If the implementation supports hot-reloading or we want to be safe:
-        if (window.CameraController.isOn && window.CameraController.stream) {
-            this.attachStreamToVideo(window.CameraController.stream);
-        }
+        // Poll camera status every 2s
+        window.CameraState.statusPollTimer = setInterval(() => this.pollCameraStatus(), 2000);
     },
 
-    startCamera() {
+    connectLiveStream() {
         const img = document.getElementById('liveCam');
+        const ph = document.getElementById('camPlaceholder');
         if (!img) return;
 
-        const useOverlay = !!document.getElementById('debugOverlayToggle')?.checked;
-        const sourceType = document.getElementById('camSourceType')?.value || 'local';
-        const sourceInfo = this.getSelectedCameraSourceInfo();
-        const ph = document.getElementById('camPlaceholder');
+        // Cancel any pending reconnect timer
+        clearTimeout(window.CameraState.reconnectTimer);
+        window.CameraState.reconnectTimer = null;
 
-        if (sourceType === 'ip' && !sourceInfo.sourceParam) {
-            window.CameraController.isOn = false;
-            window.CameraController.lastError = 'Please enter an IP camera URL.';
-            this.setCameraStatusChip('error', 'IP URL REQUIRED');
-            this.setCameraSourceChip(true, 'IP Webcam URL is empty');
-            if (ph) {
-                ph.style.display = 'flex';
-                ph.innerHTML = `
-                    <div style="font-size: 2rem; margin-bottom: 10px; color: #d32f2f;">
-                        <i class="fa-solid fa-link-slash"></i>
-                    </div>
-                    <p><strong>IP Camera URL is required.</strong><br>Enter host:port/video, then Start Camera.</p>
-                `;
-            }
-            return;
-        }
+        // Cancel any pending load timeout
+        clearTimeout(window.CameraState._loadTimeout);
+        window.CameraState._loadTimeout = null;
 
-        const loadToken = Date.now().toString();
+        // Clean up old handlers to prevent ghost callbacks
+        img.onload = null;
+        img.onerror = null;
+        img.src = '';
 
-        this._clearCameraLoadWatch();
-        this._camLoadToken = loadToken;
-        window.CameraController.isOn = false;
-        window.CameraController.lastError = null;
-
-        // Starting state
+        // Show connecting state
         if (ph) {
             ph.style.display = 'flex';
             ph.innerHTML = `
                 <div style="font-size: 2rem; margin-bottom: 10px; color: #ccc;">
                     <i class="fa-solid fa-spinner fa-spin"></i>
                 </div>
-                <p><strong>Starting camera...</strong><br>Waiting for first frame.</p>
+                <p><strong>Connecting to CCTV...</strong><br>Waiting for Hikvision stream.</p>
             `;
         }
         img.style.display = 'none';
-        this.setCameraStatusChip('starting', 'STARTING');
-        this.setCameraSourceChip(true, `${sourceInfo.sourceLabel} + YOLO`);
+        window.CameraState.isConnected = false;
 
-        const onLoaded = () => {
-            if (this._camLoadToken !== loadToken) return;
-            this._clearCameraLoadWatch();
-            window.CameraController.isOn = true;
-            window.CameraController.lastError = null;
+        const useOverlay = !!document.getElementById('debugOverlayToggle')?.checked;
+        const connectToken = Date.now();
+        window.CameraState._connectToken = connectToken;
+
+        // SUCCESS: first MJPEG frame arrived
+        img.onload = () => {
+            if (window.CameraState._connectToken !== connectToken) return;
+            clearTimeout(window.CameraState._loadTimeout);
+            window.CameraState.isConnected = true;
+            window.CameraState.isReconnecting = false;
             img.style.display = 'block';
             if (ph) ph.style.display = 'none';
-            this.setCameraStatusChip('on', 'ON');
-            this.setCameraSourceChip(true, `${sourceInfo.sourceLabel} + YOLO`);
             this.updateLiveRoiBadge();
+            console.log('[Camera] Hikvision stream connected');
         };
 
-        const onError = () => {
-            if (this._camLoadToken !== loadToken) return;
-            this._clearCameraLoadWatch();
-            window.CameraController.isOn = false;
-            window.CameraController.lastError = `Failed to open camera source (${sourceInfo.sourceLabel}).`;
-            img.style.display = 'none';
-            img.src = '';
-            this.setCameraStatusChip('error', 'ERROR');
-            this.setCameraSourceChip(true, `${sourceInfo.sourceLabel} stream failed`);
+        // ERROR: HTTP connection failed (server down, 503, etc.)
+        img.onerror = () => {
+            if (window.CameraState._connectToken !== connectToken) return;
+            clearTimeout(window.CameraState._loadTimeout);
+            this._handleStreamError();
+        };
+
+        // TIMEOUT: HTTP connection open but no frame data (the core bug fix)
+        window.CameraState._loadTimeout = setTimeout(() => {
+            if (window.CameraState._connectToken !== connectToken) return;
+            if (window.CameraState.isConnected) return; // Already loaded, ignore
+            console.warn('[Camera] Load timeout (8s) — no frame received, retrying');
+            img.onload = null;
+            img.onerror = null;
+            img.src = '';  // Kill the hung MJPEG connection
+            this._handleStreamError();
+        }, 8000);
+
+        // Start the MJPEG stream
+        img.src = this.buildVideoFeedUrl(useOverlay) + '&t=' + connectToken;
+    },
+
+    _handleStreamError() {
+        const img = document.getElementById('liveCam');
+        const ph = document.getElementById('camPlaceholder');
+
+        window.CameraState.isConnected = false;
+        if (img) img.style.display = 'none';
+
+        // Show reconnecting UI (only update once to avoid flicker)
+        if (!window.CameraState.isReconnecting) {
+            window.CameraState.isReconnecting = true;
             if (ph) {
                 ph.style.display = 'flex';
                 ph.innerHTML = `
-                    <div style="font-size: 2rem; margin-bottom: 10px; color: #d32f2f;">
-                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    <div style="font-size: 2rem; margin-bottom: 10px; color: #e65100;">
+                        <i class="fa-solid fa-rotate-right fa-spin"></i>
                     </div>
-                    <p><strong>Camera stream failed.</strong></p>
+                    <p><strong>Stream disconnected</strong><br>Reconnecting automatically...</p>
                 `;
             }
-        };
+        }
 
-        img.onload = onLoaded;
-        img.onerror = onError;
-
-        this._camLoadTimeout = setTimeout(() => {
-            if (this._camLoadToken === loadToken) onError();
-        }, 8000);
-
-        img.src = this.buildVideoFeedUrl(useOverlay, sourceInfo.sourceParam) + '&t=' + Date.now();
+        // Schedule retry (single timer, no duplicates)
+        clearTimeout(window.CameraState.reconnectTimer);
+        window.CameraState.reconnectTimer = setTimeout(() => {
+            console.log('[Camera] Auto-retry...');
+            this.connectLiveStream();
+        }, 3000);
     },
 
-    stopCamera() {
-        this._camLoadToken = null;
-        this._clearCameraLoadWatch();
-        window.CameraController.isOn = false;
-
-        // UI Reset
+    ensureLiveStream() {
         const img = document.getElementById('liveCam');
-        if (img) {
-            img.onload = null;
-            img.onerror = null;
-            img.src = '';
-            img.style.display = 'none';
+        if (!img) return;
+        // If MJPEG src is already set and working, do nothing
+        if (img.src && img.src.includes('/video_feed') && window.CameraState.isConnected) return;
+        // Otherwise reconnect
+        this.connectLiveStream();
+    },
+
+    async pollCameraStatus() {
+        try {
+            const res = await fetch('/api/camera/status');
+            if (res.ok) {
+                const data = await res.json();
+                window.CameraState.lastStatus = data;
+                this.updateSystemStatusPanel(data);
+            }
+        } catch (e) {
+            // Server offline — show disconnected
+            this.updateSystemStatusPanel({
+                camera_online: false,
+                stream_connected: false,
+                ai_running: false,
+                ai_error: 'Server unreachable',
+                reconnect_attempts: 0,
+                last_frame_time: 0,
+            });
+        }
+    },
+
+    updateSystemStatusPanel(data) {
+        if (!data) return;
+
+        const setChip = (id, isGood, textOn, textOff) => {
+            const chip = document.getElementById(id);
+            if (!chip) return;
+            chip.className = `status-chip ${isGood ? 'connected' : 'disconnected'}`;
+            chip.innerHTML = `<div class="status-indicator"></div> ${isGood ? textOn : textOff}`;
+        };
+
+        setChip('sysStatusCamera', data.camera_online, 'Online', 'Offline');
+        setChip('sysStatusStream', data.stream_connected, 'Connected', 'Disconnected');
+        setChip('sysStatusAI', data.ai_running, 'Running', data.ai_error ? 'Not Loaded' : 'Stopped');
+
+        // Warning output uses the live status from EventStore
+        const warningOn = window.EventStore.systemStatus.warning_on;
+        setChip('sysStatusWarning', true, warningOn ? 'Active' : 'Standby', 'Standby');
+        const warnChip = document.getElementById('sysStatusWarning');
+        if (warnChip) {
+            if (warningOn) {
+                warnChip.className = 'status-chip';
+                warnChip.style.backgroundColor = 'rgba(211, 47, 47, 0.12)';
+                warnChip.style.color = '#b71c1c';
+            } else {
+                warnChip.style.backgroundColor = '';
+                warnChip.style.color = '';
+            }
         }
 
-        const ph = document.getElementById('camPlaceholder');
-        if (ph) {
-            ph.style.display = 'flex';
-            ph.innerHTML = `
-                <div style="font-size: 2rem; margin-bottom: 10px; color: #ccc;">
-                    <i class="fa-solid fa-camera"></i>
-                </div>
-                <p><strong>Camera is OFF.</strong><br>Click Start Camera to preview.</p>
-                <p style="font-size: 0.8rem; margin-top: 10px; color: #888;">Powered by OpenCV backend.</p>
-            `;
+        // Last frame time
+        const lastFrame = document.getElementById('sysLastFrame');
+        if (lastFrame) {
+            if (data.last_frame_time && data.last_frame_time > 0) {
+                const d = new Date(data.last_frame_time * 1000);
+                lastFrame.textContent = d.toLocaleTimeString();
+            } else {
+                lastFrame.textContent = '---';
+            }
         }
-
-        this.setCameraStatusChip('off', 'OFF');
-        this.setCameraSourceChip(false);
-
-        // Reset live status cards to idle state
-        const status = window.EventStore.systemStatus;
-        status.child_in_roi = false;
-        status.warning_on = false;
-        status.confidence = 0.0;
-        status.roi_status = 'OUTSIDE';
-        status.latency_ms = 0;
-        status.connection_status = 'Camera OFF';
-        this.updateUI();
     },
 
     // ---------------------------------------------------------
