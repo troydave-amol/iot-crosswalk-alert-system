@@ -54,6 +54,7 @@ WARNING_MIN_TOGGLE_SEC = _env_float("LIVE_WARNING_MIN_TOGGLE_SEC", 0.75)
 YOLO_IMGSZ = _env_int("LIVE_YOLO_IMGSZ", 640)
 INFER_INTERVAL_SEC = _env_float("LIVE_INFER_INTERVAL_SEC", 0.125)
 STREAM_FPS = max(1.0, _env_float("LIVE_STREAM_FPS", 25.0))
+STREAM_SCALE = max(0.1, min(1.0, _env_float("LIVE_STREAM_SCALE", 0.5)))  # downscale for MJPEG only
 CAM_WIDTH = _env_int("LIVE_CAM_WIDTH", 640)
 CAM_HEIGHT = _env_int("LIVE_CAM_HEIGHT", 360)
 MODEL_PATH = _resolve_model_path()
@@ -443,8 +444,19 @@ class LiveSession:
                     self.stop_event.wait(self.reconnect_sec)
                     continue
 
-            # --- Read frames ---
-            ok, frame = self.cap.read()
+            # --- Read frames (drain buffer to get the LATEST frame) ---
+            # FFMPEG buffers 2-5 frames internally even with nobuffer.
+            # grab() discards old frames quickly, then retrieve() decodes only the latest.
+            ok = True
+            for _ in range(4):  # drain up to 4 stale buffered frames
+                ok = self.cap.grab()
+                if not ok:
+                    break
+            if ok:
+                ok, frame = self.cap.retrieve()
+            else:
+                frame = None
+
             if not ok or frame is None:
                 print("[LIVE] Hikvision frame read failed — will reconnect")
                 self.cap.release()
@@ -637,6 +649,29 @@ def video_feed_route():
     )
 
 
+@app.get("/api/camera/snapshot")
+def api_camera_snapshot():
+    """Return a single JPEG frame from the live camera (full resolution, no overlay).
+    Used by the ROI 'Capture Frame' button."""
+    if hikvision_session is None:
+        return Response("Camera not configured", status=503)
+
+    frame = hikvision_session.get_stream_frame(overlay=False)
+    if frame is None:
+        return Response("No frame available", status=503)
+
+    ret, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    if not ret:
+        return Response("Encoding failed", status=500)
+
+    return Response(
+        buffer.tobytes(),
+        mimetype="image/jpeg",
+        headers={"Cache-Control": "no-cache, no-store"},
+    )
+
+
+
 def gen_frames(session: LiveSession, overlay: bool = True):
     frame_interval = 1.0 / STREAM_FPS
     last_perf_log = time.time()
@@ -670,6 +705,14 @@ def gen_frames(session: LiveSession, overlay: bool = True):
             last_frame_id = frame_id
 
             last_frame_sent = time.time()
+
+            # Downscale for browser stream (YOLO still gets full-res)
+            if STREAM_SCALE < 1.0:
+                h, w = frame.shape[:2]
+                new_w = int(w * STREAM_SCALE)
+                new_h = int(h * STREAM_SCALE)
+                frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
             ret, buffer = cv2.imencode(".jpg", frame, encode_params)
             if ret:
                 stream_count += 1

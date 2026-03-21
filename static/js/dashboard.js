@@ -1476,29 +1476,48 @@ const App = {
         document.getElementById('btnSaveRoi')?.addEventListener('click', () => this.saveRoi());
         document.getElementById('btnResetRoi')?.addEventListener('click', () => this.resetRoi());
 
-        // D) Capture Frame
-        document.getElementById('btnCaptureFrame')?.addEventListener('click', () => {
-            const liveImg = document.getElementById('liveCam');
-            if (liveImg && liveImg.src && window.CameraController.isOn) {
-                const c = document.createElement('canvas');
-                c.width = liveImg.naturalWidth || 1280;
-                c.height = liveImg.naturalHeight || 720;
-                const ctx = c.getContext('2d');
-                try {
-                    ctx.drawImage(liveImg, 0, 0, c.width, c.height);
-                    const dataUrl = c.toDataURL('image/jpeg', 0.8);
-                    this.state.roi = null;
-                    this.loadImageToCanvas(dataUrl);
-                    // Mark dirty (new capture = unsaved)
-                    this.roiDirty = true;
-                    const ub = document.getElementById('roiUnsavedBadge');
-                    if (ub) ub.style.display = 'inline-flex';
-                } catch (e) {
-                    alert("Stream error capturing frame. Please upload an image instead.");
-                }
-            } else {
-                alert("Camera is not running in Live View. Please Start Camera first.");
+        // D) Capture Frame — fetch a snapshot from the backend API
+        document.getElementById('btnCaptureFrame')?.addEventListener('click', async () => {
+            const btn = document.getElementById('btnCaptureFrame');
+            if (btn) btn.disabled = true;
+
+            // Check if camera is connected
+            if (!window.CameraState.isConnected) {
+                alert("Camera is not connected. Please wait for the Hikvision stream to connect.");
+                if (btn) btn.disabled = false;
+                return;
             }
+
+            try {
+                const res = await fetch('/api/camera/snapshot?t=' + Date.now());
+                if (!res.ok) {
+                    throw new Error(`Snapshot failed: ${res.status}`);
+                }
+
+                const blob = await res.blob();
+                const dataUrl = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+
+                // Load the captured frame into the ROI canvas
+                this.state.roi = null;
+                this.loadImageToCanvas(dataUrl);
+
+                // Mark dirty (new capture = unsaved)
+                this.roiDirty = true;
+                const ub = document.getElementById('roiUnsavedBadge');
+                if (ub) ub.style.display = 'inline-flex';
+
+                console.log('[ROI] Frame captured from live camera');
+            } catch (e) {
+                console.error('[ROI] Capture failed:', e);
+                alert("Failed to capture frame. Make sure the camera is online.");
+            }
+
+            if (btn) btn.disabled = false;
         });
     },
 
