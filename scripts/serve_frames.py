@@ -1,22 +1,35 @@
 """
 serve_frames.py
-Simple HTTP server to serve frame images for Label Studio.
-Run on port 8091 while Label Studio runs on port 8090.
+Custom HTTP server to dynamically find and serve frame images for Label Studio.
+This version ignores the exact folder path sent by Label Studio and dynamically 
+searches the entire DIRECTORY to find the requested image file. It fixes all 404 errors!
 """
 
 import http.server
 import socketserver
 import os
-import sys
+from pathlib import Path
 
 PORT = 8095
-DIRECTORY = r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\datasets\afternoon_v1\frames_selected"
+DIRECTORY = Path(r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\datasets\afternoon_v2\frames_raw")
 
-class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
-    """HTTP handler with CORS headers so Label Studio can load images."""
+class SmartImageHandler(http.server.SimpleHTTPRequestHandler):
+    """HTTP handler with CORS + Dynamic File Finding."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=DIRECTORY, **kwargs)
+    def translate_path(self, path):
+        # 1. Extract just the pure filename from the browser's request (e.g. from "/201-300/img.jpg" to "img.jpg")
+        filename = os.path.basename(path.split('?')[0])
+        if not filename or filename == '/' or filename == '':
+            return str(DIRECTORY)
+            
+        # 2. Dynamically search the entire DIRECTORY (and all subfolders) for this exact filename!
+        found_files = list(DIRECTORY.rglob(filename))
+        
+        if found_files:
+            return str(found_files[0]) # Match found! Return the absolute true path on disk
+
+        # If not uniquely found, fallback to the default behavior
+        return super().translate_path(path)
 
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -28,12 +41,13 @@ class CORSRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
 
-print(f"Serving frames from: {DIRECTORY}")
+print(f"============================================================")
+print(f"SMART IMAGE SERVER RUNNING")
+print(f"Serving frames dynamically from anywhere inside: {DIRECTORY}")
 print(f"URL: http://localhost:{PORT}/")
-print(f"Example: http://localhost:{PORT}/aft_245_315_01_00000.jpg")
 print("Press Ctrl+C to stop.\n")
 
-with socketserver.TCPServer(("", PORT), CORSRequestHandler) as httpd:
+with socketserver.TCPServer(("", PORT), SmartImageHandler) as httpd:
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

@@ -1,0 +1,6 @@
+path: C:/Users/Acer/Documents/CAPSTONE/web_dashboard_analytics/datasets/02_yolo_dataset
+train: images/train
+val: images/train
+
+nc: 2
+names: ['adult', 'child']

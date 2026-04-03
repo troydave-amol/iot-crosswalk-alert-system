@@ -1,0 +1,115 @@
+import json
+
+nb = {
+    "nbformat": 4,
+    "nbformat_minor": 4,
+    "metadata": {
+        "kernelspec": {
+            "display_name": "Python 3",
+            "language": "python",
+            "name": "python3"
+        },
+        "language_info": {
+            "name": "python",
+            "version": "3.11.9"
+        }
+    },
+    "cells": [
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "# YOLOv8 Training: Crosswalk Pedestrian Detection (Merged V2)\n",
+                "\n",
+                "**Dataset:** 1,111 labeled frames (Morning V1 + Afternoon V1 + Afternoon V2 combined)  \n",
+                "**Classes:** adult (0), child (1)  \n",
+                "**Architecture:** YOLOv8 Nano  \n",
+                "**Training:** 100 epochs, cosine LR, early stopping at patience=20"
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "# Cell 1: Setup\n",
+                "try:\n",
+                "    import ultralytics\n",
+                "except ImportError:\n",
+                "    !pip install ultralytics\n",
+                "    import ultralytics\n",
+                "\n",
+                "from ultralytics import YOLO\n",
+                "ultralytics.checks()"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Start Training\n",
+                "\n",
+                "All paths are absolute to avoid any working-directory confusion between Colab and local Jupyter."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "# Cell 2: Train\n",
+                "model = YOLO('yolov8n.pt')\n",
+                "\n",
+                "DATASET_YAML = r'C:/Users/Acer/Documents/CAPSTONE/web_dashboard_analytics/datasets/merged_v2/data.yaml'\n",
+                "PROJECT_DIR  = r'C:/Users/Acer/Documents/CAPSTONE/web_dashboard_analytics/datasets/merged_v2/training_runs'\n",
+                "\n",
+                "results = model.train(\n",
+                "    data=DATASET_YAML,\n",
+                "    epochs=100,\n",
+                "    imgsz=640,\n",
+                "    batch=8,\n",
+                "    workers=0,          # MUST be 0 on Windows\n",
+                "    device='',          # Auto-select GPU\n",
+                "    cache=True,         # Cache images in RAM for speed\n",
+                "    project=PROJECT_DIR,\n",
+                "    name='run_v2',\n",
+                "    exist_ok=True,\n",
+                "    patience=20,        # Early stop if no improvement for 20 epochs\n",
+                "    augment=True,\n",
+                "    cos_lr=True,        # Cosine LR schedule\n",
+                "    close_mosaic=20     # Disable mosaic in final 20 epochs\n",
+                ")"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Validate Best Model\n",
+                "\n",
+                "After training completes, this cell loads the best checkpoint and runs validation."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "# Cell 3: Validate\n",
+                "best_pt = r'C:/Users/Acer/Documents/CAPSTONE/web_dashboard_analytics/datasets/merged_v2/training_runs/run_v2/weights/best.pt'\n",
+                "model = YOLO(best_pt)\n",
+                "metrics = model.val()\n",
+                "print(f'mAP50-95: {metrics.box.map}')\n",
+                "print(f'mAP50:    {metrics.box.map50}')"
+            ]
+        }
+    ]
+}
+
+with open('train_merged_v2.ipynb', 'w', encoding='utf-8') as f:
+    json.dump(nb, f, indent=1)
+
+print("Created: train_merged_v2.ipynb")

@@ -7,9 +7,9 @@ import glob
 
 # Configuration
 PROJECT_ROOT = r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics"
-ZIP_FILE = os.path.join(PROJECT_ROOT, "datasets", "afternoon_v1", "exports", "Afternoon_V1.zip")
-FRAMES_BASE_DIR = os.path.join(PROJECT_ROOT, "datasets", "afternoon_v1", "frames_selected")
-YOLO_DATASET_DIR = os.path.join(PROJECT_ROOT, "datasets", "afternoon_v1", "yolo_dataset")
+ZIP_FILE = os.path.join(PROJECT_ROOT, "datasets", "source_afternoon_v1", "annotation_exports", "afternoon_v1_label_studio_yolo_export.zip")
+FRAMES_BASE_DIR = os.path.join(PROJECT_ROOT, "datasets", "source_afternoon_v1", "selected_frames")
+YOLO_DATASET_DIR = os.path.join(PROJECT_ROOT, "datasets", "source_afternoon_v1", "yolo_dataset")
 TMP_UNZIP_DIR = os.path.join(YOLO_DATASET_DIR, "tmp_unzip")
 
 SPLIT_RATIO = 0.8  # 80% train, 20% validation
@@ -18,8 +18,8 @@ SPLIT_RATIO = 0.8  # 80% train, 20% validation
 CLASSES = ["adult", "child"]
 
 def find_original_image(filename):
-    """Search for the original image in the frames_selected subdirectories."""
-    # Could be in 1-100, 101-200, 201-250
+    """Search for the original image in the selected_frames subdirectories."""
+    # Could be in batch_001_100, batch_101_200, batch_201_250
     search_path = os.path.join(FRAMES_BASE_DIR, "**", filename)
     matches = glob.glob(search_path, recursive=True)
     if matches:

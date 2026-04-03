@@ -44,10 +44,10 @@ python scripts/setup_datasets.py
 That creates the active manual dataset layout under `datasets/site_dataset_v1/`:
 
 - `videos_raw/`
-- `frames_raw/`
-- `frames_selected/`
+- `raw_frames/`
+- `selected_frames/`
 - `labels/`
-- `exports/`
+- `annotation_exports/`
 - `rejected/`
 
 ## Dataset Commands

@@ -8,7 +8,7 @@ As of March 20, 2026, there is no approved active detector in the repository. Tr
 
 Active export:
 
-- `datasets/site_dataset_v1/exports/yolo/data.yaml`
+- `datasets/site_dataset_v1/annotation_exports/yolo/data.yaml`
 
 Expected classes:
 
@@ -19,9 +19,9 @@ Expected classes:
 
 Do not start training until all of these are true:
 
-1. `frames_selected/` has enough varied site footage
+1. `selected_frames/` has enough varied site footage
 2. labels pass `scripts/validate_labels.py`
-3. `exports/yolo/` has a clean train/val/test split
+3. `annotation_exports/yolo/` has a clean train/val/test split
 4. the manuscript language matches the annotation guideline
 
 ## Baseline Training Configuration
@@ -30,7 +30,7 @@ Use a fresh YOLOv8 nano checkpoint downloaded at training time, not an old repo-
 
 ```yaml
 model: yolov8n.pt
-data: datasets/site_dataset_v1/exports/yolo/data.yaml
+data: datasets/site_dataset_v1/annotation_exports/yolo/data.yaml
 epochs: 50
 imgsz: 640
 batch: 16

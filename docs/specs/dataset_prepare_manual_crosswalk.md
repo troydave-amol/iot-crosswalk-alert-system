@@ -20,8 +20,8 @@ Prepare the team-collected crosswalk dataset for labeling, validation, and expor
 ## Inputs Required
 
 - `datasets/site_dataset_v1/videos_raw/`
-- `datasets/site_dataset_v1/frames_raw/`
-- `datasets/site_dataset_v1/frames_selected/`
+- `datasets/site_dataset_v1/raw_frames/`
+- `datasets/site_dataset_v1/selected_frames/`
 - `datasets/site_dataset_v1/labels/`
 
 ## Tools / Scripts
@@ -32,34 +32,34 @@ Prepare the team-collected crosswalk dataset for labeling, validation, and expor
 
 ## Outputs / Deliverables
 
-- curated selected frames under `datasets/site_dataset_v1/frames_selected/`
+- curated selected frames under `datasets/site_dataset_v1/selected_frames/`
 - YOLO labels under `datasets/site_dataset_v1/labels/`
-- exported training dataset under `datasets/site_dataset_v1/exports/yolo/`
-- `datasets/site_dataset_v1/exports/yolo/data.yaml`
+- exported training dataset under `datasets/site_dataset_v1/annotation_exports/yolo/`
+- `datasets/site_dataset_v1/annotation_exports/yolo/data.yaml`
 - validation report in `reports/site_dataset_v1_label_validation.csv`
 
 ## Steps
 
 1. Run `python scripts/setup_datasets.py` to scaffold or refresh the manual dataset workspace.
 2. Save raw crosswalk recordings in `videos_raw/`.
-3. Extract frames into `frames_raw/`.
-4. Move only approved, non-duplicate frames into `frames_selected/`.
+3. Extract frames into `raw_frames/`.
+4. Move only approved, non-duplicate frames into `selected_frames/`.
 5. Create YOLO labels in `labels/` with the same relative filenames as the selected frames.
 6. Run `python scripts/validate_labels.py --dataset site_dataset_v1`.
 7. Fix or remove any frames that fail validation.
 8. Run `python scripts/split_dataset.py --dataset site_dataset_v1`.
-9. Confirm `datasets/site_dataset_v1/exports/yolo/data.yaml` points at the generated export root.
+9. Confirm `datasets/site_dataset_v1/annotation_exports/yolo/data.yaml` points at the generated export root.
 
 ## Edge Cases
 
 - image exists but label is missing -> validation must fail
 - label exists but frame was rejected -> remove or relocate the orphan label
-- duplicate near-identical frames -> keep only one in `frames_selected/`, move the rest to `rejected/`
+- duplicate near-identical frames -> keep only one in `selected_frames/`, move the rest to `rejected/`
 - motion blur, heavy occlusion, or unusable nighttime glare -> move to `rejected/`
 
 ## Validation
 
-- `frames_selected/` and `labels/` contain paired files only
+- `selected_frames/` and `labels/` contain paired files only
 - all YOLO coordinates remain within `[0, 1]`
-- exported `train`, `val`, and `test` folders are created under `exports/yolo/`
+- exported `train`, `val`, and `test` folders are created under `annotation_exports/yolo/`
 - no legacy dataset folder is referenced anywhere in the export config

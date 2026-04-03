@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from cv_inference import ChildLikeDetector, ROI
 from warning_controller import TemporalVoteStabilizer, WarningController
+from detection_tracker import DetectionTracker
 
 load_dotenv()
 
@@ -57,6 +58,12 @@ STREAM_FPS = max(1.0, _env_float("LIVE_STREAM_FPS", 25.0))
 STREAM_SCALE = max(0.1, min(1.0, _env_float("LIVE_STREAM_SCALE", 0.5)))  # downscale for MJPEG only
 CAM_WIDTH = _env_int("LIVE_CAM_WIDTH", 640)
 CAM_HEIGHT = _env_int("LIVE_CAM_HEIGHT", 360)
+
+# Anti-Flicker Tracker Settings
+TRACKER_IOU_THRESHOLD = _env_float("TRACKER_IOU_THRESHOLD", 0.25)
+TRACKER_MAX_MISSES = _env_int("TRACKER_MAX_MISSES", 5)
+TRACKER_SMOOTH_ALPHA = _env_float("TRACKER_SMOOTH_ALPHA", 0.6)
+
 MODEL_PATH = _resolve_model_path()
 
 # Hikvision CCTV — single fixed camera source (auto-connect on boot)
@@ -242,7 +249,7 @@ def _draw_overlay(frame, roi: ROI, detections, child_in_roi: bool, status_note: 
         x1, y1, x2, y2 = d["bbox"]
         conf = d["conf"]
         cls = d["cls"]
-        if cls == 0:
+        if cls == 1:
             color = (0, 255, 255)  # Cyan
             label = f"child_like {conf:.2f}"
             thickness = 3
@@ -275,6 +282,11 @@ class LiveSession:
         self.detector: Optional[ChildLikeDetector] = None
         self.detector_error: Optional[str] = None
         self._load_detector()
+        self.tracker = DetectionTracker(
+            iou_threshold=TRACKER_IOU_THRESHOLD,
+            max_misses=TRACKER_MAX_MISSES,
+            smooth_alpha=TRACKER_SMOOTH_ALPHA,
+        )
         self.stabilizer = TemporalVoteStabilizer(window_size=5, required_true=3)
         self.warn_ctrl = WarningController(
             hold_seconds=WARNING_HOLD_SECONDS,
@@ -574,19 +586,41 @@ class LiveSession:
                 continue
 
             out_raw = self.detector.infer_frame(frame, roi)
+            
+            # --- 1. Apply Anti-Flicker Box Tracking ---
+            raw_detections = out_raw.get("detections", [])
+            tracked_detections = self.tracker.update(raw_detections)
+
+            # --- 2. Recalculate ROI state based on smoothed/ghost boxes ---
+            min_bbox_h = h * MIN_CHILD_BBOX_RATIO
+            tracked_child_in_roi_raw = False
+            tracked_confidence_raw = 0.0
+
+            for d in tracked_detections:
+                if d["cls"] == 1 and d["conf"] >= CHILD_CONF:
+                    x1, y1, x2, y2 = d["bbox"]
+                    if (y2 - y1) >= min_bbox_h:
+                        cx = (x1 + x2) / 2.0
+                        # Check strictly bottom-center like cv_inference does
+                        if roi.contains_point(cx, float(y2)):
+                            tracked_child_in_roi_raw = True
+                            tracked_confidence_raw = max(tracked_confidence_raw, d["conf"])
+
+            # --- 3. Vote Stabilizer for the global warning status ---
             child_in_roi_stable, confidence_stable = self.stabilizer.update(
-                out_raw.get("child_in_roi_raw", False),
-                out_raw.get("confidence_raw", 0.0),
+                tracked_child_in_roi_raw,
+                tracked_confidence_raw,
             )
+            
             out = {
                 "timestamp_iso": out_raw["timestamp_iso"],
                 "latency_ms": out_raw["latency_ms"],
                 "confidence": confidence_stable,
                 "child_in_roi": bool(child_in_roi_stable),
                 "roi_status": "CHILD_IN_ROI" if child_in_roi_stable else "CLEAR",
-                "confidence_raw": out_raw.get("confidence_raw", 0.0),
-                "child_in_roi_raw": bool(out_raw.get("child_in_roi_raw", False)),
-                "detections": out_raw.get("detections", []),
+                "confidence_raw": tracked_confidence_raw,
+                "child_in_roi_raw": tracked_child_in_roi_raw,
+                "detections": tracked_detections,
             }
             warning_device_on = bool(self.warn_ctrl.update(out["child_in_roi"]))
 
@@ -901,4 +935,5 @@ if __name__ == "__main__":
 
     # Run the Flask-SocketIO server.
     socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)
+
 

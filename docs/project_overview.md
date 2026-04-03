@@ -29,13 +29,13 @@ The repo now treats this layout as the source of truth:
 
 - `datasets/site_dataset_v1/videos_raw/`
   - original camera recordings from the deployment site
-- `datasets/site_dataset_v1/frames_raw/`
+- `datasets/site_dataset_v1/raw_frames/`
   - extracted frames before review
-- `datasets/site_dataset_v1/frames_selected/`
+- `datasets/site_dataset_v1/selected_frames/`
   - approved frames to annotate
 - `datasets/site_dataset_v1/labels/`
-  - YOLO labels matching `frames_selected/`
-- `datasets/site_dataset_v1/exports/`
+  - YOLO labels matching `selected_frames/`
+- `datasets/site_dataset_v1/annotation_exports/`
   - generated train/val/test exports
 - `datasets/site_dataset_v1/rejected/`
   - blurred, duplicated, or unusable frames
@@ -61,8 +61,8 @@ This avoids a crash while the team is still collecting and labeling the new data
 ## Manual Dataset Workflow
 
 1. Record site footage and store it in `videos_raw/`.
-2. Extract candidate frames into `frames_raw/`.
-3. Move only usable frames into `frames_selected/`.
+2. Extract candidate frames into `raw_frames/`.
+3. Move only usable frames into `selected_frames/`.
 4. Create YOLO labels in `labels/`.
 5. Validate labels with `scripts/validate_labels.py`.
 6. Export a clean split with `scripts/split_dataset.py`.
@@ -75,7 +75,7 @@ This avoids a crash while the team is still collecting and labeling the new data
 - `scripts/validate_labels.py`
   - checks missing labels, malformed rows, and out-of-bounds values
 - `scripts/split_dataset.py`
-  - copies `frames_selected/` + `labels/` into `exports/yolo/images|labels/train|val|test`
+  - copies `selected_frames/` + `labels/` into `annotation_exports/yolo/images|labels/train|val|test`
 - `scripts/test_infer_video.py`
   - sanity-checks a future manual model on a local validation video
 - `scripts/smoke_test_api.py`

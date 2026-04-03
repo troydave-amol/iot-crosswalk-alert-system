@@ -3,7 +3,7 @@ Validate YOLO-format label files for a manual dataset under datasets/.
 
 Usage:
     python scripts/validate_labels.py --dataset site_dataset_v1
-    python scripts/validate_labels.py --dataset site_dataset_v1 --images-subdir exports/yolo/images --labels-subdir exports/yolo/labels
+    python scripts/validate_labels.py --dataset site_dataset_v1 --images-subdir annotation_exports/yolo/images --labels-subdir annotation_exports/yolo/labels
 
 Outputs:
     reports/<dataset>_label_validation.csv
@@ -23,7 +23,7 @@ REPORTS_DIR = PROJECT_ROOT / "reports"
 
 def validate_dataset(
     dataset_name: str,
-    images_subdir: str = "frames_selected",
+    images_subdir: str = "selected_frames",
     labels_subdir: str = "labels",
 ) -> list[dict]:
     dataset_path = Path(dataset_name)
@@ -141,8 +141,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--images-subdir",
-        default="frames_selected",
-        help="Image folder inside the dataset root (default: frames_selected)",
+        default="selected_frames",
+        help="Image folder inside the dataset root (default: selected_frames)",
     )
     parser.add_argument(
         "--labels-subdir",

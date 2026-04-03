@@ -2,8 +2,16 @@ venv/
 __pycache__/
 .env
 *.pyc
-datasets/
 runs/
 models/runs/
 .tmp/
+
+# Safely ignore raw images inside datasets to prevent 2GB Git crash
+datasets/02_yolo_dataset/images/
+datasets/04_raw_frames_backup/
+datasets/visual_verify_output/
+
+# Globally ignore all other large random tensor files, but permit our specific models
 *.pt
+!models/*.pt
+!datasets/03_training_runs/**/weights/*.pt

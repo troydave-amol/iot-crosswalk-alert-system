@@ -6,12 +6,12 @@ Usage:
     python scripts/split_dataset.py --dataset site_dataset_v1 --split 70 15 15 --force
 
 Source folders:
-    datasets/<dataset>/frames_selected/
+    datasets/<dataset>/selected_frames/
     datasets/<dataset>/labels/
 
 Output folders:
-    datasets/<dataset>/exports/yolo/images/train|val|test/
-    datasets/<dataset>/exports/yolo/labels/train|val|test/
+    datasets/<dataset>/annotation_exports/yolo/images/train|val|test/
+    datasets/<dataset>/annotation_exports/yolo/labels/train|val|test/
 """
 
 from __future__ import annotations
@@ -83,9 +83,9 @@ def export_split_dataset(
     dataset_name: str,
     ratios: tuple[float, float, float],
     force: bool = False,
-    images_subdir: str = "frames_selected",
+    images_subdir: str = "selected_frames",
     labels_subdir: str = "labels",
-    output_root: str = "exports/yolo",
+    output_root: str = "annotation_exports/yolo",
 ) -> None:
     train_r, val_r, test_r = ratios
     assert abs(train_r + val_r + test_r - 1.0) < 1e-6, "Ratios must sum to 1.0"
@@ -96,7 +96,7 @@ def export_split_dataset(
     export_root = dataset_dir / output_root
 
     if not images_dir.exists():
-        raise FileNotFoundError(f"frames_selected directory not found: {images_dir}")
+        raise FileNotFoundError(f"selected_frames directory not found: {images_dir}")
     if not labels_dir.exists():
         raise FileNotFoundError(f"labels directory not found: {labels_dir}")
 
@@ -160,12 +160,12 @@ def main() -> None:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Delete the existing exports/yolo split folders before rebuilding them",
+        help="Delete the existing annotation_exports/yolo split folders before rebuilding them",
     )
     parser.add_argument(
         "--images-subdir",
-        default="frames_selected",
-        help="Image source folder inside the dataset root (default: frames_selected)",
+        default="selected_frames",
+        help="Image source folder inside the dataset root (default: selected_frames)",
     )
     parser.add_argument(
         "--labels-subdir",
@@ -174,8 +174,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--output-root",
-        default="exports/yolo",
-        help="Export folder inside the dataset root (default: exports/yolo)",
+        default="annotation_exports/yolo",
+        help="Export folder inside the dataset root (default: annotation_exports/yolo)",
     )
     args = parser.parse_args()
 

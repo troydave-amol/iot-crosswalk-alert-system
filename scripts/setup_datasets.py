@@ -3,7 +3,7 @@ Scaffold the manual crosswalk dataset workspace.
 
 The active dataset layout is centered on footage collected by the team at the
 deployment site. This script creates the standard folder structure and writes a
-starter YOLO config under exports/yolo/.
+starter YOLO config under annotation_exports/yolo/.
 """
 
 from __future__ import annotations
@@ -18,10 +18,10 @@ DEFAULT_DATASET = "site_dataset_v1"
 
 DATASET_SUBDIRS = {
     "videos_raw": "Original site recordings from the crosswalk camera.",
-    "frames_raw": "All extracted frames before quality review.",
-    "frames_selected": "Frames approved for annotation and export.",
-    "labels": "YOLO txt labels matching frames_selected/.",
-    "exports": "Generated train/val/test datasets for training.",
+    "raw_frames": "All extracted frames before quality review.",
+    "selected_frames": "Frames approved for annotation and export.",
+    "labels": "YOLO txt labels matching selected_frames/.",
+    "annotation_exports": "Generated train/val/test datasets for training.",
     "rejected": "Blurred, duplicate, off-angle, or unusable frames.",
 }
 
@@ -61,8 +61,8 @@ def build_readme(dataset_root: Path) -> str:
             "",
             "Recommended sequence:",
             "1. Save raw recordings in `videos_raw/`.",
-            "2. Extract frames into `frames_raw/`.",
-            "3. Move approved frames into `frames_selected/`.",
+            "2. Extract frames into `raw_frames/`.",
+            "3. Move approved frames into `selected_frames/`.",
             "4. Create YOLO labels in `labels/`.",
             "5. Run `python scripts/validate_labels.py --dataset site_dataset_v1`.",
             "6. Run `python scripts/split_dataset.py --dataset site_dataset_v1`.",
@@ -73,7 +73,7 @@ def build_readme(dataset_root: Path) -> str:
 
 def ensure_layout(dataset_name: str) -> tuple[Path, Path]:
     dataset_root = DATASETS_DIR / dataset_name
-    export_root = dataset_root / "exports" / "yolo"
+    export_root = dataset_root / "annotation_exports" / "yolo"
 
     ensure_dir(dataset_root)
     for name in DATASET_SUBDIRS:

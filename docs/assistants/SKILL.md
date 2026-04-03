@@ -41,14 +41,14 @@ The active workflow is manual-dataset-only.
 ## Dataset Workflow
 
 1. Confirm `datasets/site_dataset_v1/` structure exists
-2. Use `frames_selected/` + `labels/` as the labeling source of truth
+2. Use `selected_frames/` + `labels/` as the labeling source of truth
 3. Validate labels with `scripts/validate_labels.py --dataset site_dataset_v1`
 4. Export train/val/test via `scripts/split_dataset.py --dataset site_dataset_v1`
 5. Use `docs/specs/annotation_guideline_child_class.md` for class rules
 
 ## Training Workflow
 
-1. Train only from `datasets/site_dataset_v1/exports/yolo/data.yaml`
+1. Train only from `datasets/site_dataset_v1/annotation_exports/yolo/data.yaml`
 2. Save approved best weights to `models/manual_crosswalk_detector.pt`
 3. Save training artifacts under `runs/`
 4. Record evaluation metrics for the manuscript
