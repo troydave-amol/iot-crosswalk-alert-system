@@ -1,91 +1,128 @@
-# Smart Crosswalk Capstone Overview
+# Smart Crosswalk Project Overview
 
-## Current Project State
+Repository state summarized for April 5, 2026.
 
-On March 20, 2026, the project direction was reset. The active repository now supports only a manual dataset collection workflow for the school-zone crosswalk deployment site.
+## Current Baseline
 
-This means:
+The repo currently contains a working dashboard stack plus archived dataset and training assets. It is not accurate anymore to describe this project as "manual dataset only with no active detector."
 
-- old external datasets are not part of the active pipeline
-- the previous trained detector is not considered valid for deployment or reporting
-- the app must remain stable even when no trained model file is present
+What is already present:
 
-## What the System Still Does
+- a Flask + Socket.IO dashboard in `app.py`
+- live Hikvision RTSP capture and reconnect handling
+- MP4 video-test mode with upload and playback from `test_videos/`
+- YOLO-based inference in `cv_inference.py`
+- anti-flicker box tracking in `detection_tracker.py`
+- temporal warning stabilization in `warning_controller.py`
+- MySQL event logging and aggregate analytics in `db.py`
+- a trained checkpoint in `models/yolov8n_crosswalk_v2_1111_frames.pt`
+- merged dataset and archived run outputs under `datasets/`
 
-The dashboard and backend remain the same core system:
+## Runtime Architecture
 
-- `app.py`
-  - Flask + Socket.IO server for live view, logs, analytics, reports, and ROI APIs
+### 1. Dashboard and transport
+
+- `templates/index.html`
+- `static/js/dashboard.js`
+- `static/js/contract.js`
+- `static/css/dashboard.css`
+
+The UI exposes five major sections: Live View, Logs, Analytics, Reports, and Settings.
+
+### 2. Inference and warning pipeline
+
 - `cv_inference.py`
-  - YOLO inference wrapper used once a new manual model is available
+  - YOLO inference wrapper
+  - ROI feet-zone checks
+  - trigger-candidate dominance filtering
+- `detection_tracker.py`
+  - IoU-based track persistence and EMA smoothing
 - `warning_controller.py`
-  - temporal stabilization plus warning hold/cooldown logic
+  - 3-of-5 temporal vote stabilization
+  - warning hold and minimum toggle interval logic
+
+### 3. Persistence and analytics
+
 - `db.py`
-  - MySQL initialization, event inserts, event retrieval, and analytics aggregates
+  - database initialization
+  - event inserts
+  - filtered event retrieval
+  - aggregate analytics for `15m`, `1h`, `today`, and `all`
 
-## Active Folder Structure
+## Operating Modes
 
-The repo now treats this layout as the source of truth:
+### Live mode
 
-- `datasets/site_dataset_v1/videos_raw/`
-  - original camera recordings from the deployment site
-- `datasets/site_dataset_v1/raw_frames/`
-  - extracted frames before review
-- `datasets/site_dataset_v1/selected_frames/`
-  - approved frames to annotate
-- `datasets/site_dataset_v1/labels/`
-  - YOLO labels matching `selected_frames/`
-- `datasets/site_dataset_v1/annotation_exports/`
-  - generated train/val/test exports
-- `datasets/site_dataset_v1/rejected/`
-  - blurred, duplicated, or unusable frames
-- `models/`
-  - destination for the next approved manual-model weights
-- `training/`
-  - notes, experiments, and reproducible training commands
-- `runs/`
-  - future training/evaluation outputs
+- reads the Hikvision RTSP stream
+- auto-reconnects when capture fails
+- emits live `status_update` payloads
+- stores state-change and heartbeat rows in MySQL
 
-## Runtime Safety Behavior
+### Video-test mode
 
-The live system now fails safe when the model file is missing:
+- reuses the same inference pipeline with an uploaded or preloaded `.mp4`
+- exposes available files through `/api/test_videos`
+- tags DB rows as `Video Test: <filename>`
 
-- camera feed still opens
-- ROI overlay still works
-- dashboard receives valid `idle` status payloads
-- `child_in_roi = false`
-- `warning_device_on = false`
+## Current Data And Model Assets
 
-This avoids a crash while the team is still collecting and labeling the new dataset.
+- `models/yolov8n_crosswalk_v2_1111_frames.pt`
+  - current checkpoint in `models/`
+- `datasets/01_label_studio_exports/`
+  - zipped label exports
+- `datasets/02_yolo_dataset/`
+  - current merged YOLO dataset snapshot
+- `datasets/03_training_runs/run_2026_04_03_merged_v2/`
+  - archived training outputs and plots
+- `datasets/04_raw_frames_backup/`
+  - raw frame backup material
+- `training/train_3_2.0.ipynb`
+  - moved notebook artifact under `training/`
 
-## Manual Dataset Workflow
+## Verification Snapshot
 
-1. Record site footage and store it in `videos_raw/`.
-2. Extract candidate frames into `raw_frames/`.
-3. Move only usable frames into `selected_frames/`.
-4. Create YOLO labels in `labels/`.
-5. Validate labels with `scripts/validate_labels.py`.
-6. Export a clean split with `scripts/split_dataset.py`.
-7. Train a new detector only from the exported manual dataset.
+During the documentation refresh, the current repo checked out like this:
 
-## Scripts That Remain Relevant
+- `python -m py_compile app.py cv_inference.py warning_controller.py db.py detection_tracker.py`
+  - passed
+- `python -m unittest test_detection_stabilization.py`
+  - failed because ROI tests still use the older rectangle constructor API
+- `python -m unittest test_backend.py`
+  - failed immediately because the file is a live integration script that expects a running server at `localhost:5000`
+- `python scripts/offline_validation.py`
+  - failed because it still uses `ROI(x1=..., y1=..., x2=..., y2=...)`
+- `python scripts/test_infer_video.py --help`
+  - failed because root imports are not adjusted when run from `scripts/`
 
-- `scripts/setup_datasets.py`
-  - creates the manual dataset scaffold
-- `scripts/validate_labels.py`
-  - checks missing labels, malformed rows, and out-of-bounds values
-- `scripts/split_dataset.py`
-  - copies `selected_frames/` + `labels/` into `annotation_exports/yolo/images|labels/train|val|test`
-- `scripts/test_infer_video.py`
-  - sanity-checks a future manual model on a local validation video
-- `scripts/smoke_test_api.py`
-  - confirms API availability and response shape
-- `scripts/verify_db.py`
-  - compares SQL truth against backend analytics responses
+## Known Implementation Gaps
 
-## Immediate Next Steps
+### Class-order mismatch
 
-- collect more site footage
-- define the exact annotation protocol for child-like and adult-like pedestrians
-- validate label quality before any new training run
-- retrain only after the manual export is large enough for a meaningful split
+The repo currently disagrees about class IDs:
+
+- runtime inference logic treats class `1` as the child class
+- manual dataset scaffold scripts still emit `0: child_like`, `1: adult_like`
+- `datasets/02_yolo_dataset/data.yaml` uses `['adult', 'child']`
+
+This must be reconciled before the next export-to-training-to-deployment cycle.
+
+### ROI API drift
+
+- the dashboard still saves a rectangle to `roi_config.json`
+- the lower-level ROI object is now polygon-first
+- several tests and helper scripts still call the old rectangle constructor directly
+
+### Legacy helper scripts
+
+Some scripts still target older dataset paths such as `merged_v2`, `merged_dataset_v1`, or `afternoon_v1`. Treat those as historical until they are updated.
+
+### Dependency documentation gap
+
+`requirements.txt` currently covers the web stack only. The runtime CV stack also needs NumPy, OpenCV, and Ultralytics.
+
+## Near-Term Priorities
+
+- reconcile class IDs across training data, docs, and runtime inference
+- normalize ROI helper usage around one supported constructor/API
+- refresh or retire legacy validation scripts
+- verify dataset YAML split paths before the next training run

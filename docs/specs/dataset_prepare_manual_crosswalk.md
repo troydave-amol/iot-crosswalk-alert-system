@@ -1,65 +1,108 @@
-# Directive: Manual Crosswalk Dataset Preparation
+# Directive: Dataset Preparation And Export Workflow
 
 ## Goal
 
-Prepare the team-collected crosswalk dataset for labeling, validation, and export without mixing in legacy external datasets.
+Document the dataset workflow that actually exists in the repo today:
 
-## Scope
+- archived merged training assets already live under `datasets/`
+- manual scaffold scripts still exist for building a fresh site-specific dataset
 
-- In scope:
-  - site video ingestion
-  - frame extraction and review
-  - YOLO label creation
-  - label validation
-  - train/val/test export generation
-- Out of scope:
-  - external dataset import
-  - reuse of removed legacy training data
-  - model training before the manual dataset is validated
+This document covers both, and it calls out the places where they currently disagree.
 
-## Inputs Required
+## Current Dataset Baseline
 
-- `datasets/site_dataset_v1/videos_raw/`
-- `datasets/site_dataset_v1/raw_frames/`
-- `datasets/site_dataset_v1/selected_frames/`
-- `datasets/site_dataset_v1/labels/`
+The repository already contains:
 
-## Tools / Scripts
+- `datasets/01_label_studio_exports/`
+  - zipped annotation exports
+- `datasets/02_yolo_dataset/`
+  - merged YOLO dataset snapshot
+- `datasets/03_training_runs/`
+  - archived YOLO run artifacts
+- `datasets/04_raw_frames_backup/`
+  - raw frame backups
 
-1. `scripts/setup_datasets.py`
-2. `scripts/validate_labels.py`
-3. `scripts/split_dataset.py`
+Separately, `scripts/setup_datasets.py` can still scaffold a fresh manual workspace such as `datasets/site_dataset_v1/`.
 
-## Outputs / Deliverables
+## Supported Workflow A: Maintain The Current Merged Dataset Lineage
 
-- curated selected frames under `datasets/site_dataset_v1/selected_frames/`
-- YOLO labels under `datasets/site_dataset_v1/labels/`
-- exported training dataset under `datasets/site_dataset_v1/annotation_exports/yolo/`
-- `datasets/site_dataset_v1/annotation_exports/yolo/data.yaml`
-- validation report in `reports/site_dataset_v1_label_validation.csv`
+Use this when reviewing or extending the dataset that produced the current checkpoint lineage.
 
-## Steps
+Inputs:
 
-1. Run `python scripts/setup_datasets.py` to scaffold or refresh the manual dataset workspace.
-2. Save raw crosswalk recordings in `videos_raw/`.
-3. Extract frames into `raw_frames/`.
-4. Move only approved, non-duplicate frames into `selected_frames/`.
-5. Create YOLO labels in `labels/` with the same relative filenames as the selected frames.
-6. Run `python scripts/validate_labels.py --dataset site_dataset_v1`.
-7. Fix or remove any frames that fail validation.
-8. Run `python scripts/split_dataset.py --dataset site_dataset_v1`.
-9. Confirm `datasets/site_dataset_v1/annotation_exports/yolo/data.yaml` points at the generated export root.
+- archived exports in `datasets/01_label_studio_exports/`
+- current training dataset in `datasets/02_yolo_dataset/`
+- archived run outputs in `datasets/03_training_runs/`
 
-## Edge Cases
+Checks:
 
-- image exists but label is missing -> validation must fail
-- label exists but frame was rejected -> remove or relocate the orphan label
-- duplicate near-identical frames -> keep only one in `selected_frames/`, move the rest to `rejected/`
-- motion blur, heavy occlusion, or unusable nighttime glare -> move to `rejected/`
+1. open the target dataset `data.yaml`
+2. verify class order before training or deployment
+3. verify `train`, `val`, and `test` paths are correct for the dataset snapshot being used
+4. keep any new exports and training artifacts traceable to their source labels
 
-## Validation
+## Supported Workflow B: Build A Fresh Manual Dataset Workspace
 
-- `selected_frames/` and `labels/` contain paired files only
-- all YOLO coordinates remain within `[0, 1]`
-- exported `train`, `val`, and `test` folders are created under `annotation_exports/yolo/`
-- no legacy dataset folder is referenced anywhere in the export config
+Use this when starting a new site-specific collection and labeling cycle.
+
+### Scaffold
+
+```powershell
+python scripts/setup_datasets.py
+```
+
+This creates the workspace shape under `datasets/site_dataset_v1/`:
+
+- `videos_raw/`
+- `raw_frames/`
+- `selected_frames/`
+- `labels/`
+- `annotation_exports/`
+- `rejected/`
+
+### Validate Labels
+
+```powershell
+python scripts/validate_labels.py --dataset site_dataset_v1
+```
+
+### Export Train/Val/Test
+
+```powershell
+python scripts/split_dataset.py --dataset site_dataset_v1
+```
+
+## Mandatory Reconciliation Step
+
+Before using any newly exported manual dataset with the current runtime:
+
+1. inspect the exported `data.yaml`
+2. compare its class order with the runtime expectation in `app.py` and `cv_inference.py`
+3. resolve any mismatch before training or deploying
+
+Reason:
+
+- current scaffold scripts still emit `0: child_like`, `1: adult_like`
+- current runtime logic behaves as though class `1` is the child trigger class
+- the archived merged dataset snapshot uses `['adult', 'child']`
+
+## Outputs
+
+For a fresh manual workspace, the expected outputs are:
+
+- curated images under `selected_frames/`
+- YOLO labels under `labels/`
+- validation report in `reports/<dataset>_label_validation.csv`
+- exported split under `annotation_exports/yolo/`
+
+## Validation Rules
+
+- every selected image should have a paired label file
+- label rows must stay within normalized YOLO bounds
+- split generation should create `images/train|val|test` and `labels/train|val|test`
+- dataset metadata must be reviewed, not assumed
+
+## Current Caveats
+
+- `datasets/02_yolo_dataset/data.yaml` currently points `val` to `images/train`, so treat dataset YAMLs as reviewable artifacts rather than trusted truth
+- older scripts elsewhere in the repo still reference historical dataset names and should not be treated as the active export path by default

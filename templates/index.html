@@ -18,23 +18,6 @@
 
 <body>
 
-    <!-- WARNING BANNER (top of page) -->
-    <div id="warningBanner" class="warning-banner hidden" aria-live="assertive">
-        <div class="warning-banner__inner">
-            <div class="warning-banner__title">⚠ SCHOOL ZONE</div>
-            <div class="warning-banner__msg">CHILD DETECTED – SLOW DOWN</div>
-            <div id="warningBannerMeta" class="warning-banner__meta"></div>
-        </div>
-    </div>
-
-    <!-- FULLSCREEN OVERLAY (visual warning device) -->
-    <div id="warningOverlay" class="warning-overlay hidden" aria-hidden="true">
-        <div class="warning-overlay__panel">
-            <div class="warning-overlay__title">⚠ SCHOOL ZONE</div>
-            <div class="warning-overlay__msg">CHILD DETECTED – SLOW DOWN</div>
-            <div id="warningOverlayMeta" class="warning-overlay__meta"></div>
-        </div>
-    </div>
 
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar">
@@ -118,10 +101,70 @@
                     </div>
                 </div>
 
-                <!-- Live Camera Feed -->
+                <!-- Mode Toggle Bar -->
+                <div class="mode-toggle-bar card">
+                    <div class="mode-toggle-left">
+                        <div class="mode-toggle" id="modeToggle">
+                            <button class="mode-btn active" data-mode="live" id="btnModeLive">
+                                <i class="fa-solid fa-video"></i> Live Camera
+                            </button>
+                            <button class="mode-btn" data-mode="video_test" id="btnModeTest">
+                                <i class="fa-solid fa-film"></i> Video Test
+                            </button>
+                        </div>
+                        <span class="mode-badge" id="modeBadge">
+                            <i class="fa-solid fa-circle"></i> Live
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Video Test Panel (hidden by default) -->
+                <div class="video-test-panel card" id="videoTestPanel" style="display: none;">
+                    <div class="video-test-header" id="videoTestHeader">
+                        <div class="video-test-header-left">
+                            <h4><i class="fa-solid fa-flask"></i> Video Test Mode</h4>
+                            <small class="text-muted">Upload or select a pre-recorded .mp4 to simulate live detection</small>
+                        </div>
+                        <i class="fa-solid fa-chevron-up video-test-collapse-icon" id="videoTestCollapseIcon"></i>
+                    </div>
+
+                    <div class="video-test-content" id="videoTestContent">
+                        <!-- Upload Dropzone -->
+                        <div class="upload-dropzone" id="uploadDropzone">
+                            <input type="file" id="videoFileInput" accept=".mp4" style="display: none;">
+                            <div class="dropzone-content">
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                                <p><strong>Drag & drop .mp4 file here</strong></p>
+                                <p class="text-muted">or click to browse</p>
+                            </div>
+                            <div class="dropzone-progress" id="uploadProgress" style="display: none;">
+                                <i class="fa-solid fa-spinner fa-spin"></i>
+                                <span id="uploadProgressText">Uploading...</span>
+                            </div>
+                        </div>
+
+                        <!-- Video Library -->
+                        <div class="video-library" id="videoLibrary">
+                            <div class="video-library-header">
+                                <h5><i class="fa-solid fa-folder-open"></i> Available Test Videos</h5>
+                                <button class="btn btn-outline btn-sm" id="btnRefreshVideos">
+                                    <i class="fa-solid fa-rotate-right"></i> Refresh
+                                </button>
+                            </div>
+                            <div class="video-grid" id="videoGrid">
+                                <div class="video-empty-state">
+                                    <i class="fa-solid fa-video-slash"></i>
+                                    <p>No test videos yet. Upload one above.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Camera Feed -->
                 <div class="camera-grid">
                     <div class="card">
-                        <div class="card-title">Live Camera View</div>
+                        <div class="card-title" id="cameraCardTitle">Live Camera View</div>
                         <div id="liveRoiBadge" class="status-chip"
                             style="margin-top: 5px; display: none; background-color: rgba(76, 175, 80, 0.1); color: #2e7d32; width: fit-content; margin-bottom: 10px;">
                             <i class="fa-solid fa-crosshairs"></i> ROI Active
@@ -534,84 +577,118 @@
             <!-- SETTINGS SECTION -->
             <section id="settings-section" class="page-section">
                 <div class="card">
-                    <div class="roi-header"
-                        style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3 style="margin:0;">ROI Configuration</h3>
+                    <div class="roi-header">
+                        <div>
+                            <h3 style="margin:0 0 4px 0;">
+                                <i class="fa-solid fa-crosshairs" style="color: var(--primary-accent);"></i>
+                                ROI Configuration
+                            </h3>
+                            <small class="text-muted">Define the crosswalk detection zone</small>
+                        </div>
                         <div class="roi-actions">
                             <input type="file" id="roiImageInput" accept="image/*" style="display:none;">
-                            <button class="btn btn-outline btn-sm" id="btnCaptureFrame" style="margin-right: 5px;">
+                            <button class="btn btn-outline btn-sm" id="btnCaptureFrame">
                                 <i class="fa-solid fa-camera"></i> Capture Frame
                             </button>
                             <button class="btn btn-outline btn-sm"
                                 onclick="document.getElementById('roiImageInput').click()">
                                 <i class="fa-solid fa-upload"></i> Upload Image
                             </button>
-                            <button class="btn btn-primary btn-sm" id="btnSaveRoi">
-                                <i class="fa-solid fa-floppy-disk"></i> Save ROI
-                            </button>
-                            <span id="roiUnsavedBadge" class="roi-unsaved-badge" style="display:none;">
-                                <i class="fa-solid fa-circle-exclamation"></i> Unsaved changes
-                            </span>
-                            <button class="btn btn-outline btn-sm" id="btnResetRoi"
-                                style="color:#d32f2f; border-color:#d32f2f;">
-                                <i class="fa-solid fa-trash"></i> Reset
-                            </button>
                         </div>
                     </div>
 
-                    <p class="mb-4 text-muted" style="font-size:0.9rem;">
-                        <strong>Instructions:</strong> Use "Capture Frame" to grab the current live camera view, or
-                        upload a reference image.
-                        Draw the Region of Interest (ROI) where warnings should trigger (crosswalk area).
-                        Click <strong>Save ROI</strong>. Go back to Live View and Click Start Camera to test.
-                    </p>
+                    <!-- Step indicator -->
+                    <div class="roi-steps">
+                        <div class="roi-step" id="roiStep1">
+                            <span class="roi-step-num">1</span>
+                            <span>Load a frame</span>
+                        </div>
+                        <div class="roi-step-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                        <div class="roi-step" id="roiStep2">
+                            <span class="roi-step-num">2</span>
+                            <span>Draw or adjust ROI</span>
+                        </div>
+                        <div class="roi-step-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                        <div class="roi-step" id="roiStep3">
+                            <span class="roi-step-num">3</span>
+                            <span>Save</span>
+                        </div>
+                    </div>
 
                     <div class="roi-tool-container">
                         <!-- Canvas Area -->
                         <div class="roi-canvas-wrapper" id="roiWrapper">
                             <canvas id="roiCanvas"></canvas>
                             <div id="roiOverlayText" class="roi-overlay-text">
-                                <i class="fa-solid fa-image"
-                                    style="font-size:3rem; margin-bottom:10px; color:#ccc;"></i>
-                                <p>Upload a sample crosswalk image<br>to set ROI.</p>
+                                <i class="fa-solid fa-image" style="font-size:2.5rem; margin-bottom:10px; color:#bbb;"></i>
+                                <p><strong>No frame loaded</strong></p>
+                                <p class="text-muted" style="font-size:0.85rem;">Click "Capture Frame" or "Upload Image" to begin</p>
                             </div>
                         </div>
 
-                        <!-- Panel -->
-                        <div class="roi-coords-panel">
-                            <h4 style="font-size:0.9rem; text-transform:uppercase; color:#6c757d; margin-bottom:10px;">
-                                Coordinates</h4>
-                            <div class="coords-grid">
-                                <div class="coord-item">
-                                    <span class="lbl">X</span>
-                                    <span class="val" id="roiX">0</span>
-                                </div>
-                                <div class="coord-item">
-                                    <span class="lbl">Y</span>
-                                    <span class="val" id="roiY">0</span>
-                                </div>
-                                <div class="coord-item">
-                                    <span class="lbl">W</span>
-                                    <span class="val" id="roiW">0</span>
-                                </div>
-                                <div class="coord-item">
-                                    <span class="lbl">H</span>
-                                    <span class="val" id="roiH">0</span>
-                                </div>
-                                <div class="coord-item">
-                                    <span class="lbl">Img W</span>
-                                    <span class="val" id="roiImgW">0</span>
-                                </div>
-                                <div class="coord-item">
-                                    <span class="lbl">Img H</span>
-                                    <span class="val" id="roiImgH">0</span>
+                        <!-- Info Panel -->
+                        <div class="roi-info-panel">
+                            <!-- Coordinates -->
+                            <div class="roi-coords-card">
+                                <h4><i class="fa-solid fa-ruler-combined"></i> Region Coordinates</h4>
+                                <div class="coords-grid">
+                                    <div class="coord-item">
+                                        <span class="lbl">X</span>
+                                        <span class="val" id="roiX">0</span>
+                                    </div>
+                                    <div class="coord-item">
+                                        <span class="lbl">Y</span>
+                                        <span class="val" id="roiY">0</span>
+                                    </div>
+                                    <div class="coord-item">
+                                        <span class="lbl">W</span>
+                                        <span class="val" id="roiW">0</span>
+                                    </div>
+                                    <div class="coord-item">
+                                        <span class="lbl">H</span>
+                                        <span class="val" id="roiH">0</span>
+                                    </div>
+                                    <div class="coord-item">
+                                        <span class="lbl">Img W</span>
+                                        <span class="val" id="roiImgW">0</span>
+                                    </div>
+                                    <div class="coord-item">
+                                        <span class="lbl">Img H</span>
+                                        <span class="val" id="roiImgH">0</span>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="roi-helper mt-3">
-                                <small style="display:block; line-height:1.4; color:#666;">
-                                    <strong>ROI Logic:</strong> The warning system triggers ONLY when a child-class
-                                    pedestrian is detected INSIDE this box.
-                                </small>
+
+                            <!-- Status -->
+                            <div class="roi-status-card">
+                                <span id="roiStatusBadge" class="roi-status-badge roi-status-none">
+                                    <i class="fa-solid fa-circle-xmark"></i> No ROI Defined
+                                </span>
+                                <span id="roiUnsavedBadge" class="roi-unsaved-badge" style="display:none;">
+                                    <i class="fa-solid fa-circle-exclamation"></i> Unsaved changes
+                                </span>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="roi-action-buttons">
+                                <button class="btn btn-primary" id="btnSaveRoi" style="width:100%;">
+                                    <i class="fa-solid fa-floppy-disk"></i> Save ROI
+                                </button>
+                                <button class="btn btn-outline" id="btnResetRoi"
+                                    style="width:100%; color:#d32f2f; border-color:#d32f2f;">
+                                    <i class="fa-solid fa-trash"></i> Reset
+                                </button>
+                            </div>
+
+                            <!-- Help -->
+                            <div class="roi-help">
+                                <h4><i class="fa-solid fa-circle-info"></i> How to use</h4>
+                                <ul>
+                                    <li><strong>Draw:</strong> Click and drag on the frame</li>
+                                    <li><strong>Move:</strong> Drag inside the box</li>
+                                    <li><strong>Resize:</strong> Drag corner/edge handles</li>
+                                    <li><strong>Save:</strong> Click Save ROI to apply</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -628,32 +705,6 @@
                 </div>
 
 
-                <div class="card mt-4">
-                    <h3>Role Access</h3>
-                    <p><strong>Current View:</strong> TMC Officer / Admin (Prototype Mode)</p>
-                    <p>System controls are restricted to authorized personnel only.</p>
-                </div>
-
-                <!-- Data Contract Preview (DEV ONLY) -->
-                <div class="card mt-4" style="border-left: 4px solid #6200ea;">
-                    <div class="card-title" style="margin-bottom: 15px; color: #6200ea;">
-                        <i class="fa-solid fa-code"></i> Data Contract Preview <span
-                            class="badge badge-neutral">DEV</span>
-                    </div>
-                    <div style="display: flex; gap: 20px; align-items: start; flex-wrap: wrap;">
-                        <div style="flex: 1; min-width: 300px;">
-                            <h5 style="margin-bottom: 8px;">Latest Status Payload</h5>
-                            <pre id="contract-json-preview"
-                                style="background: #f4f4f4; padding: 10px; border-radius: 6px; font-size: 0.8rem; overflow-x: auto; max-height: 250px; color: #333; border: 1px solid #ddd;">No data yet...</pre>
-                        </div>
-                        <div style="flex: 1; min-width: 250px;">
-                            <h5 style="margin-bottom: 8px;">Validation Status</h5>
-                            <div id="contract-valid-badge" class="status-chip disconnected">Waiting...</div>
-                            <ul id="contract-errors-list"
-                                style="margin-top: 10px; color: #d32f2f; font-size: 0.85rem; padding-left: 20px;"></ul>
-                        </div>
-                    </div>
-                </div>
             </section>
 
         </div>

@@ -4,129 +4,98 @@
 
 You are supporting a capstone project that combines:
 
-- Computer Vision (YOLOv8)
-- Edge/IoT deployment
-- Flask + MySQL backend
-- Web dashboard (Live View, Logs, Analytics, Reports, Settings)
+- YOLO-based pedestrian classification
+- Hikvision RTSP live streaming
+- Flask + Socket.IO dashboard delivery
+- MySQL event logging and analytics
+- ROI-gated visual warning logic
 
-## Project Context
+## Current Repo Reality
 
-**Official Title**
-IoT-Based Smart School-Zone Crosswalk Alert System Using CNN for Real-Time Child Pedestrian Detection
+Treat these as the current ground truth for this repository:
 
-**Client / Location**
+- the repo already contains a trained checkpoint at `models/yolov8n_crosswalk_v2_1111_frames.pt`
+- the dashboard supports both live camera mode and video-test mode
+- the current merged dataset and archived training assets live under `datasets/`
+- the checked-in ROI config is rectangular, even though the lower-level ROI helper is polygon-capable
+- logs and analytics are server-side and DB-backed, not browser-only summaries
 
-- Client: Traffic Management Center (TMC)
-- Location: Casisang Central School crosswalk, Barangay Casisang, Malaybalay City
+## High-Priority Inconsistencies
 
-**Core Behavior**
+Surface these rather than glossing over them:
 
-- Detect pedestrians visually classified as children based on body size, proportions, and school-age appearance.
-- Do not claim biological age estimation.
-- Warning ON only when a child-classified pedestrian is inside the Crosswalk ROI.
-- Warning OFF otherwise.
-- Visual warning only. No SMS. No sirens. No face recognition.
-- Store events in MySQL and keep dashboard analytics range-accurate.
+### 1. Class-index mismatch
 
-## Active Dataset Policy
+- runtime inference currently behaves as though class `1` is the child class
+- scaffold/export scripts still emit `0: child_like`, `1: adult_like`
+- `datasets/02_yolo_dataset/data.yaml` uses `['adult', 'child']`
 
-The active repository workflow is manual-dataset-only.
+Any work touching training, deployment, labels, or evaluation must explicitly account for that mismatch.
 
-- Use `datasets/site_dataset_v1/` as the working dataset root.
-- Do not reintroduce removed legacy external datasets into the active pipeline.
-- Do not treat prior trained model artifacts as approved deliverables.
+### 2. ROI API drift
 
-## 3-Layer Architecture
+- `cv_inference.ROI` is now polygon-first
+- older tests and scripts still call rectangle-style constructors directly
+- ROI-related failures in tests are currently expected until that API is normalized
 
-### Layer 1: Directive
+### 3. Legacy helper scripts
 
-- SOPs live in `docs/specs/`
-- Each directive should define goal, scope, inputs, tools, outputs, edge cases, and validation
+Some scripts still point to older datasets such as `merged_v2`, `merged_dataset_v1`, or `afternoon_v1`. Do not assume every script in `scripts/` is current just because it exists.
 
-Relevant directives:
+## Core Behavior To Preserve
 
-- `docs/specs/dataset_prepare_manual_crosswalk.md`
-- `docs/specs/annotation_guideline_child_class.md`
-- `docs/specs/yolov8_training_plan.md`
+- warning output must remain visual only
+- no biological age claims
+- no face recognition
+- no plate recognition
+- warning ON only when the child trigger condition is satisfied inside the ROI after stabilization
+- DB failures must not crash the app
+
+## Recommended Working Order
+
+### Runtime and backend work
+
+Read first:
+
 - `docs/specs/api_events_contract.md`
 - `docs/specs/api_analytics_aggregates.md`
 - `docs/specs/roi_logic_and_trigger_rules.md`
 
-### Layer 2: Orchestration
+Then inspect:
 
-- Read the relevant directive
-- Prefer deterministic scripts over manual steps
-- Keep scope aligned with the capstone rules
-- Ask only the minimum clarifying questions required
+- `app.py`
+- `db.py`
+- `cv_inference.py`
+- `warning_controller.py`
+- `detection_tracker.py`
 
-### Layer 3: Execution
+### Dataset and training work
 
-- Scripts live in `scripts/`
-- Scripts should be fast, repeatable, and parameter-driven
-- Use validation scripts for labels, exports, API checks, and DB checks
+Read first:
 
-## Operating Principles
+- `docs/specs/dataset_prepare_manual_crosswalk.md`
+- `docs/specs/annotation_guideline_child_class.md`
+- `docs/specs/yolov8_training_plan.md`
 
-### 1) Scope protection first
+Then inspect:
 
-- visual warning only
-- no SMS/audio
-- no biological age claims
-- no face or plate recognition
+- `datasets/`
+- `models/`
+- `training/`
+- relevant scripts under `scripts/`
 
-### 2) Check for tools first
+## Validation Guidance
 
-Before creating new scripts, inspect `scripts/` for an existing fit.
+Currently verified during docs refresh:
 
-### 3) Determinism for critical logic
+- py_compile for the core Python modules passes
+- `test_detection_stabilization.py` fails because of ROI API drift
+- `test_backend.py` expects a running server and is not a pure unit test
+- `scripts/offline_validation.py` is stale against the current ROI API
+- `scripts/test_infer_video.py` has import-path issues when run directly from `scripts/`
 
-Time ranges, analytics aggregates, ROI trigger rules, and API contracts must be validated with deterministic code and reproducible checks.
-
-### 4) Fail safe
-
-If the live model file is missing, keep the app stable and warning output OFF instead of crashing.
-
-### 5) Validate with ground truth
-
-For analytics correctness:
-
-- SQL truth must match API response
-- API response must match dashboard values for the same range
-
-## Directory Guidance
-
-- `.tmp/` - temporary files
-- `docs/specs/` - SOPs
-- `scripts/` - deterministic tools
-- `datasets/site_dataset_v1/` - manual dataset workspace
-- `models/` - approved trained weights only
-- `training/` - reproducible training notes and commands
-- `reports/` - summaries and evaluations
-
-## Typical Directives
-
-### Dataset preparation
-
-- record footage
-- extract frames
-- review and select usable frames
-- annotate YOLO labels
-- validate labels
-- export train/val/test
-
-### Training and evaluation
-
-- train only from the manual site export
-- evaluate precision, recall, F1, and latency
-- document results for the manuscript
-
-### Integration
-
-- feed YOLO detections into ROI logic
-- emit `status_update`
-- log meaningful events into MySQL
-- verify analytics matches SQL
+Prefer validating current behavior from code and targeted commands rather than assuming all helper scripts are trustworthy.
 
 ## Summary
 
-Be pragmatic. Be reliable. Keep the repo aligned with the manual dataset reset.
+Be precise about what is implemented, what is archived, and what is currently inconsistent. Future contributors should be able to read your output and immediately tell which parts of the repo are production-path, which are historical, and which need reconciliation before the next training or deployment cycle.

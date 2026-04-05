@@ -1,67 +1,119 @@
-# Directive: ROI Logic and Trigger Rules
+# Directive: ROI Logic And Trigger Rules
 
 ## Goal
-Define deterministic rules for when the visual warning device is activated or deactivated based on child pedestrian detection within the Crosswalk ROI.
 
-## Scope
-- In scope: ROI definition, entry/exit detection, `warning_device_on` state, event logging
-- Out of scope: SMS, audio/sirens/buzzers, face recognition, speed detection, biological age estimation
+Describe the warning trigger pipeline as it is implemented today, including the current rectangle-based dashboard ROI storage and the newer polygon-capable ROI helper.
 
-## Non-Negotiable Rules
+## Current ROI Representation
 
-| Condition | Warning State |
-|---|---|
-| >=1 child-classified pedestrian inside Crosswalk ROI | `warning_device_on = TRUE` |
-| 0 child-classified pedestrians inside Crosswalk ROI | `warning_device_on = FALSE` |
+At the dashboard/API layer, ROI is currently stored in `roi_config.json` as:
 
-A child-classified pedestrian is defined as: visually classified as a child based on body size, proportions, and school-age appearance, not biological age.
+```json
+{
+  "x1": 245,
+  "y1": 366,
+  "x2": 1485,
+  "y2": 731,
+  "image_w": 1920,
+  "image_h": 1080
+}
+```
 
-## ROI Definition
-- ROI is a polygon/rectangle in pixel coordinates at inference time.
-- A detection is inside ROI if the bbox bottom-center point is inside ROI.
-- ROI coordinates must be configurable (not hardcoded).
+At the inference layer, `cv_inference.ROI` is now polygon-first and precomputes a mask for point-in-polygon checks.
 
-## Canonical Trigger Pipeline
-1. Run detector on frame with `agnostic_nms=True` and configured IoU threshold.
-2. Build raw trigger candidates using:
-   - class `child_like`
-   - confidence >= `LIVE_CHILD_CONF`
-   - bbox height >= `LIVE_MIN_CHILD_BBOX_RATIO * frame_height`
-   - bbox bottom-center inside ROI
-3. Apply overlap dominance on trigger candidates only (keep higher-confidence candidate when IoU >= configured dominance threshold).
-4. Compute raw decision:
-   - `child_in_roi_raw = len(candidates_after_dominance) > 0`
-   - `confidence_raw = max(candidate_conf)` or `0.0`
-5. Apply temporal stabilizer (`3-of-5`) to produce canonical fields:
-   - `child_in_roi`
-   - `confidence`
-6. Apply warning hold/cooldown logic to produce `warning_device_on`.
+Current practical meaning:
 
-## Canonical Fields
-- `timestamp_iso` - UTC ISO 8601
-- `warning_device_on` - boolean (1/0 in MySQL)
-- `child_in_roi` - canonical stabilized boolean (1/0 in MySQL)
-- `confidence` - canonical stabilized confidence [0.0, 1.0]
-- `latency_ms` - int (ms)
-- `scenario` - optional string tag
+- the UI still saves rectangles
+- the inference object can support quadrilateral polygons
+- several older tests and helper scripts still use the old rectangle constructor style directly
 
-Optional debug fields (socket payload only):
+## Warning Trigger Rule
+
+The final warning state should only turn on when the stabilized child-in-ROI state is true.
+
+High-level rule:
+
+- child inside ROI after tracking and stabilization -> `warning_device_on = true`
+- no child inside ROI after stabilization and hold expiry -> `warning_device_on = false`
+
+## Actual Runtime Pipeline
+
+### 1. Raw YOLO inference
+
+`ChildLikeDetector.infer_frame()` currently calls Ultralytics with:
+
+- `conf=0.50`
+- `iou=0.45`
+- `agnostic_nms=True`
+- `imgsz=<LIVE_YOLO_IMGSZ>`
+
+### 2. Raw child trigger candidate filter
+
+Current code then filters detections by:
+
+- runtime child class ID expectation
+- `conf >= LIVE_CHILD_CONF`
+- `bbox_height >= LIVE_MIN_CHILD_BBOX_RATIO * frame_height`
+- ROI feet-zone inclusion via `roi.feet_in_roi(...)`
+
+Important note:
+
+- the current runtime treats class `1` as the child trigger class
+- some dataset/export scripts still document the opposite class order
+
+## 3. Dominance filter
+
+Near-duplicate trigger candidates are reduced with IoU dominance:
+
+- sort candidates by confidence descending
+- suppress lower-confidence candidates whose IoU with a kept box is `>= LIVE_DOMINANCE_IOU`
+
+## 4. Detection tracking
+
+`DetectionTracker` then smooths boxes across frames using:
+
+- IoU matching
+- per-track EMA box smoothing
+- short-lived ghost persistence through `max_misses`
+
+The ROI decision is recalculated from tracked boxes, not just from the raw detector output.
+
+## 5. Temporal stabilization
+
+`TemporalVoteStabilizer(window_size=5, required_true=3)` converts tracked raw state into the canonical state:
+
+- `child_in_roi`
+- `confidence`
+
+## 6. Warning output control
+
+`WarningController` applies:
+
+- immediate enable when stabilized child state becomes true
+- warning hold for `LIVE_WARNING_HOLD_SECONDS`
+- minimum toggle spacing via `LIVE_WARNING_MIN_TOGGLE_SEC`
+
+## 7. Emission and persistence
+
+On each inference cycle, the live session:
+
+- emits a `status_update` payload over Socket.IO
+- draws ROI and detection overlays for the MJPEG stream
+- logs DB rows on state change or every 10 seconds as a heartbeat
+
+## Canonical Live Fields
+
+- `timestamp_iso`
+- `child_in_roi`
 - `child_in_roi_raw`
+- `roi_status`
+- `confidence`
 - `confidence_raw`
+- `latency_ms`
+- `warning_device_on`
 
-## Event Logging
-- Log to MySQL `events` table on state change and heartbeat.
-- State change means `child_in_roi` or `warning_device_on` changed from the last logged state.
-- If DB is down, inference must continue without crashing.
+## Current Implementation Caveats
 
-## Validation Steps
-1. Simulate a valid child trigger inside ROI: canonical `child_in_roi` becomes `1`.
-2. Simulate outside ROI: canonical `child_in_roi` becomes `0`.
-3. Simulate tiny/partial child-like box (< min ratio): raw trigger remains `0`.
-4. Verify warning hold and min-toggle interval behavior under rapid flicker.
-5. Verify events logging and DB-down tolerance.
-
-## Edge Cases
-- Partial bbox overlap with ROI: bottom-center rule is the only inclusion criterion.
-- Multiple children in ROI: canonical `warning_device_on = 1`, confidence = max stabilized confidence.
-- Near-duplicate overlapping candidates: dominance keeps higher-confidence trigger candidate.
+- if ROI loading falls back to the old rectangle constructor path, the current ROI API drift can break tests and helper scripts
+- the dashboard persists a rectangle even though the helper class can represent a polygon
+- any future ROI tooling work should first normalize on one supported ROI constructor pattern

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
@@ -9,16 +9,77 @@ import numpy as np
 from ultralytics import YOLO
 
 
-@dataclass
+import cv2 as _cv2
+
+
 class ROI:
-    # ROI rectangle in pixel coords relative to the frame.
-    x1: int
-    y1: int
-    x2: int
-    y2: int
+    """ROI defined as a 4-point polygon (quadrilateral).
+    
+    Stores the polygon as a numpy array of shape (4, 2) in pixel coords.
+    Pre-computes a binary mask for fast point-in-polygon testing.
+    """
+
+    def __init__(self, polygon: np.ndarray, frame_w: int = 1920, frame_h: int = 1080):
+        """
+        polygon: np.ndarray of shape (4, 2) — four (x, y) corner points.
+        frame_w, frame_h: dimensions used for the binary mask.
+        """
+        self.polygon = np.array(polygon, dtype=np.int32).reshape(4, 2)
+        self.frame_w = frame_w
+        self.frame_h = frame_h
+        # Pre-compute binary mask (uint8, 0 or 255)
+        self._mask = np.zeros((frame_h, frame_w), dtype=np.uint8)
+        _cv2.fillPoly(self._mask, [self.polygon], 255)
+
+    @classmethod
+    def from_rect(cls, x1: int, y1: int, x2: int, y2: int,
+                  frame_w: int = 1920, frame_h: int = 1080) -> "ROI":
+        """Create an ROI from an axis-aligned rectangle (backward compat)."""
+        polygon = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], dtype=np.int32)
+        return cls(polygon, frame_w, frame_h)
+
+    # --- Backward-compatible bounding-box properties ---
+    @property
+    def x1(self) -> int:
+        return int(self.polygon[:, 0].min())
+
+    @property
+    def y1(self) -> int:
+        return int(self.polygon[:, 1].min())
+
+    @property
+    def x2(self) -> int:
+        return int(self.polygon[:, 0].max())
+
+    @property
+    def y2(self) -> int:
+        return int(self.polygon[:, 1].max())
 
     def contains_point(self, x: float, y: float) -> bool:
-        return (self.x1 <= x <= self.x2) and (self.y1 <= y <= self.y2)
+        """Check if a single point is inside the polygon using the pre-computed mask."""
+        ix, iy = int(round(x)), int(round(y))
+        if 0 <= ix < self.frame_w and 0 <= iy < self.frame_h:
+            return self._mask[iy, ix] > 0
+        return False
+
+    def feet_in_roi(self, bx1: float, by1: float, bx2: float, by2: float,
+                    feet_ratio: float = 0.15) -> bool:
+        """Check if the 'feet zone' (bottom portion) of a bounding box is inside the ROI polygon.
+        Samples 5 points along the bottom edge of the feet zone against the mask."""
+        bbox_h = by2 - by1
+        if bbox_h <= 0:
+            return False
+        feet_y = by2 - (bbox_h * feet_ratio * 0.5)  # mid-point of feet zone
+        iy = int(round(feet_y))
+        if iy < 0 or iy >= self.frame_h:
+            return False
+        # Sample 5 points across the width
+        for frac in (0.2, 0.35, 0.5, 0.65, 0.8):
+            fx = bx1 + (bx2 - bx1) * frac
+            ix = int(round(fx))
+            if 0 <= ix < self.frame_w and self._mask[iy, ix] > 0:
+                return True
+        return False
 
 
 def _bbox_iou(a: Tuple[float, float, float, float], b: Tuple[float, float, float, float]) -> float:
@@ -59,6 +120,7 @@ class ChildLikeDetector:
         min_child_bbox_ratio: float = 0.18,
         dominance_iou: float = 0.70,
         imgsz: int = 640,
+        feet_height_ratio: float = 0.15,
     ):
         self.model_path = model_path
         self.conf_child = float(conf_child)
@@ -66,6 +128,7 @@ class ChildLikeDetector:
         self.device = device  # e.g., "cpu" or "0" for GPU
         self.min_child_bbox_ratio = float(min_child_bbox_ratio)
         self.dominance_iou = float(dominance_iou)
+        self.feet_height_ratio = float(feet_height_ratio)
         self.imgsz = int(imgsz)
 
     def infer_frame(self, frame_bgr: np.ndarray, roi: ROI) -> Dict[str, Any]:
@@ -121,8 +184,7 @@ class ChildLikeDetector:
                 if bbox_h < min_bbox_h:
                     continue
 
-                cx = (float(x1) + float(x2)) / 2.0
-                if not roi.contains_point(cx, float(y2)):
+                if not roi.feet_in_roi(float(x1), float(y1), float(x2), float(y2), self.feet_height_ratio):
                     continue
 
                 valid_child_candidates.append(

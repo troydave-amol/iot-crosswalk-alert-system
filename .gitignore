@@ -5,6 +5,7 @@ __pycache__/
 runs/
 models/runs/
 .tmp/
+test_videos/
 
 # Safely ignore raw images inside datasets to prevent 2GB Git crash
 datasets/02_yolo_dataset/images/

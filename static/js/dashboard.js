@@ -47,6 +47,16 @@ window.CameraState = {
     lastStatus: null,
 };
 
+// ---------------------------------------------------------
+// APP MODE STATE (Live Camera vs Video Test)
+// ---------------------------------------------------------
+window.AppMode = {
+    current: 'live',           // 'live' | 'video_test'
+    testVideoFile: null,       // currently playing filename
+    availableVideos: [],       // from /api/test_videos
+    switching: false,          // prevent double-clicks during mode switch
+};
+
 const App = {
     // ---------------------------------------------------------
     // 1. Central State
@@ -124,6 +134,7 @@ const App = {
 
         this.setupROI();
         this.initCamera();
+        this.initVideoTestMode();
         this.updateUI(); // Initial render
 
         // Sidebar Init
@@ -194,6 +205,9 @@ const App = {
             });
             this.socket.on('roi_updated', (msg) => {
                 this.handleRoiUpdated(msg);
+            });
+            this.socket.on('mode_update', (data) => {
+                this.handleModeUpdate(data);
             });
         } catch (e) {
             console.log("Socket.IO not initialized.");
@@ -1334,166 +1348,125 @@ const App = {
     },
 
     setupROI() {
-        // 1. References
         const canvas = document.getElementById('roiCanvas');
         const fileInput = document.getElementById('roiImageInput');
         const overlay = document.getElementById('roiOverlayText');
+        const wrapper = document.getElementById('roiWrapper');
 
         if (!canvas) return;
 
-        // 2. State Init
         this.ctx = canvas.getContext('2d');
         this.roiState = {
-            isDrawing: false,
-            startX: 0,
-            startY: 0,
-            img: null // Image object
+            img: null,
+            // Interaction mode: 'none' | 'drawing' | 'moving' | 'resizing'
+            mode: 'none',
+            // For drawing
+            startX: 0, startY: 0,
+            // For moving
+            moveOffsetX: 0, moveOffsetY: 0,
+            // For resizing — which handle is being dragged
+            resizeHandle: null, // 'nw','n','ne','e','se','s','sw','w'
+            resizeStartRoi: null, // snapshot of ROI at drag-start
+            resizeStartMouse: null, // mouse position at drag-start
         };
 
-        // 3. Load from LocalStorage (image data only)
-        const savedImgData = localStorage.getItem('roiImageData');
+        // Handle size in canvas pixels (scaled visually later)
+        this.HANDLE_SIZE = 8;
+        this.HANDLE_HIT = 14; // Hit area slightly larger than visual
 
+        // Load saved image
+        const savedImgData = localStorage.getItem('roiImageData');
         if (savedImgData) {
             this.loadImageToCanvas(savedImgData);
         } else {
-            // No image? Show overlay
             overlay.style.display = 'block';
             canvas.style.display = 'none';
         }
 
-        // 3b. Sync ROI rect from server (authoritative source)
+        // Sync ROI from server
         fetch('/api/roi').then(r => r.json()).then(j => {
             if (j.ok && j.roi) {
                 const sr = j.roi;
-                // Convert server x1,y1,x2,y2 to canvas x,y,w,h
-                this.state.roi = {
-                    x: sr.x1,
-                    y: sr.y1,
-                    w: sr.x2 - sr.x1,
-                    h: sr.y2 - sr.y1
-                };
-                // Also store the image dims for reference
-                localStorage.setItem('roiImageMeta', JSON.stringify({
-                    width: sr.image_w,
-                    height: sr.image_h
-                }));
+                if (sr.polygon) {
+                    // New polygon format
+                    this.state.roi = sr.polygon.map(p => ({x: p.x, y: p.y}));
+                } else {
+                    // Legacy rect → convert to 4-point polygon
+                    this.state.roi = [
+                        {x: sr.x1, y: sr.y1}, {x: sr.x2, y: sr.y1},
+                        {x: sr.x2, y: sr.y2}, {x: sr.x1, y: sr.y2}
+                    ];
+                }
+                localStorage.setItem('roiImageMeta', JSON.stringify({ width: sr.image_w, height: sr.image_h }));
                 localStorage.setItem('roiRect', JSON.stringify(this.state.roi));
-                this.roiDirty = false; // Server-synced = active
+                this.roiDirty = false;
                 this.drawRoi();
                 this.updateRoiCoords(this.state.roi);
-                console.log('[ROI] Synced from server:', sr);
+                this.updateRoiSteps();
             }
         }).catch(() => {
-            // Server unavailable — fall back to localStorage
             const savedRect = localStorage.getItem('roiRect');
             if (savedRect) {
                 this.state.roi = JSON.parse(savedRect);
                 this.drawRoi();
                 this.updateRoiCoords(this.state.roi);
+                this.updateRoiSteps();
             }
         });
 
-        // 4. Event Listeners
-
-        // A) File Input
+        // --- File Input ---
         fileInput.addEventListener('change', (e) => {
             if (e.target.files && e.target.files[0]) {
                 const reader = new FileReader();
                 reader.onload = (evt) => {
-                    // Reset ROI on new image
                     this.state.roi = null;
                     this.loadImageToCanvas(evt.target.result);
-                    // Mark dirty (new image = unsaved)
                     this.roiDirty = true;
-                    const ub = document.getElementById('roiUnsavedBadge');
-                    if (ub) ub.style.display = 'inline-flex';
-                    // Clear inputs just in case
+                    this.updateRoiSteps();
                     e.target.value = '';
                 };
                 reader.readAsDataURL(e.target.files[0]);
             }
         });
 
-        // B) Canvas Drawing
-        canvas.addEventListener('mousedown', (e) => {
-            if (!this.roiState.img) return;
-            const pos = this.getCanvasCoordinates(e, canvas);
-            this.roiState.isDrawing = true;
-            this.roiState.startX = pos.x;
-            this.roiState.startY = pos.y;
+        // --- Canvas Mouse Events ---
+        canvas.addEventListener('mousedown', (e) => this._roiMouseDown(e, canvas));
+        canvas.addEventListener('mousemove', (e) => this._roiMouseMove(e, canvas));
+        canvas.addEventListener('mouseup', (e) => this._roiMouseUp(e, canvas));
+        canvas.addEventListener('mouseleave', (e) => this._roiMouseUp(e, canvas));
 
-            // Start a new rect
-            this.state.roi = { x: pos.x, y: pos.y, w: 0, h: 0 };
-            this.drawRoi();
-        });
+        // --- Touch Events (mobile support) ---
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this._roiMouseDown(this._touchToMouse(e), canvas);
+        }, { passive: false });
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            this._roiMouseMove(this._touchToMouse(e), canvas);
+        }, { passive: false });
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this._roiMouseUp(this._touchToMouse(e), canvas);
+        }, { passive: false });
 
-        canvas.addEventListener('mousemove', (e) => {
-            if (!this.roiState.isDrawing || !this.roiState.img) return;
-            const pos = this.getCanvasCoordinates(e, canvas);
-
-            // Calculate width/height
-            // Allow drawing in any direction
-            let w = pos.x - this.roiState.startX;
-            let h = pos.y - this.roiState.startY;
-
-            // Normalize (x,y always top-left)
-            // But we'll just store raw w/h for now, or normalize?
-            // Standard approach: x,y is top-left.
-
-            // Let's keep it simple: x/y is start, w/h can be negative during draw
-            // but for final save we normalize.
-            this.state.roi.w = w;
-            this.state.roi.h = h;
-
-            this.drawRoi();
-            this.updateRoiCoords(this.state.roi);
-        });
-
-        canvas.addEventListener('mouseup', (e) => {
-            if (this.roiState.isDrawing) {
-                this.roiState.isDrawing = false;
-                // Normalize rect (w/h should be positive)
-                this.normalizeRoi();
-                this.drawRoi();
-                this.updateRoiCoords(this.state.roi);
-                // Mark dirty
-                this.roiDirty = true;
-                const ub = document.getElementById('roiUnsavedBadge');
-                if (ub) ub.style.display = 'inline-flex';
-            }
-        });
-
-        canvas.addEventListener('mouseout', () => {
-            if (this.roiState.isDrawing) {
-                this.roiState.isDrawing = false;
-                this.normalizeRoi();
-                this.drawRoi();
-                this.updateRoiCoords(this.state.roi);
-            }
-        });
-
-        // C) Buttons
+        // --- Buttons ---
         document.getElementById('btnSaveRoi')?.addEventListener('click', () => this.saveRoi());
         document.getElementById('btnResetRoi')?.addEventListener('click', () => this.resetRoi());
 
-        // D) Capture Frame — fetch a snapshot from the backend API
+        // --- Capture Frame ---
         document.getElementById('btnCaptureFrame')?.addEventListener('click', async () => {
             const btn = document.getElementById('btnCaptureFrame');
             if (btn) btn.disabled = true;
 
-            // Check if camera is connected
             if (!window.CameraState.isConnected) {
-                alert("Camera is not connected. Please wait for the Hikvision stream to connect.");
+                alert("Camera is not connected. Please wait for the stream to connect.");
                 if (btn) btn.disabled = false;
                 return;
             }
 
             try {
                 const res = await fetch('/api/camera/snapshot?t=' + Date.now());
-                if (!res.ok) {
-                    throw new Error(`Snapshot failed: ${res.status}`);
-                }
-
+                if (!res.ok) throw new Error(`Snapshot failed: ${res.status}`);
                 const blob = await res.blob();
                 const dataUrl = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -1501,24 +1474,149 @@ const App = {
                     reader.onerror = reject;
                     reader.readAsDataURL(blob);
                 });
-
-                // Load the captured frame into the ROI canvas
                 this.state.roi = null;
                 this.loadImageToCanvas(dataUrl);
-
-                // Mark dirty (new capture = unsaved)
                 this.roiDirty = true;
-                const ub = document.getElementById('roiUnsavedBadge');
-                if (ub) ub.style.display = 'inline-flex';
-
-                console.log('[ROI] Frame captured from live camera');
+                this.updateRoiSteps();
             } catch (e) {
                 console.error('[ROI] Capture failed:', e);
                 alert("Failed to capture frame. Make sure the camera is online.");
             }
-
             if (btn) btn.disabled = false;
         });
+
+        this.updateRoiSteps();
+    },
+
+    _touchToMouse(e) {
+        const touch = e.touches[0] || e.changedTouches[0];
+        return { clientX: touch.clientX, clientY: touch.clientY };
+    },
+
+    // --- Detect which handle (if any) the mouse is over ---
+    _hitTestHandle(pos, roi) {
+        if (!roi || !Array.isArray(roi) || roi.length < 3) return -1;
+        const hs = this.HANDLE_HIT;
+        for (let i = 0; i < roi.length; i++) {
+            if (Math.abs(pos.x - roi[i].x) <= hs && Math.abs(pos.y - roi[i].y) <= hs) {
+                return i;
+            }
+        }
+        return -1;
+    },
+
+    _isInsideRoi(pos, roi) {
+        if (!roi || !Array.isArray(roi) || roi.length < 3) return false;
+        // Ray-casting point-in-polygon test
+        let inside = false;
+        for (let i = 0, j = roi.length - 1; i < roi.length; j = i++) {
+            const xi = roi[i].x, yi = roi[i].y;
+            const xj = roi[j].x, yj = roi[j].y;
+            if ((yi > pos.y) !== (yj > pos.y) &&
+                pos.x < (xj - xi) * (pos.y - yi) / (yj - yi) + xi) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    },
+
+    _getCursorForHandle(handle) {
+        return handle >= 0 ? 'move' : 'default';
+    },
+
+    _roiMouseDown(e, canvas) {
+        if (!this.roiState.img) return;
+        const pos = this.getCanvasCoordinates(e, canvas);
+
+        // Priority: handle > inside > draw new
+        const handleIdx = this._hitTestHandle(pos, this.state.roi);
+        if (handleIdx >= 0) {
+            this.roiState.mode = 'dragging_corner';
+            this.roiState.dragCornerIdx = handleIdx;
+            canvas.style.cursor = 'move';
+            return;
+        }
+
+        if (this._isInsideRoi(pos, this.state.roi)) {
+            this.roiState.mode = 'moving';
+            this.roiState.moveStart = { x: pos.x, y: pos.y };
+            this.roiState.moveStartRoi = this.state.roi.map(p => ({...p}));
+            canvas.style.cursor = 'grabbing';
+            return;
+        }
+
+        // Draw new 4-point polygon (start as a small rectangle from click)
+        this.roiState.mode = 'drawing';
+        this.roiState.startX = pos.x;
+        this.roiState.startY = pos.y;
+        this.state.roi = [
+            {x: pos.x, y: pos.y}, {x: pos.x, y: pos.y},
+            {x: pos.x, y: pos.y}, {x: pos.x, y: pos.y}
+        ];
+        this.drawRoi();
+    },
+
+    _roiMouseMove(e, canvas) {
+        if (!this.roiState.img) return;
+        const pos = this.getCanvasCoordinates(e, canvas);
+
+        if (this.roiState.mode === 'drawing') {
+            // Expand rectangle from start point
+            const sx = this.roiState.startX;
+            const sy = this.roiState.startY;
+            this.state.roi = [
+                {x: sx, y: sy}, {x: pos.x, y: sy},
+                {x: pos.x, y: pos.y}, {x: sx, y: pos.y}
+            ];
+            this.drawRoi();
+            this.updateRoiCoords(this.state.roi);
+            return;
+        }
+
+        if (this.roiState.mode === 'dragging_corner') {
+            const idx = this.roiState.dragCornerIdx;
+            this.state.roi[idx] = { x: pos.x, y: pos.y };
+            this.drawRoi();
+            this.updateRoiCoords(this.state.roi);
+            return;
+        }
+
+        if (this.roiState.mode === 'moving') {
+            const dx = pos.x - this.roiState.moveStart.x;
+            const dy = pos.y - this.roiState.moveStart.y;
+            this.state.roi = this.roiState.moveStartRoi.map(p => ({
+                x: p.x + dx, y: p.y + dy
+            }));
+            this.drawRoi();
+            this.updateRoiCoords(this.state.roi);
+            return;
+        }
+
+        // Hover cursor
+        const handleIdx = this._hitTestHandle(pos, this.state.roi);
+        if (handleIdx >= 0) {
+            canvas.style.cursor = this._getCursorForHandle(handleIdx);
+        } else if (this._isInsideRoi(pos, this.state.roi)) {
+            canvas.style.cursor = 'grab';
+        } else {
+            canvas.style.cursor = 'crosshair';
+        }
+    },
+
+    _roiMouseUp(e, canvas) {
+        const wasInteracting = this.roiState.mode !== 'none';
+        if (wasInteracting) {
+            this.roiState.mode = 'none';
+            this.normalizeRoi();
+            this.drawRoi();
+            this.updateRoiCoords(this.state.roi);
+            // Mark dirty
+            this.roiDirty = true;
+            const ub = document.getElementById('roiUnsavedBadge');
+            if (ub) ub.style.display = 'inline-flex';
+            this.updateRoiSteps();
+            canvas.style.cursor = 'crosshair';
+        }
     },
 
     loadImageToCanvas(dataUrl) {
@@ -1527,24 +1625,17 @@ const App = {
             this.roiState.img = img;
             const canvas = document.getElementById('roiCanvas');
             const overlay = document.getElementById('roiOverlayText');
-
-            // Set Resolution
-            // Limit max resolution to avoid huge storage/perf issues? 
-            // Prompt says: "keep it small... warn if huge".
-            // We'll use natural size but maybe cap max width for display helpfulness?
-            // Actually, for "saving image" we are saving the DataURL which is already loaded. 
-            // If it's huge, localStorage will crash (5MB limit).
-            // For now, we use what we have.
+            const wrapper = document.getElementById('roiWrapper');
 
             canvas.width = img.naturalWidth;
             canvas.height = img.naturalHeight;
-
-            // UI
             canvas.style.display = 'block';
             overlay.style.display = 'none';
+            if (wrapper) wrapper.classList.add('has-image');
 
             this.drawRoi();
             this.updateRoiCoords(this.state.roi);
+            this.updateRoiSteps();
         };
         img.src = dataUrl;
     },
@@ -1553,7 +1644,6 @@ const App = {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
-
         return {
             x: (e.clientX - rect.left) * scaleX,
             y: (e.clientY - rect.top) * scaleY
@@ -1561,22 +1651,14 @@ const App = {
     },
 
     normalizeRoi() {
-        if (!this.state.roi) return;
-        let { x, y, w, h } = this.state.roi;
-
-        if (w < 0) { x += w; w = Math.abs(w); }
-        if (h < 0) { y += h; h = Math.abs(h); }
-
-        // Constraints
+        if (!this.state.roi || !Array.isArray(this.state.roi)) return;
         const img = this.roiState.img;
         if (img) {
-            x = Math.max(0, x);
-            y = Math.max(0, y);
-            w = Math.min(w, img.naturalWidth - x);
-            h = Math.min(h, img.naturalHeight - y);
+            this.state.roi = this.state.roi.map(p => ({
+                x: Math.max(0, Math.min(p.x, img.naturalWidth)),
+                y: Math.max(0, Math.min(p.y, img.naturalHeight))
+            }));
         }
-
-        this.state.roi = { x, y, w, h };
     },
 
     drawRoi() {
@@ -1584,72 +1666,158 @@ const App = {
         const canvas = document.getElementById('roiCanvas');
         const img = this.roiState.img;
         const roi = this.state.roi;
-
         if (!ctx || !canvas) return;
 
-        // Clear
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (img) ctx.drawImage(img, 0, 0);
 
-        // Draw Image
-        if (img) {
-            ctx.drawImage(img, 0, 0);
-        }
-
-        // Draw Rect — Green = Active (saved), Red = Draft (unsaved)
-        if (roi && (roi.w !== 0 || roi.h !== 0)) {
+        if (roi && Array.isArray(roi) && roi.length >= 3) {
             const isDraft = !!this.roiDirty;
-            const fillColor = isDraft ? 'rgba(239, 68, 68, 0.25)' : 'rgba(34, 197, 94, 0.25)';
+            const fillColor = isDraft ? 'rgba(239, 68, 68, 0.18)' : 'rgba(34, 197, 94, 0.18)';
             const strokeColor = isDraft ? '#ef4444' : '#22c55e';
+            const handleColor = isDraft ? '#dc2626' : '#16a34a';
 
-            // Fill
+            // Dim outside region, cut out polygon
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Cut out polygon area
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(roi[0].x, roi[0].y);
+            for (let i = 1; i < roi.length; i++) ctx.lineTo(roi[i].x, roi[i].y);
+            ctx.closePath();
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fill();
+            ctx.restore();
+            // Redraw image inside polygon
+            if (img) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(roi[0].x, roi[0].y);
+                for (let i = 1; i < roi.length; i++) ctx.lineTo(roi[i].x, roi[i].y);
+                ctx.closePath();
+                ctx.clip();
+                ctx.drawImage(img, 0, 0);
+                ctx.restore();
+            }
+
+            // Polygon fill
+            ctx.beginPath();
+            ctx.moveTo(roi[0].x, roi[0].y);
+            for (let i = 1; i < roi.length; i++) ctx.lineTo(roi[i].x, roi[i].y);
+            ctx.closePath();
             ctx.fillStyle = fillColor;
-            ctx.fillRect(roi.x, roi.y, roi.w, roi.h);
+            ctx.fill();
 
-            // Stroke
+            // Polygon border
+            ctx.beginPath();
+            ctx.moveTo(roi[0].x, roi[0].y);
+            for (let i = 1; i < roi.length; i++) ctx.lineTo(roi[i].x, roi[i].y);
+            ctx.closePath();
             ctx.strokeStyle = strokeColor;
             ctx.lineWidth = 3;
-            ctx.strokeRect(roi.x, roi.y, roi.w, roi.h);
+            ctx.setLineDash([]);
+            ctx.stroke();
 
             // Label
-            const label = isDraft ? 'DRAFT' : 'ACTIVE';
+            const minX = Math.min(...roi.map(p => p.x));
+            const minY = Math.min(...roi.map(p => p.y));
+            const label = isDraft ? 'DRAFT ROI (drag corners)' : 'ACTIVE ROI';
             ctx.font = 'bold 14px Manrope, sans-serif';
+            const labelX = minX + 8;
+            const labelY = minY > 24 ? minY - 8 : minY + 20;
+            const tm = ctx.measureText(label);
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(labelX - 3, labelY - 13, tm.width + 6, 17);
             ctx.fillStyle = strokeColor;
-            const labelX = roi.x + 6;
-            const labelY = roi.y > 22 ? roi.y - 8 : roi.y + 18;
             ctx.fillText(label, labelX, labelY);
+
+            // Draw 4 corner handles (circles)
+            const hs = this.HANDLE_SIZE;
+            roi.forEach((p, i) => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, hs + 2, 0, Math.PI * 2);
+                ctx.fillStyle = '#fff';
+                ctx.fill();
+                ctx.strokeStyle = handleColor;
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+                // Corner number
+                ctx.fillStyle = handleColor;
+                ctx.font = 'bold 10px Manrope, sans-serif';
+                ctx.fillText(String(i + 1), p.x - 3, p.y + 3);
+            });
         }
+
+        // Update status badge
+        this.updateRoiStatusBadge();
+    },
+
+    updateRoiStatusBadge() {
+        const badge = document.getElementById('roiStatusBadge');
+        if (!badge) return;
+        const roi = this.state.roi;
+        if (!roi || !Array.isArray(roi) || roi.length < 3) {
+            badge.className = 'roi-status-badge roi-status-none';
+            badge.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> No ROI Defined';
+        } else if (this.roiDirty) {
+            badge.className = 'roi-status-badge roi-status-draft';
+            badge.innerHTML = '<i class="fa-solid fa-pen"></i> Draft (Unsaved)';
+        } else {
+            badge.className = 'roi-status-badge roi-status-active';
+            badge.innerHTML = '<i class="fa-solid fa-circle-check"></i> Active (Saved)';
+        }
+    },
+
+    updateRoiSteps() {
+        const s1 = document.getElementById('roiStep1');
+        const s2 = document.getElementById('roiStep2');
+        const s3 = document.getElementById('roiStep3');
+        if (!s1 || !s2 || !s3) return;
+
+        const hasImage = !!this.roiState.img;
+        const hasRoi = !!(this.state.roi && Array.isArray(this.state.roi) && this.state.roi.length >= 3);
+        const isSaved = hasRoi && !this.roiDirty;
+
+        // Step 1
+        s1.className = hasImage ? 'roi-step done' : 'roi-step active';
+        // Step 2
+        s2.className = hasImage ? (hasRoi ? 'roi-step done' : 'roi-step active') : 'roi-step';
+        // Step 3
+        s3.className = isSaved ? 'roi-step done' : (hasRoi ? 'roi-step active' : 'roi-step');
     },
 
     updateRoiCoords(roi) {
-        if (!roi) roi = { x: 0, y: 0, w: 0, h: 0 };
-
-        // Update DOM
-        ['x', 'y', 'w', 'h'].forEach(k => {
-            const el = document.getElementById(`roi${k.toUpperCase()}`);
-            if (el) el.textContent = Math.round(roi[k]);
+        // Display polygon corner coordinates
+        const coordsEl = document.getElementById('roiX');
+        if (coordsEl) {
+            if (roi && Array.isArray(roi) && roi.length >= 3) {
+                const txt = roi.map((p, i) => `P${i+1}(${Math.round(p.x)},${Math.round(p.y)})`).join('  ');
+                coordsEl.textContent = txt;
+            } else {
+                coordsEl.textContent = 'No ROI';
+            }
+        }
+        // Hide legacy fields that may not exist
+        ['Y', 'W', 'H'].forEach(k => {
+            const el = document.getElementById('roi' + k);
+            if (el) el.textContent = '';
         });
-
-        // Img Dims
         if (this.roiState.img) {
-            document.getElementById('roiImgW').textContent = this.roiState.img.naturalWidth;
-            document.getElementById('roiImgH').textContent = this.roiState.img.naturalHeight;
+            const elW = document.getElementById('roiImgW');
+            const elH = document.getElementById('roiImgH');
+            if (elW) elW.textContent = this.roiState.img.naturalWidth;
+            if (elH) elH.textContent = this.roiState.img.naturalHeight;
         }
     },
 
-    async saveRoiToServer(roiRect, roiImageMeta) {
-        // Convert canvas {x,y,w,h} to server {x1,y1,x2,y2}
-        const hasXY = roiRect.x !== undefined && roiRect.y !== undefined;
-        const x1 = Math.round(hasXY ? roiRect.x : (roiRect.x1 ?? 0));
-        const y1 = Math.round(hasXY ? roiRect.y : (roiRect.y1 ?? 0));
-        const x2 = Math.round(hasXY ? roiRect.x + roiRect.w : (roiRect.x2 ?? 0));
-        const y2 = Math.round(hasXY ? roiRect.y + roiRect.h : (roiRect.y2 ?? 0));
+    async saveRoiToServer(roiPoly, roiImageMeta) {
         const image_w = Math.round(roiImageMeta?.width ?? roiImageMeta?.image_w ?? 0);
         const image_h = Math.round(roiImageMeta?.height ?? roiImageMeta?.image_h ?? 0);
 
-        const payload = { x1, y1, x2, y2, image_w, image_h };
-        console.log('[ROI] Saving to server:', payload);
-
-        // 10-second timeout so the button never gets stuck at "Saving..." forever
+        // Send polygon format
+        const polygon = roiPoly.map(p => ({x: Math.round(p.x), y: Math.round(p.y)}));
+        const payload = { polygon, image_w, image_h };
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -1661,23 +1829,18 @@ const App = {
                 signal: controller.signal,
             });
             clearTimeout(timeoutId);
-
             const j = await res.json().catch(() => ({}));
-            if (!res.ok || !j.ok) {
-                throw new Error(j.error || `HTTP ${res.status}`);
-            }
+            if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
         } catch (e) {
             clearTimeout(timeoutId);
-            if (e.name === 'AbortError') {
-                throw new Error('Server did not respond in time (10s). Is the camera stream blocking the server?');
-            }
+            if (e.name === 'AbortError') throw new Error('Server did not respond in time (10s).');
             throw e;
         }
     },
 
     async saveRoi() {
         if (!this.state.roi) {
-            alert("No ROI defined.");
+            alert("No ROI defined. Draw a region first.");
             return;
         }
 
@@ -1685,15 +1848,11 @@ const App = {
         const oldHTML = btn ? btn.innerHTML : '';
 
         try {
-            // 1. ROI Rect
             localStorage.setItem('roiRect', JSON.stringify(this.state.roi));
-
-            // 2. Image Data (only if new image loaded, or keep existing)
             if (this.roiState.img && this.roiState.img.src.startsWith('data:')) {
                 localStorage.setItem('roiImageData', this.roiState.img.src);
             }
 
-            // 3. Meta
             let meta = null;
             if (this.roiState.img) {
                 meta = { width: this.roiState.img.naturalWidth, height: this.roiState.img.naturalHeight };
@@ -1702,91 +1861,347 @@ const App = {
                 meta = JSON.parse(localStorage.getItem('roiImageMeta') || "{}");
             }
 
-            // 4. Visual: Saving state
             if (btn) {
                 btn.classList.remove('btn-saved', 'btn-error');
                 btn.classList.add('btn-saving');
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
             }
 
-            // 5. Send to Backend
             await this.saveRoiToServer(this.state.roi, meta);
 
-            // 6. Success feedback
             if (btn) {
                 btn.classList.remove('btn-saving');
                 btn.classList.add('btn-saved');
                 btn.innerHTML = '<i class="fa-solid fa-check"></i> Saved \u2713';
-                setTimeout(() => {
-                    btn.classList.remove('btn-saved');
-                    btn.innerHTML = oldHTML;
-                }, 1200);
+                setTimeout(() => { btn.classList.remove('btn-saved'); btn.innerHTML = oldHTML; }, 1200);
             }
 
-            // 7. Clear dirty flag & redraw ROI in "active" green
             this.roiDirty = false;
             this.drawRoi();
             const ub = document.getElementById('roiUnsavedBadge');
             if (ub) ub.style.display = 'none';
+            this.updateRoiSteps();
 
-            // Note: Live View badge + camera stream restart is now handled
-            // by the 'roi_updated' socket event emitted by the backend.
-            // Fallback for cases where socket is not connected:
             if (!this.socket || !this.socket.connected) {
                 this.updateLiveRoiBadge();
-                if (window.CameraController.isOn) {
-                    const img = document.getElementById('liveCam');
-                    if (img && img.src && img.src.includes('/video_feed')) {
-                        const currentSrc = img.src;
-                        img.src = '';
-                        setTimeout(() => { img.src = currentSrc; }, 100);
-                    }
-                }
             }
 
         } catch (e) {
             console.error("[ROI] Save error:", e);
-
             if (btn) {
                 btn.classList.remove('btn-saving');
                 btn.classList.add('btn-error');
                 btn.innerHTML = '<i class="fa-solid fa-xmark"></i> Save failed';
-                setTimeout(() => {
-                    btn.classList.remove('btn-error');
-                    btn.innerHTML = oldHTML;
-                }, 1800);
+                setTimeout(() => { btn.classList.remove('btn-error'); btn.innerHTML = oldHTML; }, 1800);
             }
-
             if (e.name === 'QuotaExceededError') {
-                alert("Error: Image is too large to save in browser storage. Please use a smaller image/resolution.");
+                alert("Error: Image is too large. Please use a smaller image.");
             }
         }
     },
 
     resetRoi() {
-        if (!confirm("Are you sure you want to clear the ROI and Image?")) return;
-
-        // Clear State
+        if (!confirm("Clear the ROI and image? This cannot be undone.")) return;
         this.state.roi = null;
         this.roiState.img = null;
 
-        // Clear Storage
         localStorage.removeItem('roiRect');
         localStorage.removeItem('roiImageData');
         localStorage.removeItem('roiImageMeta');
 
-        // Update UI
-        this.drawRoi(); // Clears canvas since img is null
-        document.getElementById('roiCanvas').style.display = 'none';
-        document.getElementById('roiOverlayText').style.display = 'block';
+        this.drawRoi();
+        const canvas = document.getElementById('roiCanvas');
+        const overlay = document.getElementById('roiOverlayText');
+        const wrapper = document.getElementById('roiWrapper');
+        if (canvas) canvas.style.display = 'none';
+        if (overlay) overlay.style.display = 'block';
+        if (wrapper) wrapper.classList.remove('has-image');
         this.updateRoiCoords(null);
         document.getElementById('roiImgW').textContent = '0';
         document.getElementById('roiImgH').textContent = '0';
+        this.updateRoiSteps();
     },
+
 
     // ---------------------------------------------------------
     // Legacy / Shared
     // ---------------------------------------------------------
+
+    // ---------------------------------------------------------
+    // VIDEO TEST MODE — Mode switching, upload, video library
+    // ---------------------------------------------------------
+
+    initVideoTestMode() {
+        // Mode toggle buttons
+        document.getElementById('btnModeLive')?.addEventListener('click', () => {
+            this.switchMode('live');
+        });
+        document.getElementById('btnModeTest')?.addEventListener('click', () => {
+            // If already in test mode, just show panel
+            if (window.AppMode.current === 'video_test') return;
+            // Show the video test panel so user can select a video
+            const panel = document.getElementById('videoTestPanel');
+            if (panel) panel.style.display = 'block';
+            this.loadTestVideos();
+            // Update toggle buttons visually (but don't switch mode yet — user picks a video)
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('btnModeTest')?.classList.add('active');
+        });
+
+        // Collapse/expand toggle for video test content
+        document.getElementById('videoTestHeader')?.addEventListener('click', () => {
+            const content = document.getElementById('videoTestContent');
+            const icon = document.getElementById('videoTestCollapseIcon');
+            if (content && icon) {
+                content.classList.toggle('collapsed');
+                icon.classList.toggle('collapsed');
+            }
+        });
+
+        // Upload dropzone
+        const dropzone = document.getElementById('uploadDropzone');
+        const fileInput = document.getElementById('videoFileInput');
+
+        if (dropzone && fileInput) {
+            dropzone.addEventListener('click', () => fileInput.click());
+
+            dropzone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropzone.classList.add('drag-over');
+            });
+
+            dropzone.addEventListener('dragleave', () => {
+                dropzone.classList.remove('drag-over');
+            });
+
+            dropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropzone.classList.remove('drag-over');
+                const files = e.dataTransfer?.files;
+                if (files && files.length > 0) {
+                    this.uploadTestVideo(files[0]);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                    this.uploadTestVideo(e.target.files[0]);
+                    e.target.value = ''; // reset for re-upload of same file
+                }
+            });
+        }
+
+        // Refresh button
+        document.getElementById('btnRefreshVideos')?.addEventListener('click', () => {
+            this.loadTestVideos();
+        });
+
+        // Fetch initial mode from server
+        fetch('/api/mode')
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    this.handleModeUpdate(data);
+                }
+            })
+            .catch(() => {});
+    },
+
+    handleModeUpdate(data) {
+        const mode = data?.mode || 'live';
+        window.AppMode.current = mode;
+        window.AppMode.testVideoFile = data?.video_filename || null;
+        window.AppMode.switching = false;
+        this.updateModeUI();
+    },
+
+    async switchMode(targetMode, filename) {
+        if (window.AppMode.switching) return;
+        if (targetMode === window.AppMode.current && targetMode === 'live') return;
+
+        window.AppMode.switching = true;
+
+        // Show switching state
+        const badge = document.getElementById('modeBadge');
+        if (badge) {
+            badge.className = 'mode-badge';
+            badge.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Switching...';
+        }
+
+        try {
+            let res;
+            if (targetMode === 'live') {
+                res = await fetch('/api/mode/live', { method: 'POST' });
+            } else {
+                res = await fetch('/api/mode/video_test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename }),
+                });
+            }
+
+            const data = await res.json();
+            if (data.ok) {
+                window.AppMode.current = data.mode;
+                window.AppMode.testVideoFile = data.video_filename || null;
+
+                // Reconnect the MJPEG stream to pick up new source
+                setTimeout(() => this.connectLiveStream(), 500);
+            } else {
+                console.error('[Mode] Switch failed:', data.error);
+                alert(`Mode switch failed: ${data.error}`);
+            }
+        } catch (e) {
+            console.error('[Mode] Switch error:', e);
+        }
+
+        window.AppMode.switching = false;
+        this.updateModeUI();
+    },
+
+    async loadTestVideos() {
+        try {
+            const res = await fetch('/api/test_videos');
+            const data = await res.json();
+            if (data.ok) {
+                window.AppMode.availableVideos = data.videos || [];
+                this.renderVideoGrid();
+            }
+        } catch (e) {
+            console.warn('[VideoTest] Failed to load videos:', e);
+        }
+    },
+
+    renderVideoGrid() {
+        const grid = document.getElementById('videoGrid');
+        if (!grid) return;
+
+        const videos = window.AppMode.availableVideos;
+        if (videos.length === 0) {
+            grid.innerHTML = `
+                <div class="video-empty-state">
+                    <i class="fa-solid fa-video-slash"></i>
+                    <p>No test videos yet. Upload an .mp4 file above.</p>
+                </div>
+            `;
+            return;
+        }
+
+        grid.innerHTML = videos.map(v => {
+            const isActive = window.AppMode.current === 'video_test' && window.AppMode.testVideoFile === v.filename;
+            const dur = v.duration_sec ? `${Math.floor(v.duration_sec / 60)}m ${Math.floor(v.duration_sec % 60)}s` : '—';
+
+            return `
+                <div class="video-card ${isActive ? 'active' : ''}" data-filename="${v.filename}">
+                    <div class="video-card-name">
+                        <i class="fa-solid fa-file-video"></i>
+                        ${v.filename}
+                    </div>
+                    <div class="video-card-meta">
+                        <span><i class="fa-solid fa-clock"></i> ${dur}</span>
+                        <span><i class="fa-solid fa-weight-hanging"></i> ${v.size_mb} MB</span>
+                        ${v.resolution ? `<span><i class="fa-solid fa-expand"></i> ${v.resolution}</span>` : ''}
+                        ${v.fps ? `<span><i class="fa-solid fa-gauge-high"></i> ${v.fps} fps</span>` : ''}
+                    </div>
+                    <button class="btn-play" onclick="App.switchMode('video_test', '${v.filename}')">
+                        ${isActive ? '<i class="fa-solid fa-circle-play"></i> Playing' : '<i class="fa-solid fa-play"></i> Play'}
+                    </button>
+                </div>
+            `;
+        }).join('');
+    },
+
+    async uploadTestVideo(file) {
+        if (!file) return;
+
+        if (!file.name.toLowerCase().endsWith('.mp4')) {
+            alert('Only .mp4 files are accepted.');
+            return;
+        }
+
+        const dropContent = document.querySelector('.dropzone-content');
+        const progress = document.getElementById('uploadProgress');
+        const progressText = document.getElementById('uploadProgressText');
+
+        // Show progress
+        if (dropContent) dropContent.style.display = 'none';
+        if (progress) progress.style.display = 'flex';
+        if (progressText) progressText.textContent = `Uploading ${file.name}...`;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const res = await fetch('/api/test_videos/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (data.ok) {
+                console.log(`[Upload] Success: ${data.filename} (${data.size_mb} MB)`);
+                if (progressText) progressText.textContent = `✓ Uploaded ${data.filename}`;
+                setTimeout(() => {
+                    if (dropContent) dropContent.style.display = 'block';
+                    if (progress) progress.style.display = 'none';
+                }, 2000);
+                // Refresh library
+                this.loadTestVideos();
+            } else {
+                throw new Error(data.error || 'Upload failed');
+            }
+        } catch (e) {
+            console.error('[Upload] Error:', e);
+            if (progressText) progressText.textContent = `✗ Failed: ${e.message}`;
+            setTimeout(() => {
+                if (dropContent) dropContent.style.display = 'block';
+                if (progress) progress.style.display = 'none';
+            }, 3000);
+        }
+    },
+
+    updateModeUI() {
+        const mode = window.AppMode.current;
+        const isTest = mode === 'video_test';
+
+        // Toggle buttons
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+
+        // Mode badge
+        const badge = document.getElementById('modeBadge');
+        if (badge) {
+            if (isTest) {
+                badge.className = 'mode-badge mode-test';
+                const name = window.AppMode.testVideoFile || 'No video';
+                badge.innerHTML = `<i class="fa-solid fa-film"></i> Test: ${name}`;
+            } else {
+                badge.className = 'mode-badge mode-live';
+                badge.innerHTML = '<i class="fa-solid fa-circle"></i> Live';
+            }
+        }
+
+        // Video test panel visibility
+        const panel = document.getElementById('videoTestPanel');
+        if (panel) {
+            panel.style.display = isTest ? 'block' : 'none';
+            if (isTest) this.loadTestVideos();
+        }
+
+        // Camera card title
+        const camTitle = document.getElementById('cameraCardTitle');
+        if (camTitle) {
+            if (isTest && window.AppMode.testVideoFile) {
+                camTitle.textContent = `Video Test — ${window.AppMode.testVideoFile}`;
+            } else {
+                camTitle.textContent = 'Live Camera View';
+            }
+        }
+
+        // Update video grid active states
+        this.renderVideoGrid();
+    },
 
     // ---------------------------------------------------------
     // Hikvision Camera — Auto-connect (no manual controls)
@@ -2088,7 +2503,11 @@ const App = {
                     const b = document.getElementById('liveRoiBadge');
                     if (b) {
                         b.style.display = 'block';
+                        if (j.roi.polygon) {
+                        b.innerHTML = '<i class="fa-solid fa-crosshairs"></i> ROI Active: ' + j.roi.polygon.length + '-point polygon';
+                    } else {
                         b.innerHTML = `<i class="fa-solid fa-crosshairs"></i> ROI Active: (${Math.round(j.roi.x1)}, ${Math.round(j.roi.y1)}) to (${Math.round(j.roi.x2)}, ${Math.round(j.roi.y2)})`;
+                    }
                     }
                 }
             }

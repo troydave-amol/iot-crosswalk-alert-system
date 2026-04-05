@@ -64,7 +64,17 @@ TRACKER_IOU_THRESHOLD = _env_float("TRACKER_IOU_THRESHOLD", 0.25)
 TRACKER_MAX_MISSES = _env_int("TRACKER_MAX_MISSES", 5)
 TRACKER_SMOOTH_ALPHA = _env_float("TRACKER_SMOOTH_ALPHA", 0.6)
 
+# Feet-zone detection — only the bottom portion of the child bbox is checked against ROI
+FEET_HEIGHT_RATIO = _env_float("FEET_HEIGHT_RATIO", 0.15)
+
+
 MODEL_PATH = _resolve_model_path()
+
+# Video Testing Mode
+TEST_VIDEO_FPS = _env_float("TEST_VIDEO_FPS", 0)
+TEST_VIDEO_MAX_UPLOAD_MB = _env_int("TEST_VIDEO_MAX_UPLOAD_MB", 500)
+TEST_VIDEOS_DIR = PROJECT_ROOT / "test_videos"
+TEST_VIDEOS_DIR.mkdir(exist_ok=True)
 
 # Hikvision CCTV — single fixed camera source (auto-connect on boot)
 HIKVISION_RTSP_URL = (os.getenv("HIKVISION_RTSP_URL") or "").strip()
@@ -96,26 +106,28 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 def load_roi_for_frame(frame_w: int, frame_h: int) -> ROI:
     """
     Loads ROI saved from Settings ROI tool and scales to current frame size.
-    Expected JSON keys: x1,y1,x2,y2,image_w,image_h (pixel coords in saved image space)
+    Supports both polygon format (4 corner points) and legacy rect format.
     """
     if not ROI_PATH.exists():
-        # Safe default: whole frame (but better to require ROI file)
-        return ROI(0, 0, frame_w - 1, frame_h - 1)
+        return ROI.from_rect(0, 0, frame_w - 1, frame_h - 1, frame_w, frame_h)
 
     data = json.loads(ROI_PATH.read_text(encoding="utf-8"))
-
-    x1, y1, x2, y2 = int(data.get("x1", 0)), int(data.get("y1", 0)), int(data.get("x2", 0)), int(data.get("y2", 0))
-    base_w, base_h = int(data.get("image_w", frame_w)), int(data.get("image_h", frame_h))
-
+    base_w = int(data.get("image_w", frame_w))
+    base_h = int(data.get("image_h", frame_h))
     sx = frame_w / base_w
     sy = frame_h / base_h
 
-    return ROI(
-        x1=int(x1 * sx),
-        y1=int(y1 * sy),
-        x2=int(x2 * sx),
-        y2=int(y2 * sy),
-    )
+    if "polygon" in data:
+        pts = data["polygon"]
+        import numpy as _np
+        polygon = _np.array([[int(p["x"] * sx), int(p["y"] * sy)] for p in pts], dtype=_np.int32)
+        return ROI(polygon, frame_w, frame_h)
+    else:
+        x1 = int(int(data.get("x1", 0)) * sx)
+        y1 = int(int(data.get("y1", 0)) * sy)
+        x2 = int(int(data.get("x2", 0)) * sx)
+        y2 = int(int(data.get("y2", 0)) * sy)
+        return ROI.from_rect(x1, y1, x2, y2, frame_w, frame_h)
 
 # --------------------------------------------------------------------------------
 # Routes & Events
@@ -133,31 +145,45 @@ def api_get_roi():
     return jsonify({"ok": True, "roi": data})
 
 def _validate_roi_payload(d: dict):
-    required = ["x1","y1","x2","y2","image_w","image_h"]
-    for k in required:
-        if k not in d:
-            return False, f"missing:{k}", d
-    try:
-        iw, ih = int(d["image_w"]), int(d["image_h"])
-    except Exception:
-        return False, "type_error", d
-
-    if iw <= 0 or ih <= 0:
-        return False, "bad_image_size", d
-
-
-    # Clamp coordinates to image bounds (instead of rejecting edge cases)
-    x1 = max(0, min(int(round(d["x1"])), iw - 1))
-    y1 = max(0, min(int(round(d["y1"])), ih - 1))
-    x2 = max(x1 + 1, min(int(round(d["x2"])), iw))
-    y2 = max(y1 + 1, min(int(round(d["y2"])), ih))
-
-    # Build clean payload with integer values
-    clean = {
-        "x1": x1, "y1": y1, "x2": x2, "y2": y2,
-        "image_w": iw, "image_h": ih
-    }
-    return True, "", clean
+    """Validate polygon or legacy rect ROI payload."""
+    if "polygon" in d:
+        pts = d.get("polygon", [])
+        if not isinstance(pts, list) or len(pts) < 3 or len(pts) > 8:
+            return False, "polygon_invalid", d
+        try:
+            iw = int(d["image_w"])
+            ih = int(d["image_h"])
+        except (KeyError, TypeError, ValueError):
+            return False, "missing_image_size", d
+        if iw <= 0 or ih <= 0:
+            return False, "bad_image_size", d
+        clean_pts = []
+        for p in pts:
+            try:
+                px = max(0, min(int(round(p["x"])), iw))
+                py = max(0, min(int(round(p["y"])), ih))
+                clean_pts.append({"x": px, "y": py})
+            except (KeyError, TypeError, ValueError):
+                return False, "bad_point", d
+        clean = {"polygon": clean_pts, "image_w": iw, "image_h": ih}
+        return True, "", clean
+    else:
+        required = ["x1", "y1", "x2", "y2", "image_w", "image_h"]
+        for k in required:
+            if k not in d:
+                return False, f"missing:{k}", d
+        try:
+            iw, ih = int(d["image_w"]), int(d["image_h"])
+        except Exception:
+            return False, "type_error", d
+        if iw <= 0 or ih <= 0:
+            return False, "bad_image_size", d
+        x1 = max(0, min(int(round(d["x1"])), iw - 1))
+        y1 = max(0, min(int(round(d["y1"])), ih - 1))
+        x2 = max(x1 + 1, min(int(round(d["x2"])), iw))
+        y2 = max(y1 + 1, min(int(round(d["y2"])), ih))
+        clean = {"x1": x1, "y1": y1, "x2": x2, "y2": y2, "image_w": iw, "image_h": ih}
+        return True, "", clean
 
 @app.post("/api/roi")
 def api_set_roi():
@@ -180,12 +206,14 @@ def handle_connect():
     """
     print("Client connected")
     # Send current camera status immediately
-    if hikvision_session is not None:
-        cam_status = "OK" if hikvision_session.camera_online else "OFFLINE"
+    if active_session is not None:
+        cam_status = "OK" if active_session.camera_online else "OFFLINE"
         socketio.emit("status_update", _build_idle_payload(camera_status=cam_status))
-        socketio.emit("camera_status", hikvision_session.get_status())
+        socketio.emit("camera_status", active_session.get_status())
+        socketio.emit("mode_update", {"mode": current_mode})
     else:
         socketio.emit("status_update", _build_idle_payload(camera_status="OFFLINE"))
+        socketio.emit("mode_update", {"mode": current_mode})
 
 # --------------------------------------------------------------------------------
 # Live Pipeline
@@ -219,13 +247,16 @@ def _draw_overlay(frame, roi: ROI, detections, child_in_roi: bool, status_note: 
         else:
             fill_color = (0, 180, 0)   # Green tint = CLEAR
             border_color = (0, 255, 0)
-        cv2.rectangle(roi_overlay, (roi.x1, roi.y1), (roi.x2, roi.y2), fill_color, -1)
+        # Draw filled polygon overlay
+        pts = roi.polygon.reshape((-1, 1, 2))
+        cv2.fillPoly(roi_overlay, [roi.polygon], fill_color)
         cv2.addWeighted(roi_overlay, 0.08, frame, 0.92, 0, frame)
-        cv2.rectangle(frame, (roi.x1, roi.y1), (roi.x2, roi.y2), border_color, 4)
+        cv2.polylines(frame, [pts], isClosed=True, color=border_color, thickness=2)
 
         roi_label = "ROI: CHILD DETECTED" if child_in_roi else "ROI: CLEAR"
         (tw, th), _ = cv2.getTextSize(roi_label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
-        lx, ly = roi.x1, max(th + 10, roi.y1 - 10)
+        lx = roi.x1
+        ly = max(th + 10, roi.y1 - 10)
         cv2.rectangle(frame, (lx, ly - th - 6), (lx + tw + 8, ly + 4), (0, 0, 0), -1)
         cv2.putText(frame, roi_label, (lx + 4, ly), cv2.FONT_HERSHEY_SIMPLEX, 0.8, border_color, 2, cv2.LINE_AA)
 
@@ -251,12 +282,12 @@ def _draw_overlay(frame, roi: ROI, detections, child_in_roi: bool, status_note: 
         cls = d["cls"]
         if cls == 1:
             color = (0, 255, 255)  # Cyan
-            label = f"child_like {conf:.2f}"
-            thickness = 3
+            label = f"child {conf:.2f}"
+            thickness = 1
         else:
             color = (255, 180, 50)  # Orange
-            label = f"adult_like {conf:.2f}"
-            thickness = 2
+            label = f"adult {conf:.2f}"
+            thickness = 1
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
         (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
         cv2.rectangle(frame, (x1, max(0, y1 - th - 8)), (x1 + tw + 6, y1), (0, 0, 0), -1)
@@ -312,6 +343,7 @@ class LiveSession:
 
         self.capture_frames = 0
         self.infer_frames = 0
+        self.viewer_count = 0
         self.last_perf_ts = time.time()
         self.last_perf_capture = 0
         self.last_perf_infer = 0
@@ -330,6 +362,7 @@ class LiveSession:
                 min_child_bbox_ratio=MIN_CHILD_BBOX_RATIO,
                 dominance_iou=DOMINANCE_IOU,
                 imgsz=YOLO_IMGSZ,
+                feet_height_ratio=FEET_HEIGHT_RATIO,
             )
             self.detector_error = None
         except Exception as exc:
@@ -600,9 +633,7 @@ class LiveSession:
                 if d["cls"] == 1 and d["conf"] >= CHILD_CONF:
                     x1, y1, x2, y2 = d["bbox"]
                     if (y2 - y1) >= min_bbox_h:
-                        cx = (x1 + x2) / 2.0
-                        # Check strictly bottom-center like cv_inference does
-                        if roi.contains_point(cx, float(y2)):
+                        if roi.feet_in_roi(float(x1), float(y1), float(x2), float(y2), FEET_HEIGHT_RATIO):
                             tracked_child_in_roi_raw = True
                             tracked_confidence_raw = max(tracked_confidence_raw, d["conf"])
 
@@ -655,8 +686,173 @@ class LiveSession:
             self._log_perf(last_latency_ms=out["latency_ms"])
 
 
-# Singleton Hikvision session — initialized at startup
-hikvision_session: Optional[LiveSession] = None
+# ================================================================================
+# VideoTestSession — MP4 file as drop-in replacement for RTSP camera
+# ================================================================================
+
+class VideoTestSession(LiveSession):
+    """
+    Plays a pre-recorded .mp4 file through the same AI pipeline as the live camera.
+    Only overrides _capture_loop(); inference, tracking, ROI, warnings, overlay,
+    database logging, and MJPEG streaming are all inherited from LiveSession.
+    """
+
+    def __init__(self, video_path: str, reconnect_sec: float = 1.0):
+        # Initialize base class with a dummy RTSP URL (never used)
+        super().__init__(rtsp_url="", reconnect_sec=reconnect_sec)
+        self.video_path = str(video_path)
+        self.source_key = "video_test"
+        self._video_filename = Path(video_path).name
+
+        # Video metadata (populated on first open)
+        self._video_fps: float = 0.0
+        self._video_total_frames: int = 0
+        self._video_duration_sec: float = 0.0
+        self._video_current_frame: int = 0
+
+    def get_status(self) -> dict:
+        """Override to provide video-specific metadata instead of RTSP info."""
+        return {
+            "camera_online": self.camera_online,
+            "stream_connected": self.stream_connected,
+            "ai_running": self.detector is not None,
+            "ai_error": self.detector_error,
+            "reconnect_attempts": 0,
+            "last_frame_time": self.last_frame_time,
+            "rtsp_url_masked": f"[Video] {self._video_filename}",
+            "mode": "video_test",
+            "video_filename": self._video_filename,
+            "video_fps": self._video_fps,
+            "video_total_frames": self._video_total_frames,
+            "video_duration_sec": round(self._video_duration_sec, 1),
+            "video_current_frame": self._video_current_frame,
+        }
+
+    def _open_capture(self) -> cv2.VideoCapture:
+        """Open the MP4 file instead of an RTSP stream."""
+        cap = cv2.VideoCapture(self.video_path, cv2.CAP_FFMPEG)
+        if cap.isOpened():
+            self._video_fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+            self._video_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            if self._video_fps > 0 and self._video_total_frames > 0:
+                self._video_duration_sec = self._video_total_frames / self._video_fps
+        return cap
+
+    def _capture_loop(self):
+        """
+        Read frames from an MP4 file at its native FPS (or a forced rate).
+        Automatically loops the video when it reaches the end for continuous demos.
+        """
+        target_fps = TEST_VIDEO_FPS if TEST_VIDEO_FPS > 0 else 0  # 0 = use native
+
+        while not self.stop_event.is_set():
+            # --- Open / Reopen video ---
+            if self.cap is None or not self.cap.isOpened():
+                self.camera_online = False
+                self.stream_connected = False
+                _emit_camera_status(self)
+                print(f"[VIDEO_TEST] Opening video: {self._video_filename}")
+                try:
+                    if self.cap is not None:
+                        self.cap.release()
+                    self.cap = self._open_capture()
+                    if self.cap.isOpened():
+                        self.camera_online = True
+                        self.stream_connected = True
+                        _emit_camera_status(self)
+                        actual_fps = target_fps if target_fps > 0 else self._video_fps
+                        print(
+                            f"[VIDEO_TEST] Video opened: {self._video_filename} "
+                            f"| {self._video_total_frames} frames "
+                            f"| {self._video_duration_sec:.1f}s "
+                            f"| native_fps={self._video_fps:.1f} "
+                            f"| playback_fps={actual_fps:.1f}"
+                        )
+                    else:
+                        print(f"[VIDEO_TEST] Failed to open: {self._video_filename}")
+                        self.cap = None
+                        self.stop_event.wait(2.0)
+                        continue
+                except Exception as exc:
+                    print(f"[VIDEO_TEST] Open error: {exc}")
+                    self.cap = None
+                    self.stop_event.wait(2.0)
+                    continue
+
+            # --- Read frame ---
+            ok, frame = self.cap.read()
+            if not ok or frame is None:
+                # End of video → loop from start
+                print(f"[VIDEO_TEST] Video ended — looping: {self._video_filename}")
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                self._video_current_frame = 0
+                # Reset tracker state on loop to avoid ghost boxes from previous cycle
+                self.tracker = DetectionTracker(
+                    iou_threshold=TRACKER_IOU_THRESHOLD,
+                    max_misses=TRACKER_MAX_MISSES,
+                    smooth_alpha=TRACKER_SMOOTH_ALPHA,
+                )
+                continue
+
+            self._video_current_frame = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+
+            with self.state_lock:
+                self.latest_frame_raw = frame
+            self.last_frame_time = time.time()
+            self.capture_frames += 1
+
+            # --- Pace to target FPS ---
+            playback_fps = target_fps if target_fps > 0 else self._video_fps
+            if playback_fps > 0:
+                self.stop_event.wait(1.0 / playback_fps)
+
+    def _log_db(self, out: dict, warning_device_on: bool):
+        """Override to tag test events with 'Video Test' scenario."""
+        now = time.time()
+        should_log = False
+
+        if (out["child_in_roi"] != self.last_logged["child_in_roi"] or
+            warning_device_on != self.last_logged["warning_device_on"]):
+            should_log = True
+
+        if (now - self.last_logged["last_log_time"]) >= self.LOG_HEARTBEAT_SEC:
+            should_log = True
+
+        if not should_log:
+            return
+
+        db_payload = {
+            "timestamp_iso": out["timestamp_iso"],
+            "source": "yolo",
+            "child_in_roi": out["child_in_roi"],
+            "roi_status": out["roi_status"],
+            "confidence": out["confidence"],
+            "latency_ms": out["latency_ms"],
+            "warning_logic_on": out["child_in_roi"],
+            "switch_enabled": True,
+            "warning_device_on": warning_device_on,
+            "battery_percent": 0.0,
+            "solar_status": "N/A",
+            "scenario": f"Video Test: {self._video_filename}",
+            "camera_status": "OK",
+            "edge_status": "OK",
+            "led_driver_status": "Ready",
+        }
+        insert_event(db_payload)
+
+        self.last_logged["child_in_roi"] = out["child_in_roi"]
+        self.last_logged["warning_device_on"] = warning_device_on
+        self.last_logged["last_log_time"] = now
+
+
+# ================================================================================
+# Session Management — Active session abstraction for mode switching
+# ================================================================================
+
+# The active session can be either a LiveSession (RTSP) or VideoTestSession (MP4)
+active_session: Optional[LiveSession] = None
+current_mode: str = "live"  # "live" or "video_test"
+_session_lock = threading.Lock()
 
 
 def _emit_camera_status(session: LiveSession):
@@ -673,24 +869,24 @@ def _emit_camera_status(session: LiveSession):
 
 @app.route("/video_feed")
 def video_feed_route():
-    """MJPEG stream from the single Hikvision session (always-on)."""
+    """MJPEG stream from the active session (live camera or video test)."""
     overlay = request.args.get("overlay", "1") == "1"
-    if hikvision_session is None:
-        return Response("Camera not configured", status=503)
+    if active_session is None:
+        return Response("No active session", status=503)
     return Response(
-        gen_frames(hikvision_session, overlay=overlay),
+        gen_frames(active_session, overlay=overlay),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
 
 
 @app.get("/api/camera/snapshot")
 def api_camera_snapshot():
-    """Return a single JPEG frame from the live camera (full resolution, no overlay).
+    """Return a single JPEG frame from the active session (full resolution, no overlay).
     Used by the ROI 'Capture Frame' button."""
-    if hikvision_session is None:
-        return Response("Camera not configured", status=503)
+    if active_session is None:
+        return Response("No active session", status=503)
 
-    frame = hikvision_session.get_stream_frame(overlay=False)
+    frame = active_session.get_stream_frame(overlay=False)
     if frame is None:
         return Response("No frame available", status=503)
 
@@ -775,42 +971,42 @@ def gen_frames(session: LiveSession, overlay: bool = True):
 
 @app.get("/api/camera/status")
 def api_camera_status():
-    """Returns the current Hikvision camera / AI pipeline status."""
-    if hikvision_session is None:
+    """Returns the current active session / AI pipeline status."""
+    if active_session is None:
         return jsonify({
             "ok": True,
             "camera_online": False,
             "stream_connected": False,
             "ai_running": False,
-            "ai_error": "No HIKVISION_RTSP_URL configured",
+            "ai_error": "No active session",
             "reconnect_attempts": 0,
             "last_frame_time": 0,
             "rtsp_url_masked": "",
+            "mode": current_mode,
         })
-    return jsonify({"ok": True, **hikvision_session.get_status()})
+    return jsonify({"ok": True, "mode": current_mode, **active_session.get_status()})
 
 
 @app.post("/api/camera/reconnect")
 def api_camera_reconnect():
-    """Force the Hikvision session to reconnect (only if actually broken)."""
-    if hikvision_session is None:
+    """Force the active session to reconnect (only if actually broken)."""
+    if active_session is None:
         return jsonify({"ok": False, "error": "No session"}), 503
 
     # If camera is already online and streaming, don't destroy the connection.
-    # Just return OK so the frontend can safely re-attach.
-    if hikvision_session.camera_online and hikvision_session.stream_connected:
-        print("[LIVE] Reconnect requested but camera is already online — skipping")
+    if active_session.camera_online and active_session.stream_connected:
+        print("[LIVE] Reconnect requested but session is already online — skipping")
         return jsonify({"ok": True, "action": "already_online"})
 
-    # Camera is genuinely offline/broken — force reconnect
-    if hikvision_session.cap is not None:
+    # Session is genuinely offline/broken — force reconnect
+    if active_session.cap is not None:
         try:
-            hikvision_session.cap.release()
+            active_session.cap.release()
         except Exception:
             pass
-        hikvision_session.cap = None
-    hikvision_session.camera_online = False
-    hikvision_session.stream_connected = False
+        active_session.cap = None
+    active_session.camera_online = False
+    active_session.stream_connected = False
     print("[LIVE] Manual reconnect requested — forcing capture reset")
     return jsonify({"ok": True, "action": "reconnecting"})
 
@@ -916,20 +1112,169 @@ def api_analytics_route():
         return jsonify({"ok": False, "error": "db_unavailable"}), 503
 
 # --------------------------------------------------------------------------------
+# Mode-Switching & Test Video API Routes
+# --------------------------------------------------------------------------------
+
+def _stop_active_session():
+    """Cleanly stop the currently running session."""
+    global active_session
+    if active_session is not None:
+        try:
+            active_session.stop()
+        except Exception as e:
+            print(f"[MODE] Error stopping session: {e}")
+        active_session = None
+
+
+def _start_live_session():
+    """Start a new LiveSession with the Hikvision RTSP URL."""
+    global active_session, current_mode
+    _stop_active_session()
+    if not HIKVISION_RTSP_URL:
+        print("[MODE] Cannot start live — HIKVISION_RTSP_URL not configured")
+        return False
+    active_session = LiveSession(
+        rtsp_url=HIKVISION_RTSP_URL,
+        reconnect_sec=HIKVISION_RECONNECT_SEC,
+    )
+    active_session.start()
+    current_mode = "live"
+    print("[MODE] Switched to LIVE mode")
+    return True
+
+
+def _start_video_test_session(filename: str):
+    """Start a new VideoTestSession with the given .mp4 file."""
+    global active_session, current_mode
+    video_path = TEST_VIDEOS_DIR / filename
+    if not video_path.exists() or not video_path.is_file():
+        print(f"[MODE] Video not found: {video_path}")
+        return False
+    _stop_active_session()
+    active_session = VideoTestSession(video_path=str(video_path))
+    active_session.start()
+    current_mode = "video_test"
+    print(f"[MODE] Switched to VIDEO TEST mode: {filename}")
+    return True
+
+
+@app.get("/api/mode")
+def api_get_mode():
+    """Return the current operating mode."""
+    info = {"ok": True, "mode": current_mode}
+    if current_mode == "video_test" and active_session and hasattr(active_session, '_video_filename'):
+        info["video_filename"] = active_session._video_filename
+    return jsonify(info)
+
+
+@app.post("/api/mode/live")
+def api_switch_to_live():
+    """Switch to live camera mode."""
+    with _session_lock:
+        ok = _start_live_session()
+    if ok:
+        socketio.emit("mode_update", {"mode": "live"})
+        return jsonify({"ok": True, "mode": "live"})
+    return jsonify({"ok": False, "error": "RTSP URL not configured"}), 400
+
+
+@app.post("/api/mode/video_test")
+def api_switch_to_video_test():
+    """Switch to video test mode with a specific .mp4 file."""
+    data = request.get_json(silent=True) or {}
+    filename = data.get("filename", "").strip()
+    if not filename:
+        return jsonify({"ok": False, "error": "No filename provided"}), 400
+
+    # Security: prevent path traversal
+    if ".." in filename or "/" in filename or "\\" in filename:
+        return jsonify({"ok": False, "error": "Invalid filename"}), 400
+
+    with _session_lock:
+        ok = _start_video_test_session(filename)
+    if ok:
+        socketio.emit("mode_update", {"mode": "video_test", "video_filename": filename})
+        return jsonify({"ok": True, "mode": "video_test", "video_filename": filename})
+    return jsonify({"ok": False, "error": "Video file not found"}), 404
+
+
+@app.get("/api/test_videos")
+def api_list_test_videos():
+    """List all .mp4 files available in the test_videos/ directory."""
+    videos = []
+    for f in sorted(TEST_VIDEOS_DIR.glob("*.mp4")):
+        try:
+            cap = cv2.VideoCapture(str(f), cv2.CAP_FFMPEG)
+            fps = cap.get(cv2.CAP_PROP_FPS) or 0
+            total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            duration = (total / fps) if fps > 0 else 0
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+            cap.release()
+            videos.append({
+                "filename": f.name,
+                "size_mb": round(f.stat().st_size / (1024 * 1024), 1),
+                "duration_sec": round(duration, 1),
+                "fps": round(fps, 1),
+                "resolution": f"{w}x{h}" if w > 0 else "unknown",
+                "total_frames": total,
+            })
+        except Exception:
+            videos.append({"filename": f.name, "size_mb": round(f.stat().st_size / (1024 * 1024), 1)})
+    return jsonify({"ok": True, "videos": videos})
+
+
+@app.post("/api/test_videos/upload")
+def api_upload_test_video():
+    """Upload a new .mp4 file to the test_videos/ directory."""
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "No file in request"}), 400
+
+    file = request.files["file"]
+    if not file.filename:
+        return jsonify({"ok": False, "error": "No filename"}), 400
+
+    # Validate extension
+    if not file.filename.lower().endswith(".mp4"):
+        return jsonify({"ok": False, "error": "Only .mp4 files are accepted"}), 400
+
+    # Security: sanitize filename
+    safe_name = Path(file.filename).name
+    if ".." in safe_name or "/" in safe_name or "\\" in safe_name:
+        return jsonify({"ok": False, "error": "Invalid filename"}), 400
+
+    dest = TEST_VIDEOS_DIR / safe_name
+    try:
+        file.save(str(dest))
+        size_mb = round(dest.stat().st_size / (1024 * 1024), 1)
+        print(f"[UPLOAD] Saved test video: {safe_name} ({size_mb} MB)")
+        return jsonify({"ok": True, "filename": safe_name, "size_mb": size_mb})
+    except Exception as e:
+        # Clean up partial file
+        if dest.exists():
+            dest.unlink()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# --------------------------------------------------------------------------------
 # Entry Point
 # --------------------------------------------------------------------------------
 if __name__ == "__main__":
     # Initialize DB (safe to run multiple times)
     init_db()
 
+    # Set max upload size for video files
+    app.config["MAX_CONTENT_LENGTH"] = TEST_VIDEO_MAX_UPLOAD_MB * 1024 * 1024
+
     # Auto-start Hikvision CCTV session on boot
     if HIKVISION_RTSP_URL:
-        hikvision_session = LiveSession(
+        active_session = LiveSession(
             rtsp_url=HIKVISION_RTSP_URL,
             reconnect_sec=HIKVISION_RECONNECT_SEC,
         )
-        hikvision_session.start()
-        print(f"[BOOT] Hikvision session auto-started")
+        active_session.start()
+        current_mode = "live"
+        print(f"[BOOT] Hikvision session auto-started (LIVE mode)")
     else:
         print("[BOOT] WARNING: HIKVISION_RTSP_URL not set — camera disabled")
 

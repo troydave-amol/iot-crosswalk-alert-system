@@ -1,94 +1,95 @@
 ---
 name: smart-crosswalk
 description: |
-  Full-stack AI agent skill for the IoT-Based Smart School-Zone Crosswalk Alert System capstone project.
-  Use this skill for manual dataset preparation, YOLOv8 training from site-collected data,
-  Flask+MySQL backend work, Socket.IO dashboard updates, analytics validation, ROI trigger logic,
-  and report generation. Enforces project scope: visual warning only, no SMS/audio/age estimation/face recognition.
+  Full-stack AI agent skill for the IoT-Based Smart School-Zone Crosswalk Alert System capstone.
+  Use this skill for dashboard/backend work, ROI logic, event analytics, dataset and training review,
+  and repo-state analysis. Treat current inconsistencies such as class-index drift, ROI API drift,
+  and legacy helper scripts as first-class concerns rather than hidden footnotes.
 ---
 
-# Smart Crosswalk Capstone
+# Smart Crosswalk Capstone Skill
 
 ## Project Identity
 
-**Title**: IoT-Based Smart School-Zone Crosswalk Alert System Using CNN for Real-Time Child Pedestrian Detection
-**Client**: Traffic Management Center (TMC), Casisang Central School crosswalk, Barangay Casisang, Malaybalay City
-**Stack**: YOLOv8 + Flask + MySQL + Socket.IO + HTML/JS dashboard
+**Title**: IoT-Based Smart School-Zone Crosswalk Alert System Using CNN for Real-Time Child Pedestrian Detection  
+**Stack**: YOLO + Flask + Socket.IO + MySQL + HTML/CSS/JS dashboard
 
-## Non-Negotiable Scope Rules
+## Current Repo Ground Truth
 
-- Detection wording must remain: visually classified as children based on body size, proportions, and school-age appearance
-- Warning output must remain visual only
-- No SMS, no audio, no face recognition, no biological age claims
-- Warning turns ON only when a child-classified pedestrian is inside the Crosswalk ROI
+- live camera mode and video-test mode both exist in the dashboard
+- a trained checkpoint already exists at `models/yolov8n_crosswalk_v2_1111_frames.pt`
+- current archived datasets and training runs live under `datasets/`
+- the dashboard persists ROI as a rectangle in `roi_config.json`
+- analytics and reports are backed by server-side APIs, not just client-side calculations
 
-## Active Dataset Policy
+## Must-Track Inconsistencies
 
-The active workflow is manual-dataset-only.
+### Class mapping
 
-- Working dataset root: `datasets/site_dataset_v1/`
-- Ignore removed legacy datasets and prior training artifacts in active decisions
-- Do not rely on an old detector as a valid deliverable
+- runtime currently behaves as though class `1` is the child trigger class
+- scaffold/export scripts still emit `0: child_like`, `1: adult_like`
+- `datasets/02_yolo_dataset/data.yaml` uses `['adult', 'child']`
 
-## Workflow Decision Tree
+### ROI API drift
 
-- Dataset / annotations -> follow Dataset Workflow
-- Model training / evaluation -> follow Training Workflow
-- Backend / API -> follow Backend Workflow
-- Dashboard / frontend -> follow Frontend Workflow
-- Analytics correctness -> follow Analytics Validation Workflow
+- `cv_inference.ROI` is polygon-first
+- older tests and helper scripts still call the older rectangle constructor patterns
 
-## Dataset Workflow
+### Script staleness
 
-1. Confirm `datasets/site_dataset_v1/` structure exists
-2. Use `selected_frames/` + `labels/` as the labeling source of truth
-3. Validate labels with `scripts/validate_labels.py --dataset site_dataset_v1`
-4. Export train/val/test via `scripts/split_dataset.py --dataset site_dataset_v1`
-5. Use `docs/specs/annotation_guideline_child_class.md` for class rules
+Do not assume every helper in `scripts/` is current. Some still reference older dataset names or older API/table fields.
 
-## Training Workflow
+## Recommended Workflow
 
-1. Train only from `datasets/site_dataset_v1/annotation_exports/yolo/data.yaml`
-2. Save approved best weights to `models/manual_crosswalk_detector.pt`
-3. Save training artifacts under `runs/`
-4. Record evaluation metrics for the manuscript
-5. See `docs/specs/yolov8_training_plan.md`
+### Runtime or analytics work
 
-## Backend Workflow
+Read:
 
-Flask app: `app.py`
-DB layer: `db.py`
+- `docs/specs/api_events_contract.md`
+- `docs/specs/api_analytics_aggregates.md`
+- `docs/specs/roi_logic_and_trigger_rules.md`
 
-Critical requirements:
+Inspect:
 
-- `/api/events` must keep correct range filtering and pagination
-- `/api/analytics` must stay SQL-accurate
-- missing model must not crash live view; system should fail safe with warning OFF
+- `app.py`
+- `db.py`
+- `cv_inference.py`
+- `warning_controller.py`
+- `detection_tracker.py`
 
-## Frontend Workflow
+### Dataset or training work
 
-Entry: `templates/index.html`
-Assets: `static/`
-
-Keep these rules:
-
-- 15m subset 1h subset today subset all
-- dashboard numbers must match backend API
-- live payloads must remain contract-valid even when detection is idle
-
-## Analytics Validation Workflow
-
-1. compute SQL truth
-2. compare against `/api/analytics`
-3. compare against dashboard KPIs
-4. treat mismatches as bugs until proven otherwise
-
-## Resources
+Read:
 
 - `docs/specs/dataset_prepare_manual_crosswalk.md`
 - `docs/specs/annotation_guideline_child_class.md`
 - `docs/specs/yolov8_training_plan.md`
-- `docs/specs/api_events_contract.md`
-- `docs/specs/api_analytics_aggregates.md`
-- `docs/specs/roi_logic_and_trigger_rules.md`
-- `scripts/`
+
+Inspect:
+
+- `datasets/`
+- `models/`
+- `training/`
+- selected scripts in `scripts/`
+
+## Validation Notes
+
+Known good during the latest repo audit:
+
+- py_compile on the core Python modules
+- `scripts/validate_labels.py --help`
+- `scripts/split_dataset.py --help`
+
+Known stale or failing:
+
+- `test_detection_stabilization.py`
+- `scripts/offline_validation.py`
+- `scripts/test_infer_video.py`
+- `scripts/verify_db.py`
+
+## Operating Principles
+
+- preserve visual-warning-only scope
+- do not make biological age claims
+- surface inconsistencies instead of documenting around them
+- prefer current code behavior over older Markdown assumptions
