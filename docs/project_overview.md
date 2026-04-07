@@ -1,128 +1,61 @@
-# Smart Crosswalk Project Overview
+# Capsone Project Overview & System Context
 
-Repository state summarized for April 5, 2026.
+**Project Title:** Smart Crosswalk Alert System for Real-Time Child Detection
+**Purpose of this Document:** This Markdown file serves as the definitive architecture, context, and foundational guide for the Capstone Project. It is designed to immediately bring AI assistants up to speed on the system's goals, tech stack, and logic parameters whenever a new chat is initialized.
 
-## Current Baseline
+---
 
-The repo currently contains a working dashboard stack plus archived dataset and training assets. It is not accurate anymore to describe this project as "manual dataset only with no active detector."
+## 1. Project Objective and Real-World Application
 
-What is already present:
+The primary objective of this capstone is to enhance pedestrian safety at crosswalks, distinctly focusing on **children**. Children are at a higher risk of roadside accidents due to their size, unpredictable movements, and lack of traffic awareness. 
 
-- a Flask + Socket.IO dashboard in `app.py`
-- live Hikvision RTSP capture and reconnect handling
-- MP4 video-test mode with upload and playback from `test_videos/`
-- YOLO-based inference in `cv_inference.py`
-- anti-flicker box tracking in `detection_tracker.py`
-- temporal warning stabilization in `warning_controller.py`
-- MySQL event logging and aggregate analytics in `db.py`
-- a trained checkpoint in `models/yolov8n_crosswalk_v2_1111_frames.pt`
-- merged dataset and archived run outputs under `datasets/`
+This system utilizes high-definition IP Cameras (typically Hikvision CCTV over RTSP) mounted near a crosswalk. By utilizing an advanced Machine Learning engine (YOLOv8), the system dynamically scans the video feed. When a **child** steps into a pre-defined virtual "Region of Interest" (ROI) on the street, the system triggers a physical/audio **Warning Device** (like a flashing beacon or siren) to immediately alert incoming vehicular traffic. Adults in the same zone do not trigger the same extreme warning response, isolating the alert for high-risk demographic protection.
 
-## Runtime Architecture
+---
 
-### 1. Dashboard and transport
+## 2. Core Operational Modules
 
-- `templates/index.html`
-- `static/js/dashboard.js`
-- `static/js/contract.js`
-- `static/css/dashboard.css`
+The project is divided into tightly integrated modules managed through a centralized Python/Flask backend and a real-time web dashboard.
 
-The UI exposes five major sections: Live View, Logs, Analytics, Reports, and Settings.
+### A. Web Dashboard & Analytics UI (Frontend)
+- **Files:** `templates/index.html`, `static/css/dashboard.css`, `static/js/dashboard.js`
+- **Function:** Serves as the administrative control center. Users monitor the Live Surveillance Feed, track the AI engine's real-time latency, modify system settings, and review statistical charts.
+- **Tech Stack:** Vanilla HTML/CSS/JS, Socket.IO (for real-time `mode_update` and frame streaming), Chart.js (for rendering metrics).
 
-### 2. Inference and warning pipeline
+### B. Flask Control Server & WebSockets (Backend)
+- **Files:** `app.py`
+- **Function:** The heartbeat of the system. It provisions the HTTP REST APIs, hosts the Socket.IO server, initializes background capture threads for OpenCV, and coordinates all sub-modules. It is responsible for serving both `Live CCTV Mode` and `Video Test Mode` (allowing simulated runs using local `.mp4` datasets).
 
-- `cv_inference.py`
-  - YOLO inference wrapper
-  - ROI feet-zone checks
-  - trigger-candidate dominance filtering
-- `detection_tracker.py`
-  - IoU-based track persistence and EMA smoothing
-- `warning_controller.py`
-  - 3-of-5 temporal vote stabilization
-  - warning hold and minimum toggle interval logic
+### C. Artificial Intelligence & Computer Vision Pipeline
+- **Files:** `cv_inference.py`, `models/yolov8n_crosswalk_v2_1111_frames.pt`
+- **Function:** Runs the custom-trained YOLOv8 model. The logic strictly detects bounding boxes in a frame, identifies the class (`0: adult`, `1: child`), calculates a confidence score, and checks spatial constraints.
+- **ROI Logic:** Uses `roi_config.json` to draw a polygonal Region of Interest. Detections only matter if the subject's feet (bottom of the bounding box) overlap within this ROI polygon inside the image.
 
-### 3. Persistence and analytics
+### D. Stabilization & Tracking (False-Positive Prevention)
+- **Files:** `detection_tracker.py`, `warning_controller.py`
+- **Function:** In the real world, AI models experience "flicker" (a detected object disappearing for a split second due to lighting or occlusion). The tracker assigns temporal IDs to bounding boxes via Intersection-over-Union (IoU) logic. The Warning Controller ensures the physical alarm is only triggered using a steady buffer protocol (e.g., waiting for consistently positive frames before emitting the trigger) to prevent erratic hardware switching.
 
-- `db.py`
-  - database initialization
-  - event inserts
-  - filtered event retrieval
-  - aggregate analytics for `15m`, `1h`, `today`, and `all`
+### E. Database & Logging Analytics
+- **Files:** `db.py`
+- **Function:** An SQLite/MySQL controller responsible for maintaining extensive event logs. Whenever a child triggers the warning, a detailed database row is written. This allows the dashboard to generate reports, historical aggregations, and traffic metrics over set timelines (e.g., "15m", "1h", "today").
 
-## Operating Modes
+---
 
-### Live mode
+## 3. Technology Stack Summary
 
-- reads the Hikvision RTSP stream
-- auto-reconnects when capture fails
-- emits live `status_update` payloads
-- stores state-change and heartbeat rows in MySQL
+- **Object Detection:** YOLOv8 (PyTorch base), OpenCV (cv2)
+- **Backend Frame Serving:** Python 3, Flask, Flask-SocketIO (Eventlet / threading)
+- **Frontend SPA:** Vanilla JS, DOM manipulation, FontAwesome Icons, Chart.js
+- **Data Persistence:** Relational Database (SQL via Python `sqlite3`/MySQL wrappers)
+- **Camera Ingestion:** FFMPEG optimization flags alongside `cv2.VideoCapture` via RTSP streaming
 
-### Video-test mode
+---
 
-- reuses the same inference pipeline with an uploaded or preloaded `.mp4`
-- exposes available files through `/api/test_videos`
-- tags DB rows as `Video Test: <filename>`
+## 4. Key Developer Constraints & Rules for AI
 
-## Current Data And Model Assets
+1. **Zero Logic Destructivity:** When upgrading the User Interface, you must maintain all pre-existing javascript IDs (e.g., `#live-child`, `#live-latency`, `liveCam`). The Python socket logic explicitly drives data to these specific DOM hooks.
+2. **Custom CSS Emphasis:** The dashboard operates without massive libraries like Tailwind; it relies heavily on bespoke properties in `dashboard.css`. Maintain modern, premium web aesthetics (glassmorphism, subtle shadows, deep contrast).
+3. **Threading Caveats:** OpenCV camera capturing is highly blocking. All streaming and AI inference occur in isolated background threads to prevent the Flask REST API from freezing.
+4. **Classes:** Ensure the runtime inference engine adheres strictly to `class 1` representing the child demographic.
 
-- `models/yolov8n_crosswalk_v2_1111_frames.pt`
-  - current checkpoint in `models/`
-- `datasets/01_label_studio_exports/`
-  - zipped label exports
-- `datasets/02_yolo_dataset/`
-  - current merged YOLO dataset snapshot
-- `datasets/03_training_runs/run_2026_04_03_merged_v2/`
-  - archived training outputs and plots
-- `datasets/04_raw_frames_backup/`
-  - raw frame backup material
-- `training/train_3_2.0.ipynb`
-  - moved notebook artifact under `training/`
-
-## Verification Snapshot
-
-During the documentation refresh, the current repo checked out like this:
-
-- `python -m py_compile app.py cv_inference.py warning_controller.py db.py detection_tracker.py`
-  - passed
-- `python -m unittest test_detection_stabilization.py`
-  - failed because ROI tests still use the older rectangle constructor API
-- `python -m unittest test_backend.py`
-  - failed immediately because the file is a live integration script that expects a running server at `localhost:5000`
-- `python scripts/offline_validation.py`
-  - failed because it still uses `ROI(x1=..., y1=..., x2=..., y2=...)`
-- `python scripts/test_infer_video.py --help`
-  - failed because root imports are not adjusted when run from `scripts/`
-
-## Known Implementation Gaps
-
-### Class-order mismatch
-
-The repo currently disagrees about class IDs:
-
-- runtime inference logic treats class `1` as the child class
-- manual dataset scaffold scripts still emit `0: child_like`, `1: adult_like`
-- `datasets/02_yolo_dataset/data.yaml` uses `['adult', 'child']`
-
-This must be reconciled before the next export-to-training-to-deployment cycle.
-
-### ROI API drift
-
-- the dashboard still saves a rectangle to `roi_config.json`
-- the lower-level ROI object is now polygon-first
-- several tests and helper scripts still call the old rectangle constructor directly
-
-### Legacy helper scripts
-
-Some scripts still target older dataset paths such as `merged_v2`, `merged_dataset_v1`, or `afternoon_v1`. Treat those as historical until they are updated.
-
-### Dependency documentation gap
-
-`requirements.txt` currently covers the web stack only. The runtime CV stack also needs NumPy, OpenCV, and Ultralytics.
-
-## Near-Term Priorities
-
-- reconcile class IDs across training data, docs, and runtime inference
-- normalize ROI helper usage around one supported constructor/API
-- refresh or retire legacy validation scripts
-- verify dataset YAML split paths before the next training run
+By reading this document, any AI assistant stepping into this workspace has the exact mental schematic of the system to provide accurate, context-aware debugging, architectural advice, and code generation.
