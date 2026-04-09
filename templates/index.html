@@ -618,6 +618,17 @@
                     <div class="roi-tool-container">
                         <!-- Canvas Area -->
                         <div class="roi-canvas-wrapper" id="roiWrapper">
+                            <!-- ROI Floating Toolbar -->
+                            <div class="roi-toolbar" id="roiToolbar">
+                                <div class="roi-toolbar-group">
+                                    <button class="roi-toolbar-btn" id="btnRoiUndo" title="Undo (Ctrl+Z)" disabled>
+                                        <i class="fa-solid fa-rotate-left"></i>
+                                    </button>
+                                    <button class="roi-toolbar-btn" id="btnRoiRedo" title="Redo (Ctrl+Y)" disabled>
+                                        <i class="fa-solid fa-rotate-right"></i>
+                                    </button>
+                                </div>
+                            </div>
                             <canvas id="roiCanvas"></canvas>
                             <div id="roiOverlayText" class="roi-overlay-text">
                                 <i class="fa-solid fa-image" style="font-size:2.5rem; margin-bottom:10px; color:#bbb;"></i>
@@ -695,7 +706,7 @@
 
                     <!-- Compliance Note -->
                     <div class="compliance-note mt-4">
-                        <strong><i class="fa-solid fa-shield-halved"></i> Privacy & Compliance:</strong><br>
+                        <strong><i class="fa-solid fa-shield-halved"></i> Privacy &amp; Compliance:</strong><br>
                         • The system classifies pedestrians based on visual features (size, proportions) associated with
                         school-age children.<br>
                         • It does NOT estimate biological age.<br>
@@ -703,8 +714,6 @@
                         • <strong>Privacy:</strong> No facial recognition, no license plate recognition.
                     </div>
                 </div>
-
-
             </section>
 
         </div>

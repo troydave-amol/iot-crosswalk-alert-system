@@ -957,6 +957,73 @@ td {
     cursor: crosshair;
 }
 
+/* ROI Floating Toolbar */
+.roi-toolbar {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 8px;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.roi-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+
+.roi-toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #555;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.roi-toolbar-btn:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.08);
+    color: #222;
+}
+
+.roi-toolbar-btn:active:not(:disabled) {
+    background: rgba(0, 0, 0, 0.14);
+}
+
+.roi-toolbar-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+
+
+
+.roi-help kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    font-size: 0.75rem;
+    font-family: inherit;
+    background: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    box-shadow: 0 1px 0 #bbb;
+}
+
 .roi-overlay-text {
     position: absolute;
     top: 50%;
@@ -1134,6 +1201,29 @@ body.dark-mode .roi-canvas-wrapper {
 
 body.dark-mode .roi-canvas-wrapper.has-image {
     border-color: var(--primary-accent);
+}
+
+body.dark-mode .roi-toolbar {
+    background: rgba(30, 30, 30, 0.92);
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+body.dark-mode .roi-toolbar-btn {
+    color: #aaa;
+}
+
+body.dark-mode .roi-toolbar-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    color: #eee;
+}
+
+
+
+body.dark-mode .roi-help kbd {
+    background: #333;
+    border-color: #555;
+    color: #ccc;
+    box-shadow: 0 1px 0 #444;
 }
 
 body.dark-mode .roi-overlay-text {

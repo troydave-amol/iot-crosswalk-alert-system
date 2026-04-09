@@ -61,8 +61,10 @@ CAM_HEIGHT = _env_int("LIVE_CAM_HEIGHT", 360)
 
 # Anti-Flicker Tracker Settings
 TRACKER_IOU_THRESHOLD = _env_float("TRACKER_IOU_THRESHOLD", 0.25)
-TRACKER_MAX_MISSES = _env_int("TRACKER_MAX_MISSES", 5)
+TRACKER_MAX_MISSES = _env_int("TRACKER_MAX_MISSES", 25)
 TRACKER_SMOOTH_ALPHA = _env_float("TRACKER_SMOOTH_ALPHA", 0.6)
+TRACKER_CONF_SMOOTH_ALPHA = _env_float("TRACKER_CONF_SMOOTH_ALPHA", 0.4)
+CLASS_SWITCH_FRAMES = _env_int("CLASS_SWITCH_FRAMES", 15)  # consecutive opposing frames to switch label
 
 # Feet-zone detection — only the bottom portion of the child bbox is checked against ROI
 FEET_HEIGHT_RATIO = _env_float("FEET_HEIGHT_RATIO", 0.15)
@@ -317,6 +319,8 @@ class LiveSession:
             iou_threshold=TRACKER_IOU_THRESHOLD,
             max_misses=TRACKER_MAX_MISSES,
             smooth_alpha=TRACKER_SMOOTH_ALPHA,
+            conf_smooth_alpha=TRACKER_CONF_SMOOTH_ALPHA,
+            class_switch_frames=CLASS_SWITCH_FRAMES,
         )
         self.stabilizer = TemporalVoteStabilizer(window_size=5, required_true=3)
         self.warn_ctrl = WarningController(
@@ -791,6 +795,8 @@ class VideoTestSession(LiveSession):
                     iou_threshold=TRACKER_IOU_THRESHOLD,
                     max_misses=TRACKER_MAX_MISSES,
                     smooth_alpha=TRACKER_SMOOTH_ALPHA,
+                    conf_smooth_alpha=TRACKER_CONF_SMOOTH_ALPHA,
+                    class_switch_frames=CLASS_SWITCH_FRAMES,
                 )
                 continue
 

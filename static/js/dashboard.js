@@ -1370,6 +1370,12 @@ const App = {
             resizeStartMouse: null, // mouse position at drag-start
         };
 
+        // Undo/Redo history stack (max 30 entries)
+        this.roiHistory = [];
+        this.roiHistoryIndex = -1;
+        this.ROI_HISTORY_MAX = 30;
+
+
         // Handle size in canvas pixels (scaled visually later)
         this.HANDLE_SIZE = 8;
         this.HANDLE_HIT = 14; // Hit area slightly larger than visual
@@ -1420,6 +1426,9 @@ const App = {
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     this.state.roi = null;
+                    this.roiHistory = [];
+                    this.roiHistoryIndex = -1;
+                    this.updateUndoRedoButtons();
                     this.loadImageToCanvas(evt.target.result);
                     this.roiDirty = true;
                     this.updateRoiSteps();
@@ -1453,6 +1462,26 @@ const App = {
         document.getElementById('btnSaveRoi')?.addEventListener('click', () => this.saveRoi());
         document.getElementById('btnResetRoi')?.addEventListener('click', () => this.resetRoi());
 
+        // --- Undo/Redo Toolbar Buttons ---
+        document.getElementById('btnRoiUndo')?.addEventListener('click', () => this.roiUndo());
+        document.getElementById('btnRoiRedo')?.addEventListener('click', () => this.roiRedo());
+
+
+        // --- Keyboard Shortcuts ---
+        document.addEventListener('keydown', (e) => {
+            // Only listen when the ROI config page is visible
+            const roiSection = document.getElementById('roiWrapper');
+            if (!roiSection || roiSection.offsetParent === null) return;
+
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                this.roiUndo();
+            } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+                e.preventDefault();
+                this.roiRedo();
+            }
+        });
+
         // --- Capture Frame ---
         document.getElementById('btnCaptureFrame')?.addEventListener('click', async () => {
             const btn = document.getElementById('btnCaptureFrame');
@@ -1475,6 +1504,9 @@ const App = {
                     reader.readAsDataURL(blob);
                 });
                 this.state.roi = null;
+                this.roiHistory = [];
+                this.roiHistoryIndex = -1;
+                this.updateUndoRedoButtons();
                 this.loadImageToCanvas(dataUrl);
                 this.roiDirty = true;
                 this.updateRoiSteps();
@@ -1528,6 +1560,14 @@ const App = {
         if (!this.roiState.img) return;
         const pos = this.getCanvasCoordinates(e, canvas);
 
+        // Capture the "before" state on the very first interaction
+        // so that the first edit can be undone back to the original.
+        if (this.roiHistory.length === 0 && this.state.roi) {
+            this.roiHistory.push(JSON.parse(JSON.stringify(this.state.roi)));
+            this.roiHistoryIndex = 0;
+            this.updateUndoRedoButtons();
+        }
+
         // Priority: handle > inside > draw new
         const handleIdx = this._hitTestHandle(pos, this.state.roi);
         if (handleIdx >= 0) {
@@ -1546,6 +1586,11 @@ const App = {
         }
 
         // Draw new 4-point polygon (start as a small rectangle from click)
+        // Snapshot "no ROI" as the before-state if history is empty
+        if (this.roiHistory.length === 0) {
+            this.roiHistory.push(null);
+            this.roiHistoryIndex = 0;
+        }
         this.roiState.mode = 'drawing';
         this.roiState.startX = pos.x;
         this.roiState.startY = pos.y;
@@ -1610,6 +1655,8 @@ const App = {
             this.normalizeRoi();
             this.drawRoi();
             this.updateRoiCoords(this.state.roi);
+            // Push state to history for undo/redo
+            this.pushRoiHistory();
             // Mark dirty
             this.roiDirty = true;
             const ub = document.getElementById('roiUnsavedBadge');
@@ -1629,9 +1676,16 @@ const App = {
 
             canvas.width = img.naturalWidth;
             canvas.height = img.naturalHeight;
+            // Clear any stale CSS transform/width from previous zoom session
+            canvas.style.transform = '';
+            canvas.style.width = '';
+            canvas.style.height = '';
             canvas.style.display = 'block';
             overlay.style.display = 'none';
-            if (wrapper) wrapper.classList.add('has-image');
+            if (wrapper) {
+                wrapper.classList.add('has-image');
+                wrapper.classList.remove('zoomed', 'hand-tool', 'panning');
+            }
 
             this.drawRoi();
             this.updateRoiCoords(this.state.roi);
@@ -1648,6 +1702,59 @@ const App = {
             x: (e.clientX - rect.left) * scaleX,
             y: (e.clientY - rect.top) * scaleY
         };
+    },
+
+    // ---------------------------------------------------------------
+    // Undo / Redo
+    // ---------------------------------------------------------------
+    pushRoiHistory() {
+        if (!this.state.roi) return;
+        const snapshot = JSON.parse(JSON.stringify(this.state.roi));
+        // Truncate any redo branch ahead of current index
+        if (this.roiHistoryIndex < this.roiHistory.length - 1) {
+            this.roiHistory = this.roiHistory.slice(0, this.roiHistoryIndex + 1);
+        }
+        this.roiHistory.push(snapshot);
+        // Cap at max size
+        if (this.roiHistory.length > this.ROI_HISTORY_MAX) {
+            this.roiHistory.shift();
+        }
+        this.roiHistoryIndex = this.roiHistory.length - 1;
+        this.updateUndoRedoButtons();
+    },
+
+    roiUndo() {
+        if (this.roiHistoryIndex <= 0) return;
+        this.roiHistoryIndex--;
+        const snapshot = this.roiHistory[this.roiHistoryIndex];
+        this.state.roi = snapshot ? JSON.parse(JSON.stringify(snapshot)) : null;
+        this.roiDirty = true;
+        this.drawRoi();
+        this.updateRoiCoords(this.state.roi);
+        this.updateRoiSteps();
+        this.updateUndoRedoButtons();
+        const ub = document.getElementById('roiUnsavedBadge');
+        if (ub) ub.style.display = 'inline-flex';
+    },
+
+    roiRedo() {
+        if (this.roiHistoryIndex >= this.roiHistory.length - 1) return;
+        this.roiHistoryIndex++;
+        this.state.roi = JSON.parse(JSON.stringify(this.roiHistory[this.roiHistoryIndex]));
+        this.roiDirty = true;
+        this.drawRoi();
+        this.updateRoiCoords(this.state.roi);
+        this.updateRoiSteps();
+        this.updateUndoRedoButtons();
+        const ub = document.getElementById('roiUnsavedBadge');
+        if (ub) ub.style.display = 'inline-flex';
+    },
+
+    updateUndoRedoButtons() {
+        const undoBtn = document.getElementById('btnRoiUndo');
+        const redoBtn = document.getElementById('btnRoiRedo');
+        if (undoBtn) undoBtn.disabled = this.roiHistoryIndex <= 0;
+        if (redoBtn) redoBtn.disabled = this.roiHistoryIndex >= this.roiHistory.length - 1;
     },
 
     normalizeRoi() {
