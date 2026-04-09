@@ -499,46 +499,50 @@
 
                 <!-- 2) Printable Report Container -->
                 <div id="reportPreview" class="report-paper">
-                    <!-- Header -->
-                    <div class="report-header" style="text-align: center; margin-bottom: 30px;">
-                        <h2 style="font-size: 1.5rem; margin-bottom: 10px;">IoT-Based Smart School-Zone Crosswalk Alert
-                            System</h2>
-                        <h3 style="font-size: 1.1rem; color: #666; font-weight: 600;">Using CNN for Real-Time Child
-                            Pedestrian Detection</h3>
-                        <div style="margin-top: 15px; font-size: 0.9rem; color: #444;">
-                            <p><strong>Client:</strong> Traffic Management Center (TMC)</p>
-                            <p><strong>Location:</strong> Casisang Central School Crosswalk, Barangay Casisang,
-                                Malaybalay City</p>
-                            <p><strong>Report Range:</strong> <span id="rep-range-label">Today</span></p>
-                            <p><strong>Generated At:</strong> <span id="rep-generated-at">---</span></p>
+                    <!-- Header / Letterhead -->
+                    <div class="report-header" style="margin-bottom: 30px;">
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 20px; text-align: center; margin-bottom: 25px;">
+                            <img src="/static/img/TMC_Logo.png" alt="TMC Logo" style="width: 80px; height: auto;">
+                            <div>
+                                <h2 style="font-size: 1.6rem; font-weight: 800; margin: 0; color: #222;">Traffic Management Center (TMC)</h2>
+                                <h3 style="font-size: 1.1rem; font-weight: 500; color: #555; margin: 5px 0 0 0;">Malaybalay City, Bukidnon</h3>
+                            </div>
                         </div>
-                        <hr style="margin-top: 20px; border: 0; border-top: 2px solid #eee;">
+                        
+                        <!-- Structured Meta block -->
+                        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; font-size: 0.95rem; color: #333; border: 1px solid #e9ecef;">
+                            <p style="margin: 0; font-weight: 600;">IoT-Based Smart Crosswalk Alert System Using CNN for Real-Time Child Pedestrian Detection</p>
+                            <p style="margin: 0;">Casisang Central School Crosswalk, Barangay Casisang</p>
+                            <p style="margin: 0;"><strong>Report Range:</strong> <span id="rep-range-label">Today</span></p>
+                            <p style="margin: 0;"><strong>Generated At:</strong> <span id="rep-generated-at">---</span></p>
+                        </div>
                     </div>
 
                     <!-- KPI Summary -->
                     <h4
                         style="margin-bottom: 15px; text-transform: uppercase; color: #666; font-size: 0.85rem; letter-spacing: 1px;">
                         Summary Metrics</h4>
-                    <div class="dashboard-grid"
-                        style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px;">
-                        <div class="card" style="padding: 15px; box-shadow: none; border: 1px solid #eee;">
-                            <div class="card-title">Total Warnings</div>
+                    <div style="display: flex; justify-content: center; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
+                        <div class="card" style="flex: 1; min-width: 180px; max-width: 220px; padding: 15px; box-shadow: none; border: 1px solid #eee; border-left: 4px solid var(--primary-accent); background: #fafafa;">
+                            <div class="card-title"><i class="fa-solid fa-triangle-exclamation" style="margin-right: 5px; color: #888;"></i> Warnings</div>
                             <div class="card-value" id="rep-total-warnings">0</div>
                         </div>
-                        <div class="card" style="padding: 15px; box-shadow: none; border: 1px solid #eee;">
-                            <div class="card-title">Child Detections</div>
+                        <div class="card" style="flex: 1; min-width: 180px; max-width: 220px; padding: 15px; box-shadow: none; border: 1px solid #eee; border-left: 4px solid var(--primary-accent); background: #fafafa;">
+                            <div class="card-title"><i class="fa-solid fa-child" style="margin-right: 5px; color: #888;"></i> Detections</div>
                             <div class="card-value" id="rep-total-detections">0</div>
                         </div>
-                        <div class="card" style="padding: 15px; box-shadow: none; border: 1px solid #eee;">
-                            <div class="card-title">False Warnings</div>
+                        <div class="card" style="flex: 1; min-width: 180px; max-width: 220px; padding: 15px; box-shadow: none; border: 1px solid #eee; border-left: 4px solid var(--primary-accent); background: #fafafa;">
+                            <div class="card-title"><i class="fa-solid fa-ban" style="margin-right: 5px; color: #888;"></i> False Warnings</div>
                             <div class="card-value" id="rep-false-warnings">0</div>
                         </div>
-                        <div class="card" style="padding: 15px; box-shadow: none; border: 1px solid #eee;">
-                            <div class="card-title">Avg Latency</div>
+                    </div>
+                    <div style="display: flex; justify-content: center; flex-wrap: wrap; gap: 15px; margin-bottom: 30px;">
+                        <div class="card" style="flex: 1; min-width: 180px; max-width: 220px; padding: 15px; box-shadow: none; border: 1px solid #eee; border-left: 4px solid var(--primary-accent); background: #fafafa;">
+                            <div class="card-title"><i class="fa-solid fa-stopwatch" style="margin-right: 5px; color: #888;"></i> Latency</div>
                             <div class="card-value" id="rep-avg-latency">0ms</div>
                         </div>
-                        <div class="card" style="padding: 15px; box-shadow: none; border: 1px solid #eee;">
-                            <div class="card-title">Peak Hour</div>
+                        <div class="card" style="flex: 1; min-width: 180px; max-width: 220px; padding: 15px; box-shadow: none; border: 1px solid #eee; border-left: 4px solid var(--primary-accent); background: #fafafa;">
+                            <div class="card-title"><i class="fa-solid fa-clock" style="margin-right: 5px; color: #888;"></i> Peak Hour</div>
                             <div class="card-value" id="rep-peak-hour">--</div>
                         </div>
                     </div>
@@ -552,24 +556,23 @@
                         <li>Click "Generate" to populate insights.</li>
                     </ul>
 
-                    <!-- Notes -->
-                    <div class="report-note-box">
-                        <h5 style="margin-bottom: 10px; color: #444;">Notes & Limitations</h5>
-                        <ul style="font-size: 0.9rem; color: #666; padding-left: 20px; margin: 0;">
-                            <li style="margin-bottom: 6px;"><strong>Prototype Summary:</strong> Metrics are based on
-                                live prototype tests.</li>
-                            <li style="margin-bottom: 6px;">The system does not estimate biological age; it classifies
-                                pedestrians as children using visual features commonly associated with school-age
-                                learners.</li>
-                            <li style="margin-bottom: 6px;">Visual warning only (LED Beacon). No Audio. No SMS.</li>
-                            <li><strong>Privacy:</strong> No facial recognition, no plate recognition. All processing is
-                                local.</li>
-                        </ul>
+
+
+                    <!-- Sign-off Block -->
+                    <div style="margin-top: 60px; display: flex; justify-content: space-between; padding: 0 40px;">
+                        <div style="text-align: center; width: 200px;">
+                            <div style="border-bottom: 1px solid #333; height: 40px; margin-bottom: 5px;"></div>
+                            <p style="margin: 0; font-size: 0.85rem; font-weight: 600; color: #444;">Prepared By</p>
+                        </div>
+                        <div style="text-align: center; width: 200px;">
+                            <div style="border-bottom: 1px solid #333; height: 40px; margin-bottom: 5px;"></div>
+                            <p style="margin: 0; font-size: 0.85rem; font-weight: 600; color: #444;">Authorized Signatory</p>
+                        </div>
                     </div>
 
                     <!-- Footer -->
-                    <div style="margin-top: 50px; text-align: center; font-size: 0.8rem; color: #999;">
-                        &copy; 2026 Smart School-Zone Crosswalk Alert System. All Rights Reserved.
+                    <div style="margin-top: 40px; text-align: center; font-size: 0.8rem; color: #999;">
+                        &copy; 2026 Tech Tribe - All Rights Reserved.
                     </div>
                 </div>
             </section>

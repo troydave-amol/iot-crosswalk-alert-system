@@ -2193,3 +2193,82 @@ body.dark-mode .mode-badge.mode-test {
     background-color: rgba(150, 150, 150, 0.15);
     color: #aaa;
 }
+
+ / *   R e p o r t   P a p e r   S t y l e s   * / 
+ . r e p o r t - p a p e r   { 
+         b a c k g r o u n d :   # f f f ; 
+         b o r d e r :   1 p x   s o l i d   # d d d ; 
+         b o r d e r - r a d i u s :   8 p x ; 
+         p a d d i n g :   4 0 p x ; 
+         m a r g i n :   0   a u t o ; 
+         m a x - w i d t h :   9 0 0 p x ; 
+         b o x - s h a d o w :   0   4 p x   1 5 p x   r g b a ( 0 ,   0 ,   0 ,   0 . 0 5 ) ;   / *   D a s h b o a r d   v i e w   o n l y   * / 
+         c o l o r :   # 3 3 3 ; 
+ } 
+ 
+ @ m e d i a   p r i n t   { 
+         @ p a g e   { 
+                 s i z e :   A 4 ; 
+                 m a r g i n :   1 5 m m ; 
+         } 
+         b o d y   *   { 
+                 v i s i b i l i t y :   h i d d e n ; 
+         } 
+         # r e p o r t P r e v i e w ,   # r e p o r t P r e v i e w   *   { 
+                 v i s i b i l i t y :   v i s i b l e ; 
+         } 
+         # r e p o r t P r e v i e w   { 
+                 p o s i t i o n :   a b s o l u t e ; 
+                 l e f t :   0 ; 
+                 t o p :   0 ; 
+                 w i d t h :   1 0 0 % ; 
+                 m a r g i n :   0 ; 
+                 p a d d i n g :   0 ; 
+                 b o r d e r :   n o n e ; 
+                 b o x - s h a d o w :   n o n e ; 
+                 b a c k g r o u n d :   n o n e ; 
+         } 
+         . r e p o r t - p a p e r   { 
+                 m a x - w i d t h :   n o n e ; 
+         } 
+ } 
+  
+ 
+/* Report Paper Styles */
+.report-paper {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 40px;
+    margin: 0 auto;
+    max-width: 900px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); /* Dashboard view only */
+    color: #333;
+}
+
+@media print {
+    @page {
+        size: A4;
+        margin: 15mm;
+    }
+    body * {
+        visibility: hidden;
+    }
+    #reportPreview, #reportPreview * {
+        visibility: visible;
+    }
+    #reportPreview {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        border: none;
+        box-shadow: none;
+        background: none;
+    }
+    .report-paper {
+        max-width: none;
+    }
+}

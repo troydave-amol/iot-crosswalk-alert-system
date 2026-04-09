@@ -1287,7 +1287,10 @@ const App = {
 
         const summary = {
             rangeLabel: document.querySelector(`.btn-preset[data-rep-range="${range}"]`)?.textContent?.trim() || range,
-            generatedAt: new Date().toLocaleString(),
+            generatedAt: new Date().toLocaleString(undefined, { 
+                year: 'numeric', month: 'numeric', day: 'numeric', 
+                hour: 'numeric', minute: 'numeric', second: 'numeric' 
+            }),
             totalWarnings,
             totalDetections,
             falseWarnings,
@@ -1333,7 +1336,7 @@ const App = {
         } else {
             // CSV — summary row
             const header = 'Generated At,Range,Total Warnings,Total Detections,False Warnings,Avg Latency,Peak Hour,Most Common Scenario,Location,Client,Title\n';
-            const row = `${s.generatedAt},${s.rangeLabel},${s.totalWarnings},${s.totalDetections},${s.falseWarnings},${s.avgLatency}ms,${s.peakHour},${s.metrics.mostCommonScenario},"Casisang Central School","TMC","IoT-Based Smart School-Zone Crosswalk Alert System"`;
+            const row = `${s.generatedAt},${s.rangeLabel},${s.totalWarnings},${s.totalDetections},${s.falseWarnings},${s.avgLatency}ms,${s.peakHour},${s.metrics.mostCommonScenario},"Casisang Central School","TMC","IoT-Based Smart Crosswalk Alert System Using CNN for Real-Time Child Pedestrian Detection"`;
             content = header + row;
         }
 
