@@ -10,6 +10,8 @@
     --sidebar-collapsed-width: 70px;
     --header-height: 64px;
     --transition-speed: 0.3s;
+    --font-primary: 'Satoshi', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'Consolas', monospace;
 }
 
 * {
@@ -19,7 +21,7 @@
 }
 
 body {
-    font-family: 'Manrope', sans-serif;
+    font-family: var(--font-primary);
     background-color: var(--bg-dominant);
     color: var(--deep-text);
     overflow-x: hidden;
@@ -223,10 +225,134 @@ body.sidebar-open .backdrop {
     font-size: 1.1rem;
 }
 
+/* ── Brand Lockup ── */
+.brand-lockup {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(255, 146, 128, 0.15), rgba(255, 146, 128, 0.05));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: var(--primary-accent);
+    position: relative;
+    flex-shrink: 0;
+    animation: iconPulse 3s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 146, 128, 0); }
+    50%      { box-shadow: 0 0 0 6px rgba(255, 146, 128, 0.12); }
+}
+
+.brand-titles {
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+}
+
+.brand-title {
+    font-family: var(--font-primary);
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--deep-text);
+    margin: 0;
+    line-height: 1.3;
+}
+
+.title-prefix {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+/* Dark mode overrides */
+body.dark-mode .brand-title {
+    color: #e0e0e0;
+}
+body.dark-mode .title-prefix {
+    color: #888;
+}
+body.dark-mode .brand-icon {
+    background: linear-gradient(135deg, rgba(255, 146, 128, 0.2), rgba(255, 146, 128, 0.08));
+}
+
 .topbar-right {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
+}
+
+/* ── System Time ── */
+.system-time {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+.system-time .time-label {
+    font-weight: 500;
+}
+.system-time .time-value {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--deep-text);
+    letter-spacing: -0.3px;
+}
+
+/* ── Topbar Divider ── */
+.topbar-divider {
+    width: 1px;
+    height: 24px;
+    background-color: var(--border-color);
+    opacity: 0.6;
+}
+
+/* ── Topbar Action Button (borderless circle) ── */
+.topbar-action-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--deep-text);
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+.topbar-action-btn:hover {
+    background-color: var(--bg-dominant);
+}
+
+/* Dark mode overrides for topbar-right elements */
+body.dark-mode .system-time .time-value {
+    color: #e0e0e0;
+}
+body.dark-mode .topbar-divider {
+    background-color: #444;
+}
+body.dark-mode .topbar-action-btn {
+    color: #ccc;
+}
+body.dark-mode .topbar-action-btn:hover {
+    background-color: #333;
 }
 
 .status-chip {
@@ -297,6 +423,24 @@ body.sidebar-open .backdrop {
     margin-bottom: 24px;
 }
 
+/* Live View — always 5 columns on desktop, never wraps */
+.live-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 15px;
+    margin-bottom: 24px;
+}
+@media (max-width: 900px) {
+    .live-metrics-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+@media (max-width: 520px) {
+    .live-metrics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
 .card {
     background-color: var(--white);
     border-radius: 12px;
@@ -320,9 +464,11 @@ body.sidebar-open .backdrop {
 }
 
 .card-value {
+    font-family: var(--font-mono);
     font-size: 1.8rem;
     font-weight: 700;
     color: var(--deep-text);
+    letter-spacing: -0.5px;
 }
 
 .card-value.critical {
@@ -2194,81 +2340,286 @@ body.dark-mode .mode-badge.mode-test {
     color: #aaa;
 }
 
- / *   R e p o r t   P a p e r   S t y l e s   * / 
- . r e p o r t - p a p e r   { 
-         b a c k g r o u n d :   # f f f ; 
-         b o r d e r :   1 p x   s o l i d   # d d d ; 
-         b o r d e r - r a d i u s :   8 p x ; 
-         p a d d i n g :   4 0 p x ; 
-         m a r g i n :   0   a u t o ; 
-         m a x - w i d t h :   9 0 0 p x ; 
-         b o x - s h a d o w :   0   4 p x   1 5 p x   r g b a ( 0 ,   0 ,   0 ,   0 . 0 5 ) ;   / *   D a s h b o a r d   v i e w   o n l y   * / 
-         c o l o r :   # 3 3 3 ; 
- } 
- 
- @ m e d i a   p r i n t   { 
-         @ p a g e   { 
-                 s i z e :   A 4 ; 
-                 m a r g i n :   1 5 m m ; 
-         } 
-         b o d y   *   { 
-                 v i s i b i l i t y :   h i d d e n ; 
-         } 
-         # r e p o r t P r e v i e w ,   # r e p o r t P r e v i e w   *   { 
-                 v i s i b i l i t y :   v i s i b l e ; 
-         } 
-         # r e p o r t P r e v i e w   { 
-                 p o s i t i o n :   a b s o l u t e ; 
-                 l e f t :   0 ; 
-                 t o p :   0 ; 
-                 w i d t h :   1 0 0 % ; 
-                 m a r g i n :   0 ; 
-                 p a d d i n g :   0 ; 
-                 b o r d e r :   n o n e ; 
-                 b o x - s h a d o w :   n o n e ; 
-                 b a c k g r o u n d :   n o n e ; 
-         } 
-         . r e p o r t - p a p e r   { 
-                 m a x - w i d t h :   n o n e ; 
-         } 
- } 
-  
- 
-/* Report Paper Styles */
+
+/* ================================================================
+   REPORT PAPER — Light & Dark Mode
+   ================================================================ */
 .report-paper {
     background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 40px;
+    color: #222;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 48px 52px;
     margin: 0 auto;
-    max-width: 900px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); /* Dashboard view only */
+    max-width: 860px;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.06);
+}
+
+/* Letterhead */
+.report-letterhead {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    text-align: center;
+    margin-bottom: 28px;
+}
+.report-letterhead img {
+    width: 72px;
+    height: auto;
+    flex-shrink: 0;
+}
+.report-letterhead h2 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin: 0;
+    color: #1a1a1a;
+    letter-spacing: -0.3px;
+}
+.report-letterhead h3 {
+    font-size: 1rem;
+    font-weight: 400;
+    color: #666;
+    margin: 4px 0 0 0;
+}
+
+/* Meta block */
+.report-meta {
+    background: #f7f8fa;
+    border: 1px solid #e8eaed;
+    border-radius: 8px;
+    padding: 18px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 6px;
+    font-size: 0.9rem;
+    color: #444;
+}
+.report-meta .meta-system {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #222;
+}
+.report-meta .meta-location {
+    color: #666;
+    font-size: 0.88rem;
+}
+.report-meta .meta-range,
+.report-meta .meta-generated {
+    color: #555;
+    font-size: 0.88rem;
+}
+.report-meta .meta-range strong,
+.report-meta .meta-generated strong {
     color: #333;
 }
 
+/* Divider */
+.report-divider {
+    border: none;
+    border-top: 1px solid #ebebeb;
+    margin: 28px 0;
+}
+
+/* Section label */
+.report-section-label {
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #999;
+    margin: 0 0 14px 0;
+}
+
+/* KPI grid */
+.report-kpi-row {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.report-kpi-row + .report-kpi-row {
+    margin-top: 12px;
+    margin-bottom: 24px;
+}
+.report-kpi-card {
+    flex: 1;
+    min-width: 150px;
+    max-width: 200px;
+    background: #fafafa;
+    border: 1px solid #ebebeb;
+    border-left: 3px solid var(--primary-accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+}
+.report-kpi-card .kpi-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #999;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.report-kpi-card .kpi-value {
+    font-family: var(--font-mono);
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    line-height: 1;
+    letter-spacing: -0.5px;
+}
+
+/* Insights */
+.report-insights-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 8px 0;
+}
+.report-insights-list li {
+    position: relative;
+    padding: 12px 0 12px 18px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.9rem;
+    color: #444;
+    line-height: 1.65;
+}
+.report-insights-list li:last-child {
+    border-bottom: none;
+}
+.report-insights-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 20px;
+    width: 6px;
+    height: 6px;
+    background: var(--primary-accent);
+    border-radius: 50%;
+}
+
+/* Sign-off */
+.report-signoff {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 20px;
+    margin-top: 56px;
+}
+.report-signoff-slot {
+    text-align: center;
+    width: 190px;
+}
+.report-signoff-slot .sig-line {
+    border-bottom: 1px solid #aaa;
+    height: 36px;
+    margin-bottom: 8px;
+}
+.report-signoff-slot p {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Footer */
+.report-footer {
+    margin-top: 32px;
+    text-align: center;
+    font-size: 0.75rem;
+    color: #bbb;
+    letter-spacing: 0.3px;
+}
+
+/* ================================================================
+   DARK MODE OVERRIDES
+   ================================================================ */
+body.dark-mode .report-paper {
+    background: #1e1e24;
+    color: #d0d0d0;
+    border-color: #333;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.3);
+}
+body.dark-mode .report-letterhead h2 {
+    color: #ececec;
+}
+body.dark-mode .report-letterhead h3 {
+    color: #888;
+}
+body.dark-mode .report-meta {
+    background: #28282f;
+    border-color: #3a3a44;
+    color: #bbb;
+}
+body.dark-mode .report-meta .meta-system {
+    color: #e0e0e0;
+}
+body.dark-mode .report-meta .meta-location {
+    color: #888;
+}
+body.dark-mode .report-meta .meta-range,
+body.dark-mode .report-meta .meta-generated {
+    color: #aaa;
+}
+body.dark-mode .report-meta .meta-range strong,
+body.dark-mode .report-meta .meta-generated strong {
+    color: #ccc;
+}
+body.dark-mode .report-divider {
+    border-top-color: #333;
+}
+body.dark-mode .report-section-label {
+    color: #666;
+}
+body.dark-mode .report-kpi-card {
+    background: #252530;
+    border-color: #333;
+}
+body.dark-mode .report-kpi-card .kpi-label {
+    color: #777;
+}
+body.dark-mode .report-kpi-card .kpi-value {
+    color: #e0e0e0;
+}
+body.dark-mode .report-insights-list li {
+    color: #bbb;
+    border-bottom-color: #2e2e38;
+}
+body.dark-mode .report-signoff-slot .sig-line {
+    border-bottom-color: #555;
+}
+body.dark-mode .report-signoff-slot p {
+    color: #666;
+}
+body.dark-mode .report-footer {
+    color: #555;
+}
+
+/* ================================================================
+   PRINT STYLES
+   ================================================================ */
 @media print {
-    @page {
-        size: A4;
-        margin: 15mm;
-    }
-    body * {
-        visibility: hidden;
-    }
-    #reportPreview, #reportPreview * {
-        visibility: visible;
-    }
+    @page { size: A4; margin: 15mm; }
+    body * { visibility: hidden; }
+    #reportPreview, #reportPreview * { visibility: visible; }
     #reportPreview {
         position: absolute;
-        left: 0;
-        top: 0;
+        left: 0; top: 0;
         width: 100%;
-        margin: 0;
-        padding: 0;
-        border: none;
-        box-shadow: none;
-        background: none;
+        margin: 0; padding: 0;
+        border: none; box-shadow: none;
+        background: #fff !important;
     }
     .report-paper {
         max-width: none;
+        background: #fff !important;
+        color: #000 !important;
+        box-shadow: none !important;
+        border: none !important;
     }
 }

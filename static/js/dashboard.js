@@ -389,10 +389,15 @@ const App = {
         // Topbar connection chip
         const connChip = document.getElementById('connection-chip');
         if (connChip) {
-            connChip.innerHTML = `<div class="status-indicator"></div> ${status.connection_status}`;
-            connChip.className = `status-chip ${this.state.isConnected ? 'connected' : 'disconnected'}`;
+            // Determine chip class — override to disconnected if camera says "Offline"
+            let chipClass = this.state.isConnected ? 'connected' : 'disconnected';
+            if (status.connection_status.toLowerCase().includes('offline')) {
+                chipClass = 'disconnected';
+            }
+            connChip.innerHTML = `<div class="status-indicator"></div><span class="status-text">${status.connection_status}</span>`;
+            connChip.className = `status-chip ${chipClass}`;
         }
-        document.getElementById('last-update').textContent = `Last Update: ${status.last_update_str}`;
+        document.getElementById('last-update').textContent = status.last_update_str;
 
         // Live View Cards
         document.getElementById('live-child').textContent = status.child_in_roi ? 'YES' : 'NO';
@@ -400,6 +405,22 @@ const App = {
 
         document.getElementById('live-child').style.color = status.child_in_roi ? '#d32f2f' : 'inherit';
         document.getElementById('live-warning').style.color = status.warning_on ? '#d32f2f' : '#2e7d32';
+
+        // Sync the System Status "Warning Output" pill instantly with the metric card
+        const warnChip = document.getElementById('sysStatusWarning');
+        if (warnChip) {
+            if (status.warning_on) {
+                warnChip.innerHTML = '<div class="status-indicator"></div> Active';
+                warnChip.className = 'status-chip';
+                warnChip.style.backgroundColor = 'rgba(211, 47, 47, 0.12)';
+                warnChip.style.color = '#b71c1c';
+            } else {
+                warnChip.innerHTML = '<div class="status-indicator"></div> Standby';
+                warnChip.className = 'status-chip connected';
+                warnChip.style.backgroundColor = '';
+                warnChip.style.color = '';
+            }
+        }
 
         document.getElementById('live-conf').textContent = status.confidence.toFixed(2);
         document.getElementById('live-roi').textContent = status.roi_status;
@@ -1202,46 +1223,79 @@ const App = {
             };
         }
 
-        // 1. Presets — always fetch dedicated report data for the selected range
+        // 1. Presets — ONLY update range state and reset the sheet to "pending"
         document.querySelectorAll('.btn-preset[data-rep-range]').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                // UI
+                // UI — toggle active class
                 document.querySelectorAll('.btn-preset[data-rep-range]').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
 
-                // State
+                // State — store selected range
                 this.state.reports.range = e.target.getAttribute('data-rep-range');
 
-                // Always fetch from DB then generate
-                this.loadReportFromDB(this.state.reports.range).then(() => this.generateReport());
+                // Clear the report sheet to indicate generation is needed
+                this.resetReportSheet(e.target.textContent.trim());
             });
         });
 
         // 2. Actions
         document.getElementById('btnGenerateReport')?.addEventListener('click', () => {
-            // Always fetch fresh data for the selected report range
-            this.loadReportFromDB(this.state.reports.range).then(() => this.generateReport());
+            const btn = document.getElementById('btnGenerateReport');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-rotate-right fa-spin"></i> Generating…'; }
+            this.loadReportFromDB(this.state.reports.range).then(() => {
+                this.generateReport();
+            }).finally(() => {
+                setTimeout(() => {
+                    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Generate'; }
+                }, 700);
+            });
         });
 
         document.getElementById('btnPrintReport')?.addEventListener('click', () => {
-            if (!this.state.reports.lastSummary) this.generateReport();
+            if (!this.state.reports.lastSummary) {
+                alert('Please click "Generate" first to build the report.');
+                return;
+            }
             window.print();
         });
 
         document.getElementById('btnDownloadReportJSON')?.addEventListener('click', () => {
-            if (!this.state.reports.lastSummary) this.generateReport();
+            if (!this.state.reports.lastSummary) {
+                alert('Please click "Generate" first to build the report.');
+                return;
+            }
             this.downloadReport('json');
         });
 
         document.getElementById('btnDownloadReportCSV')?.addEventListener('click', () => {
-            if (!this.state.reports.lastSummary) this.generateReport();
+            if (!this.state.reports.lastSummary) {
+                alert('Please click "Generate" first to build the report.');
+                return;
+            }
             this.downloadReport('csv');
         });
 
-        // Initial Generation — always fetch from DB on load
-        setTimeout(() => {
-            this.loadReportFromDB(this.state.reports.range).then(() => this.generateReport());
-        }, 500);
+        // No auto-generation on load — report starts in a clean pending state
+    },
+
+    // Resets the report sheet to a "pending generation" state
+    resetReportSheet(rangeLabel) {
+        this.state.reports.lastSummary = null;
+        window.EventStore.reportAggregate = null;
+
+        document.getElementById('rep-range-label').textContent = rangeLabel || 'Today';
+        document.getElementById('rep-generated-at').textContent = '\u2014';
+
+        document.getElementById('rep-total-warnings').textContent = '\u2014';
+        document.getElementById('rep-total-detections').textContent = '\u2014';
+        document.getElementById('rep-false-warnings').textContent = '\u2014';
+        document.getElementById('rep-avg-latency').textContent = '\u2014';
+        document.getElementById('rep-peak-hour').textContent = '\u2014';
+
+        const list = document.getElementById('rep-insights-list');
+        if (list) {
+            list.innerHTML = '<li>Select a time range and click <strong>Generate</strong> to build the report.</li>';
+        }
     },
 
     // Returns the event dataset for the current report range (always from DB reportRows).
@@ -1273,16 +1327,39 @@ const App = {
             ` | avg_lat=${avgLatency}ms | peak=${peakHour} | window=${agg.range_start} → ${agg.range_end}`
         );
 
-        // Insights
+        // Professional qualitative insights
         const insights = [];
         if (agg.total_events === 0) {
-            insights.push('No events recorded during this period.');
+            insights.push('No events were recorded during this period. The system was operational but no pedestrian activity was detected in the monitored crosswalk zone.');
         } else {
-            if (totalWarnings > 0) insights.push(`Total of ${totalWarnings} warnings triggered.`);
-            if (peakHour !== '--') insights.push(`Peak warning period: ${peakHour}`);
-            if (topScenario !== '--') insights.push(`Most common scenario: ${topScenario}`);
-            if (avgLatency < 100) insights.push(`System performance optimal (Avg latency < 100ms).`);
-            else insights.push(`Average latency is ${avgLatency}ms.`);
+            // Safety impact
+            if (totalWarnings > 0) {
+                insights.push(`The system successfully facilitated <strong>${totalWarnings}</strong> active safety intervention${totalWarnings > 1 ? 's' : ''}, triggering visual alerts for child pedestrians detected in the crosswalk zone.`);
+            } else {
+                insights.push('No warning activations were recorded during this period, indicating no child pedestrian entries were detected within the active ROI zone.');
+            }
+
+            // Accuracy / false warning rate
+            if (totalWarnings > 0) {
+                const falseRate = ((falseWarnings / totalWarnings) * 100).toFixed(1);
+                if (parseFloat(falseRate) <= 10) {
+                    insights.push(`System classification reliability is <strong>high</strong> — false warning rate stands at ${falseRate}%, well within acceptable prototype operating parameters.`);
+                } else {
+                    insights.push(`A false warning rate of <strong>${falseRate}%</strong> was recorded. This is within standard prototype operating variance; continued dataset refinement is recommended for production deployment.`);
+                }
+            }
+
+            // Peak risk interval
+            if (peakHour !== '--') {
+                insights.push(`A <strong>Critical Risk Interval</strong> was identified at <strong>${peakHour}</strong> — representing the period of highest crosswalk utilization requiring the greatest driver and pedestrian vigilance.`);
+            }
+
+            // Latency / performance
+            if (avgLatency < 100) {
+                insights.push(`Real-time processing benchmarks were met — average system latency of <strong>${avgLatency}ms</strong> ensures instantaneous alert triggering upon pedestrian entry into the detection zone.`);
+            } else {
+                insights.push(`Average system latency recorded at <strong>${avgLatency}ms</strong>. While within functional range, optimization of inference pipeline is recommended to reduce alert response time.`);
+            }
         }
 
         const summary = {
@@ -2521,20 +2598,8 @@ const App = {
         setChip('sysStatusStream', data.stream_connected, 'Connected', 'Disconnected');
         setChip('sysStatusAI', data.ai_running, 'Running', data.ai_error ? 'Not Loaded' : 'Stopped');
 
-        // Warning output uses the live status from EventStore
-        const warningOn = window.EventStore.systemStatus.warning_on;
-        setChip('sysStatusWarning', true, warningOn ? 'Active' : 'Standby', 'Standby');
-        const warnChip = document.getElementById('sysStatusWarning');
-        if (warnChip) {
-            if (warningOn) {
-                warnChip.className = 'status-chip';
-                warnChip.style.backgroundColor = 'rgba(211, 47, 47, 0.12)';
-                warnChip.style.color = '#b71c1c';
-            } else {
-                warnChip.style.backgroundColor = '';
-                warnChip.style.color = '';
-            }
-        }
+        // Warning Output pill is now updated in the high-speed updateUI() loop
+        // for perfect synchronization with the Warning Device metric card.
 
         // Last frame time
         const lastFrame = document.getElementById('sysLastFrame');

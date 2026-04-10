@@ -5,8 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard</title>
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Fonts: Satoshi (primary UI) + JetBrains Mono (data/KPIs) -->
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700,900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- CSS -->
@@ -23,8 +24,7 @@
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="sidebar-brand">
-                <i class="fa-solid fa-person-walking"></i> Dashboard
-
+                Dashboard
             </div>
             <button class="sidebar-toggle" id="btnHamburger" aria-label="Toggle sidebar" aria-expanded="false"
                 aria-controls="sidebar">
@@ -59,15 +59,38 @@
     <main class="main-content">
         <!-- Topbar -->
         <header class="topbar">
-            <div class="topbar-left">Smart Crosswalk Alert System for Real-Time Child Detection</div>
-            <div class="topbar-right">
-                <div class="status-chip disconnected" id="connection-chip">
-                    <div class="status-indicator"></div> Connecting...
+            <div class="topbar-left brand-lockup">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-tower-broadcast"></i>
                 </div>
-                <button class="btn btn-outline" id="theme-toggle" title="Toggle Dark/Light Mode">
+                <div class="brand-titles">
+                    <h1 class="brand-title">
+                        <span class="title-prefix">IoT-Based</span>
+                        Smart Crosswalk Alert System
+                    </h1>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <!-- System Time Display -->
+                <div class="system-time" title="Last Sync Time">
+                    <i class="fa-regular fa-clock"></i>
+                    <span class="time-label">Sync:</span>
+                    <span id="last-update" class="time-value">--:--:--</span>
+                </div>
+
+                <!-- Divider -->
+                <div class="topbar-divider"></div>
+
+                <!-- Theme Toggle (clean circle, no border) -->
+                <button class="topbar-action-btn" id="theme-toggle" title="Toggle Dark/Light Mode">
                     <i class="fa-solid fa-moon"></i>
                 </button>
-                <small id="last-update" class="text-muted">Last Update: ---</small>
+
+                <!-- Status Pill -->
+                <div class="status-chip disconnected" id="connection-chip">
+                    <div class="status-indicator"></div>
+                    <span class="status-text">Connecting...</span>
+                </div>
             </div>
         </header>
 
@@ -78,7 +101,7 @@
 
             <!-- LIVE VIEW SECTION -->
             <section id="live-section" class="page-section active">
-                <div class="dashboard-grid">
+                <div class="live-metrics-grid">
                     <div class="card">
                         <div class="card-title">Child-class in ROI</div>
                         <div class="card-value" id="live-child">NO</div>
@@ -499,81 +522,75 @@
 
                 <!-- 2) Printable Report Container -->
                 <div id="reportPreview" class="report-paper">
-                    <!-- Header / Letterhead -->
-                    <div class="report-header" style="margin-bottom: 30px;">
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 20px; text-align: center; margin-bottom: 25px;">
-                            <img src="/static/img/TMC_Logo.png" alt="TMC Logo" style="width: 80px; height: auto;">
-                            <div>
-                                <h2 style="font-size: 1.6rem; font-weight: 800; margin: 0; color: #222;">Traffic Management Center (TMC)</h2>
-                                <h3 style="font-size: 1.1rem; font-weight: 500; color: #555; margin: 5px 0 0 0;">Malaybalay City, Bukidnon</h3>
-                            </div>
-                        </div>
-                        
-                        <!-- Structured Meta block -->
-                        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; font-size: 0.95rem; color: #333; border: 1px solid #e9ecef;">
-                            <p style="margin: 0; font-weight: 600;">IoT-Based Smart Crosswalk Alert System Using CNN for Real-Time Child Pedestrian Detection</p>
-                            <p style="margin: 0;">Casisang Central School Crosswalk, Barangay Casisang</p>
-                            <p style="margin: 0;"><strong>Report Range:</strong> <span id="rep-range-label">Today</span></p>
-                            <p style="margin: 0;"><strong>Generated At:</strong> <span id="rep-generated-at">---</span></p>
+
+                    <!-- Letterhead -->
+                    <div class="report-letterhead">
+                        <img src="/static/img/TMC_Logo.png" alt="TMC Logo">
+                        <div>
+                            <h2>Traffic Management Center (TMC)</h2>
+                            <h3>Malaybalay City, Bukidnon</h3>
                         </div>
                     </div>
+
+                    <!-- Meta block -->
+                    <div class="report-meta">
+                        <p class="meta-system">IoT-Based Smart Crosswalk Alert System Using CNN for Real-Time Child Pedestrian Detection</p>
+                        <p class="meta-location">Casisang Central School Crosswalk, Barangay Casisang</p>
+                        <p class="meta-range"><strong>Report Range:</strong> <span id="rep-range-label">Today</span></p>
+                        <p class="meta-generated"><strong>Generated At:</strong> <span id="rep-generated-at">---</span></p>
+                    </div>
+
+                    <hr class="report-divider">
 
                     <!-- KPI Summary -->
-                    <h4
-                        style="margin-bottom: 15px; text-transform: uppercase; color: #666; font-size: 0.85rem; letter-spacing: 1px;">
-                        Summary Metrics</h4>
-                    <div style="display: flex; justify-content: center; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
-                        <div class="card" style="flex: 1; min-width: 180px; max-width: 220px; padding: 15px; box-shadow: none; border: 1px solid #eee; border-left: 4px solid var(--primary-accent); background: #fafafa;">
-                            <div class="card-title"><i class="fa-solid fa-triangle-exclamation" style="margin-right: 5px; color: #888;"></i> Warnings</div>
-                            <div class="card-value" id="rep-total-warnings">0</div>
+                    <p class="report-section-label">Summary Metrics</p>
+                    <div class="report-kpi-row">
+                        <div class="report-kpi-card">
+                            <div class="kpi-label"><i class="fa-solid fa-triangle-exclamation"></i> Warnings</div>
+                            <div class="kpi-value" id="rep-total-warnings">0</div>
                         </div>
-                        <div class="card" style="flex: 1; min-width: 180px; max-width: 220px; padding: 15px; box-shadow: none; border: 1px solid #eee; border-left: 4px solid var(--primary-accent); background: #fafafa;">
-                            <div class="card-title"><i class="fa-solid fa-child" style="margin-right: 5px; color: #888;"></i> Detections</div>
-                            <div class="card-value" id="rep-total-detections">0</div>
+                        <div class="report-kpi-card">
+                            <div class="kpi-label"><i class="fa-solid fa-child"></i> Detections</div>
+                            <div class="kpi-value" id="rep-total-detections">0</div>
                         </div>
-                        <div class="card" style="flex: 1; min-width: 180px; max-width: 220px; padding: 15px; box-shadow: none; border: 1px solid #eee; border-left: 4px solid var(--primary-accent); background: #fafafa;">
-                            <div class="card-title"><i class="fa-solid fa-ban" style="margin-right: 5px; color: #888;"></i> False Warnings</div>
-                            <div class="card-value" id="rep-false-warnings">0</div>
+                        <div class="report-kpi-card">
+                            <div class="kpi-label"><i class="fa-solid fa-ban"></i> False Warnings</div>
+                            <div class="kpi-value" id="rep-false-warnings">0</div>
                         </div>
                     </div>
-                    <div style="display: flex; justify-content: center; flex-wrap: wrap; gap: 15px; margin-bottom: 30px;">
-                        <div class="card" style="flex: 1; min-width: 180px; max-width: 220px; padding: 15px; box-shadow: none; border: 1px solid #eee; border-left: 4px solid var(--primary-accent); background: #fafafa;">
-                            <div class="card-title"><i class="fa-solid fa-stopwatch" style="margin-right: 5px; color: #888;"></i> Latency</div>
-                            <div class="card-value" id="rep-avg-latency">0ms</div>
+                    <div class="report-kpi-row">
+                        <div class="report-kpi-card">
+                            <div class="kpi-label"><i class="fa-solid fa-stopwatch"></i> Avg Latency</div>
+                            <div class="kpi-value" id="rep-avg-latency">0ms</div>
                         </div>
-                        <div class="card" style="flex: 1; min-width: 180px; max-width: 220px; padding: 15px; box-shadow: none; border: 1px solid #eee; border-left: 4px solid var(--primary-accent); background: #fafafa;">
-                            <div class="card-title"><i class="fa-solid fa-clock" style="margin-right: 5px; color: #888;"></i> Peak Hour</div>
-                            <div class="card-value" id="rep-peak-hour">--</div>
+                        <div class="report-kpi-card">
+                            <div class="kpi-label"><i class="fa-solid fa-clock"></i> Peak Hour</div>
+                            <div class="kpi-value" id="rep-peak-hour">--</div>
                         </div>
                     </div>
 
-                    <!-- Insights -->
-                    <h4
-                        style="margin-bottom: 15px; text-transform: uppercase; color: #666; font-size: 0.85rem; letter-spacing: 1px;">
-                        Key Insights</h4>
-                    <ul id="rep-insights-list"
-                        style="margin-bottom: 30px; padding-left: 20px; color: #444; line-height: 1.6;">
-                        <li>Click "Generate" to populate insights.</li>
+                    <hr class="report-divider">
+
+                    <!-- Key Insights -->
+                    <p class="report-section-label">Key Insights</p>
+                    <ul class="report-insights-list" id="rep-insights-list">
+                        <li>Click &ldquo;Generate&rdquo; to populate insights.</li>
                     </ul>
 
-
-
-                    <!-- Sign-off Block -->
-                    <div style="margin-top: 60px; display: flex; justify-content: space-between; padding: 0 40px;">
-                        <div style="text-align: center; width: 200px;">
-                            <div style="border-bottom: 1px solid #333; height: 40px; margin-bottom: 5px;"></div>
-                            <p style="margin: 0; font-size: 0.85rem; font-weight: 600; color: #444;">Prepared By</p>
+                    <!-- Sign-off -->
+                    <div class="report-signoff">
+                        <div class="report-signoff-slot">
+                            <div class="sig-line"></div>
+                            <p>Prepared By</p>
                         </div>
-                        <div style="text-align: center; width: 200px;">
-                            <div style="border-bottom: 1px solid #333; height: 40px; margin-bottom: 5px;"></div>
-                            <p style="margin: 0; font-size: 0.85rem; font-weight: 600; color: #444;">Authorized Signatory</p>
+                        <div class="report-signoff-slot">
+                            <div class="sig-line"></div>
+                            <p>Authorized Signatory</p>
                         </div>
                     </div>
 
                     <!-- Footer -->
-                    <div style="margin-top: 40px; text-align: center; font-size: 0.8rem; color: #999;">
-                        &copy; 2026 Tech Tribe - All Rights Reserved.
-                    </div>
+                    <div class="report-footer">&copy; 2026 Tech Tribe &mdash; All Rights Reserved.</div>
                 </div>
             </section>
 
