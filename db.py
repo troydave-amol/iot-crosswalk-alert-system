@@ -86,6 +86,13 @@ def init_db():
             except Exception:
                 pass
 
+            # Migration: add child_count column if it doesn't exist (safe for existing tables)
+            try:
+                cursor.execute("ALTER TABLE events ADD COLUMN child_count INT NOT NULL DEFAULT 0")
+                print(f"  → Added 'child_count' column to events table.")
+            except Exception:
+                pass  # Column already exists
+
             print(f"Database '{target_db}' and table 'events' checked/initialized successfully.")
             
     except Exception as e:
@@ -134,11 +141,13 @@ def insert_event(payload):
             sql = """
             INSERT INTO events (
                 timestamp_iso, source, child_in_roi, roi_status, confidence, latency_ms,
-                warning_logic_on, switch_enabled, warning_device_on, battery_percent, solar_status,
+                warning_logic_on, switch_enabled, warning_device_on, child_count,
+                battery_percent, solar_status,
                 scenario, camera_status, edge_status, led_driver_status
             ) VALUES (
                 %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s,
                 %s, %s, %s, %s
             )
             """
@@ -170,6 +179,7 @@ def insert_event(payload):
                 int(payload["warning_logic_on"]),
                 int(payload["switch_enabled"]),
                 int(payload["warning_device_on"]),
+                int(payload.get("child_count", 0)),
                 payload["battery_percent"],
                 payload["solar_status"],
                 payload.get("scenario"),
@@ -179,7 +189,7 @@ def insert_event(payload):
             )
             
             cursor.execute(sql, values)
-            print(f"DB INSERT OK: {ts_val} warning_device_on={int(payload['warning_device_on'])} child_in_roi={int(payload['child_in_roi'])}")
+            print(f"DB INSERT OK: {ts_val} warning_device_on={int(payload['warning_device_on'])} child_in_roi={int(payload['child_in_roi'])} child_count={int(payload.get('child_count', 0))}")
 
     except Exception as e:
         print(f"DB INSERT FAILED: {e}")
@@ -398,29 +408,61 @@ def fetch_analytics_aggregates(time_range="all"):
 
         with conn.cursor() as cursor:
 
-            # ── 1. KPI AGGREGATES (single fast query) ────────────────────────────
+            # ══════════════════════════════════════════════════════════════════
+            # UNIFIED SESSION-BASE SUBQUERY
+            # ──────────────────────────────────────────────────────────────────
+            # LAG() runs over the ENTIRE events table (unfiltered by time) so
+            # it always sees the true previous row.  Time-range filtering is
+            # applied in the OUTER query only, preventing artificial session
+            # boundary inflation at the edge of time windows.
+            #
+            # Definitions:
+            #   warn_start   = warning_device_on transitions 0→1 (one warning session)
+            #   detect_start = child_in_roi transitions 0→1 (one detection session)
+            #   false_warn_start = warning turns ON while child is NOT in ROI
+            # ══════════════════════════════════════════════════════════════════
+            session_base = """
+                SELECT
+                    id, timestamp_iso, latency_ms,
+                    warning_device_on, child_in_roi, child_count, confidence, scenario,
+                    CASE WHEN warning_device_on = 1
+                         AND COALESCE(LAG(warning_device_on) OVER (ORDER BY id), 0) = 0
+                         THEN 1 ELSE 0 END  AS warn_start,
+                    CASE WHEN child_in_roi = 1
+                         AND COALESCE(LAG(child_in_roi) OVER (ORDER BY id), 0) = 0
+                         THEN 1 ELSE 0 END  AS detect_start,
+                    CASE WHEN warning_device_on = 1
+                         AND child_in_roi = 0
+                         AND COALESCE(LAG(warning_device_on) OVER (ORDER BY id), 0) = 0
+                         THEN 1 ELSE 0 END  AS false_warn_start
+                FROM events
+            """
+
+            # ── 1. KPI AGGREGATES (session-based) ────────────────────────────
+            # total_warnings & false_warnings count unique sessions (0→1 transitions).
+            # total_detections counts the actual number of children present at the
+            # moment each detection session starts (detect_start=1 × child_count).
             kpi_sql = f"""
                 SELECT
-                    COUNT(*)                                        AS total_events,
-                    SUM(warning_device_on = 1)                      AS total_warnings,
-                    SUM(child_in_roi = 1)                           AS total_detections,
-                    SUM(warning_device_on = 1 AND child_in_roi = 0) AS false_warnings,
-                    ROUND(AVG(latency_ms), 1)                       AS avg_latency
-                FROM events
+                    COUNT(*)                    AS total_events,
+                    ROUND(AVG(latency_ms), 1)   AS avg_latency,
+                    SUM(warn_start)             AS total_warnings,
+                    SUM(CASE WHEN detect_start = 1 THEN child_count ELSE 0 END) AS total_detections,
+                    SUM(false_warn_start)       AS false_warnings
+                FROM ({session_base}) s
                 {where_sql}
             """
             cursor.execute(kpi_sql, params)
             kpi = cursor.fetchone()
 
-            # ── 2. TIME-SERIES BINS ───────────────────────────────────────────────
+            # ── 2. TIME-SERIES BINS (session-based) ──────────────────────────
             if time_range in ("15m", "1h"):
-                # UNIX_TIMESTAMP floor-based bins (works on DATETIME columns)
                 ts_sql = f"""
                     SELECT
                         FLOOR(UNIX_TIMESTAMP(timestamp_iso) / {bin_seconds}) * {bin_seconds} AS bin_ts,
-                        SUM(warning_device_on = 1) AS warnings,
-                        SUM(child_in_roi = 1)      AS detections
-                    FROM events
+                        SUM(warn_start)    AS warnings,
+                        SUM(CASE WHEN detect_start = 1 THEN child_count ELSE 0 END) AS detections
+                    FROM ({session_base}) s
                     {where_sql}
                     GROUP BY bin_ts
                     ORDER BY bin_ts
@@ -442,13 +484,12 @@ def fetch_analytics_aggregates(time_range="all"):
                     })
 
             elif time_range == "today":
-                # Hourly bins: group by UTC hour, display as Manila hour
                 ts_sql = f"""
                     SELECT
                         HOUR(timestamp_iso) AS hour_utc,
-                        SUM(warning_device_on = 1) AS warnings,
-                        SUM(child_in_roi = 1)      AS detections
-                    FROM events
+                        SUM(warn_start)    AS warnings,
+                        SUM(CASE WHEN detect_start = 1 THEN child_count ELSE 0 END) AS detections
+                    FROM ({session_base}) s
                     {where_sql}
                     GROUP BY hour_utc
                     ORDER BY hour_utc
@@ -462,7 +503,6 @@ def fetch_analytics_aggregates(time_range="all"):
                     hour_utc = int(row["hour_utc"])
                     hour_manila = (hour_utc + 8) % 24
                     label = f"{hour_manila:02d}:00"
-                    # Approximate ts_ms for chart ordering
                     bin_dt = datetime(today_date_utc.year, today_date_utc.month,
                                       today_date_utc.day, hour_utc, 0, 0, tzinfo=timezone.utc)
                     time_series.append({
@@ -476,9 +516,9 @@ def fetch_analytics_aggregates(time_range="all"):
                 ts_sql = f"""
                     SELECT
                         DATE(timestamp_iso) AS bin_date,
-                        SUM(warning_device_on = 1) AS warnings,
-                        SUM(child_in_roi = 1)      AS detections
-                    FROM events
+                        SUM(warn_start)    AS warnings,
+                        SUM(CASE WHEN detect_start = 1 THEN child_count ELSE 0 END) AS detections
+                    FROM ({session_base}) s
                     {where_sql}
                     GROUP BY bin_date
                     ORDER BY bin_date
@@ -493,7 +533,6 @@ def fetch_analytics_aggregates(time_range="all"):
                         label = bin_date.strftime("%b %d")
                         ts_ms = int(bin_date.replace(tzinfo=timezone.utc).timestamp()) * 1000
                     else:
-                        from datetime import date as date_cls
                         label = str(bin_date)
                         try:
                             d = datetime.strptime(str(bin_date), "%Y-%m-%d").replace(tzinfo=timezone.utc)
@@ -507,13 +546,13 @@ def fetch_analytics_aggregates(time_range="all"):
                         "detections": int(row["detections"] or 0)
                     })
 
-            # ── 3. PEAK HOUR (based on warnings, expressed in Manila time) ────────
+            # ── 3. PEAK HOUR (session-based, Manila time) ────────────────────
             peak_hour = "--"
             peak_sql = f"""
                 SELECT
-                    HOUR(timestamp_iso)        AS hour_utc,
-                    SUM(warning_device_on = 1) AS warn_count
-                FROM events
+                    HOUR(timestamp_iso)  AS hour_utc,
+                    SUM(warn_start)      AS warn_count
+                FROM ({session_base}) s
                 {where_sql}
                 GROUP BY hour_utc
                 ORDER BY warn_count DESC
@@ -528,7 +567,8 @@ def fetch_analytics_aggregates(time_range="all"):
                 h12 = hour_manila % 12 or 12
                 peak_hour = f"{h12} {ampm}"
 
-            # ── 4. CONFIDENCE HISTOGRAM (only for detections) ────────────────────
+            # ── 4. CONFIDENCE HISTOGRAM (row-level — not session-based) ──────
+            # Counts individual detection rows for distribution analysis.
             conf_sql = f"""
                 SELECT
                     SUM(confidence < 0.2  AND child_in_roi = 1) AS b0,
@@ -549,7 +589,7 @@ def fetch_analytics_aggregates(time_range="all"):
                 int(conf_row.get("b4") or 0)
             ] if conf_row else [0, 0, 0, 0, 0]
 
-            # ── 5. SCENARIO DISTRIBUTION ─────────────────────────────────────────
+            # ── 5. SCENARIO DISTRIBUTION (row-level) ─────────────────────────
             scen_sql = f"""
                 SELECT scenario, COUNT(*) AS cnt
                 FROM events

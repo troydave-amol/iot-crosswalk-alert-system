@@ -559,6 +559,7 @@ class LiveSession:
             "warning_logic_on": out["child_in_roi"],
             "switch_enabled": True,
             "warning_device_on": warning_device_on,
+            "child_count": out.get("child_count", 0),
             "battery_percent": 0.0,
             "solar_status": "N/A",
             "scenario": "Live",
@@ -632,6 +633,7 @@ class LiveSession:
             min_bbox_h = h * MIN_CHILD_BBOX_RATIO
             tracked_child_in_roi_raw = False
             tracked_confidence_raw = 0.0
+            child_count_in_roi = 0
 
             for d in tracked_detections:
                 if d["cls"] == 1 and d["conf"] >= CHILD_CONF:
@@ -640,6 +642,7 @@ class LiveSession:
                         if roi.feet_in_roi(float(x1), float(y1), float(x2), float(y2), FEET_HEIGHT_RATIO):
                             tracked_child_in_roi_raw = True
                             tracked_confidence_raw = max(tracked_confidence_raw, d["conf"])
+                            child_count_in_roi += 1
 
             # --- 3. Vote Stabilizer for the global warning status ---
             child_in_roi_stable, confidence_stable = self.stabilizer.update(
@@ -655,6 +658,7 @@ class LiveSession:
                 "roi_status": "CHILD_IN_ROI" if child_in_roi_stable else "CLEAR",
                 "confidence_raw": tracked_confidence_raw,
                 "child_in_roi_raw": tracked_child_in_roi_raw,
+                "child_count": child_count_in_roi,
                 "detections": tracked_detections,
             }
             warning_device_on = bool(self.warn_ctrl.update(out["child_in_roi"]))
@@ -837,6 +841,7 @@ class VideoTestSession(LiveSession):
             "warning_logic_on": out["child_in_roi"],
             "switch_enabled": True,
             "warning_device_on": warning_device_on,
+            "child_count": out.get("child_count", 0),
             "battery_percent": 0.0,
             "solar_status": "N/A",
             "scenario": f"Video Test: {self._video_filename}",

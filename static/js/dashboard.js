@@ -941,10 +941,10 @@ const App = {
                 // Always fetch from DB, then update UI
                 this.loadAnalyticsFromDB(this.state.analytics.range).then(() => this.updateAnalyticsUI());
 
-                // Start Polling (30s)
+                // Start Polling (5s — near real-time)
                 this.state.analyticsPollingTimer = setInterval(() => {
                     this.loadAnalyticsFromDB(this.state.analytics.range).then(() => this.updateAnalyticsUI());
-                }, 30000);
+                }, 5000);
             } else {
                 // Leaving Analytics
                 if (this.state.analyticsPollingTimer) {
