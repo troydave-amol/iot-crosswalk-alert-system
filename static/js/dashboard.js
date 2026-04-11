@@ -1134,6 +1134,8 @@ const App = {
                 } else {
                     emptyMsg.style.display = 'block';
                 }
+                // Reset KPI cards to zero so stale values from the previous range don't persist
+                this.renderKPIs({ total_warnings: 0, total_detections: 0, false_warnings: 0, avg_latency: 0, peak_hour: '--' });
                 return;
             } else {
                 chartGrid.style.display = 'grid';
