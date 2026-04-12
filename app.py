@@ -2,7 +2,7 @@ import os
 import threading
 import time
 import functools
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, time as dt_time
 from typing import Optional, Union
 
 from dotenv import load_dotenv
@@ -46,6 +46,27 @@ def _resolve_model_path() -> Path:
     if not path.is_absolute():
         path = PROJECT_ROOT / path
     return path
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Time-Based Scenario Recognition
+# ────────────────────────────────────────────────────────────────────────────
+# Automatically labels detection events based on the current Manila local
+# time (UTC+8).  Replaces static "Live" / "Video Test" labels so TMC
+# Officers can identify high-risk school windows in the Scenario chart.
+# ────────────────────────────────────────────────────────────────────────────
+def get_time_scenario() -> str:
+    """Return a scenario label based on the current Manila local time."""
+    manila_now = datetime.now(timezone.utc) + timedelta(hours=8)
+    t = manila_now.time()
+
+    if dt_time(6, 0) <= t < dt_time(8, 30):
+        return "Morning School Entry"
+    if dt_time(11, 0) <= t < dt_time(13, 30):
+        return "Mid-Day Shift"
+    if dt_time(15, 30) <= t < dt_time(17, 0):
+        return "Afternoon Dismissal"
+    return "Standard Daylight Ops"
 
 
 CHILD_CONF = _env_float("LIVE_CHILD_CONF", 0.65)
@@ -624,7 +645,7 @@ class LiveSession:
             "child_count": out.get("child_count", 0),
             "battery_percent": 0.0,
             "solar_status": "N/A",
-            "scenario": "Live",
+            "scenario": get_time_scenario(),
             "camera_status": "OK",
             "edge_status": "OK",
             "led_driver_status": "Ready",
@@ -906,7 +927,7 @@ class VideoTestSession(LiveSession):
             "child_count": out.get("child_count", 0),
             "battery_percent": 0.0,
             "solar_status": "N/A",
-            "scenario": f"Video Test: {self._video_filename}",
+            "scenario": get_time_scenario(),
             "camera_status": "OK",
             "edge_status": "OK",
             "led_driver_status": "Ready",

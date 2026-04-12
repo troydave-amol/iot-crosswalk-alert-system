@@ -610,19 +610,34 @@ def fetch_analytics_aggregates(time_range="all"):
                 int(conf_row.get("b4") or 0)
             ] if conf_row else [0, 0, 0, 0, 0]
 
-            # ── 5. SCENARIO DISTRIBUTION (row-level) ─────────────────────────
+            # ── 5. SCENARIO DISTRIBUTION (dynamic time-based labeling) ─────
+            # Instead of reading the raw 'scenario' column, we compute the
+            # label from each event's timestamp (converted to Manila UTC+8).
+            # This retroactively classifies ALL historical data correctly.
+            manila_t = "TIME(DATE_ADD(timestamp_iso, INTERVAL 8 HOUR))"
+            scenario_case = f"""
+                CASE
+                    WHEN {manila_t} >= '06:00:00' AND {manila_t} < '08:30:00'
+                        THEN 'Morning School Entry'
+                    WHEN {manila_t} >= '11:00:00' AND {manila_t} < '13:30:00'
+                        THEN 'Mid-Day Shift'
+                    WHEN {manila_t} >= '15:30:00' AND {manila_t} < '17:00:00'
+                        THEN 'Afternoon Dismissal'
+                    ELSE 'Standard Daylight Ops'
+                END
+            """
             scen_sql = f"""
-                SELECT scenario, COUNT(*) AS cnt
+                SELECT {scenario_case} AS time_scenario, COUNT(*) AS cnt
                 FROM events
                 {where_sql}
-                GROUP BY scenario
+                GROUP BY time_scenario
                 ORDER BY cnt DESC
                 LIMIT 10
             """
             cursor.execute(scen_sql, params)
             scen_rows = cursor.fetchall()
             scenario_distribution = [
-                {"scenario": r["scenario"] or "Unknown", "count": int(r["cnt"])}
+                {"scenario": r["time_scenario"] or "Unknown", "count": int(r["cnt"])}
                 for r in scen_rows
             ]
             top_scenario = scenario_distribution[0]["scenario"] if scenario_distribution else None

@@ -1062,7 +1062,8 @@ const App = {
             });
         }
 
-        // D) Scenario (Bar)
+        // D) Scenario (Horizontal Bar — axes must be explicitly set
+        //    because indexAxis:'y' swaps which axis is category vs value)
         const ctxS = document.getElementById('chartScenario')?.getContext('2d');
         if (ctxS) {
             this.state.charts.scenario = new Chart(ctxS, {
@@ -1070,15 +1071,39 @@ const App = {
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'Events',
+                        label: 'Total Recorded Events',
                         data: [],
-                        backgroundColor: ['#FF9280', '#45315D', '#6c757d', '#2196f3'],
+                        backgroundColor: ['#FF9280', '#45315D', '#6c757d', '#2196f3', '#4caf50', '#ff5722'],
                         borderRadius: 4
                     }]
                 },
                 options: {
-                    ...commonOptions,
-                    indexAxis: 'y' // Horizontal bar for scenarios
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 800 },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `${ctx.parsed.x.toLocaleString()} events`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: { color: gridColor },
+                            ticks: {
+                                color: textColor,
+                                precision: 0
+                            }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: textColor }
+                        }
+                    }
                 }
             });
         }
