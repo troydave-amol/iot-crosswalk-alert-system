@@ -409,47 +409,64 @@ def fetch_analytics_aggregates(time_range="all"):
         with conn.cursor() as cursor:
 
             # ══════════════════════════════════════════════════════════════════
-            # UNIFIED SESSION-BASE SUBQUERY
+            # 3-STEP CTE PIPELINE  (Gaps-and-Islands for session counting)
             # ──────────────────────────────────────────────────────────────────
-            # LAG() runs over the ENTIRE events table (unfiltered by time) so
-            # it always sees the true previous row.  Time-range filtering is
-            # applied in the OUTER query only, preventing artificial session
-            # boundary inflation at the edge of time windows.
+            # Step 1 — flags:   LAG() over entire table for 0→1 transitions
+            # Step 2 — sessions: rolling SUM(detect_start) to assign session IDs
+            # Step 3 — enriched: MAX(child_count) per detect session, attached
+            #                    to every row so outer queries can filter by time
             #
-            # Definitions:
-            #   warn_start   = warning_device_on transitions 0→1 (one warning session)
-            #   detect_start = child_in_roi transitions 0→1 (one detection session)
-            #   false_warn_start = warning turns ON while child is NOT in ROI
+            # Key column:
+            #   session_max_children = the peak child_count within each session.
+            #   Only read at detect_start=1 rows for aggregation to avoid
+            #   double-counting.
             # ══════════════════════════════════════════════════════════════════
-            session_base = """
-                SELECT
-                    id, timestamp_iso, latency_ms,
-                    warning_device_on, child_in_roi, child_count, confidence, scenario,
-                    CASE WHEN warning_device_on = 1
-                         AND COALESCE(LAG(warning_device_on) OVER (ORDER BY id), 0) = 0
-                         THEN 1 ELSE 0 END  AS warn_start,
-                    CASE WHEN child_in_roi = 1
-                         AND COALESCE(LAG(child_in_roi) OVER (ORDER BY id), 0) = 0
-                         THEN 1 ELSE 0 END  AS detect_start,
-                    CASE WHEN warning_device_on = 1
-                         AND child_in_roi = 0
-                         AND COALESCE(LAG(warning_device_on) OVER (ORDER BY id), 0) = 0
-                         THEN 1 ELSE 0 END  AS false_warn_start
-                FROM events
+            cte_base = """
+                WITH flags AS (
+                    SELECT
+                        id, timestamp_iso, latency_ms,
+                        warning_device_on, child_in_roi, child_count, confidence, scenario,
+                        CASE WHEN warning_device_on = 1
+                             AND COALESCE(LAG(warning_device_on) OVER (ORDER BY id), 0) = 0
+                             THEN 1 ELSE 0 END  AS warn_start,
+                        CASE WHEN child_in_roi = 1
+                             AND COALESCE(LAG(child_in_roi) OVER (ORDER BY id), 0) = 0
+                             THEN 1 ELSE 0 END  AS detect_start,
+                        CASE WHEN warning_device_on = 1
+                             AND child_in_roi = 0
+                             AND COALESCE(LAG(warning_device_on) OVER (ORDER BY id), 0) = 0
+                             THEN 1 ELSE 0 END  AS false_warn_start
+                    FROM events
+                ),
+                sessions AS (
+                    SELECT
+                        f.*,
+                        SUM(detect_start) OVER (ORDER BY id) AS detect_session_id
+                    FROM flags f
+                ),
+                enriched AS (
+                    SELECT
+                        s.*,
+                        CASE WHEN detect_session_id > 0
+                             THEN MAX(child_count) OVER (PARTITION BY detect_session_id)
+                             ELSE 0 END AS session_max_children
+                    FROM sessions s
+                )
             """
 
             # ── 1. KPI AGGREGATES (session-based) ────────────────────────────
-            # total_warnings & false_warnings count unique sessions (0→1 transitions).
-            # total_detections counts the actual number of children present at the
-            # moment each detection session starts (detect_start=1 × child_count).
+            # total_warnings & false_warnings count unique sessions (0→1).
+            # total_detections sums the peak number of children observed in
+            # each distinct detection session (cumulative, time-filtered).
             kpi_sql = f"""
+                {cte_base}
                 SELECT
                     COUNT(*)                    AS total_events,
                     ROUND(AVG(latency_ms), 1)   AS avg_latency,
                     SUM(warn_start)             AS total_warnings,
-                    SUM(CASE WHEN detect_start = 1 THEN child_count ELSE 0 END) AS total_detections,
+                    SUM(CASE WHEN detect_start = 1 THEN session_max_children ELSE 0 END) AS total_detections,
                     SUM(false_warn_start)       AS false_warnings
-                FROM ({session_base}) s
+                FROM enriched
                 {where_sql}
             """
             cursor.execute(kpi_sql, params)
@@ -458,11 +475,12 @@ def fetch_analytics_aggregates(time_range="all"):
             # ── 2. TIME-SERIES BINS (session-based) ──────────────────────────
             if time_range in ("15m", "1h"):
                 ts_sql = f"""
+                    {cte_base}
                     SELECT
                         FLOOR(UNIX_TIMESTAMP(timestamp_iso) / {bin_seconds}) * {bin_seconds} AS bin_ts,
                         SUM(warn_start)    AS warnings,
-                        SUM(CASE WHEN detect_start = 1 THEN child_count ELSE 0 END) AS detections
-                    FROM ({session_base}) s
+                        SUM(CASE WHEN detect_start = 1 THEN session_max_children ELSE 0 END) AS detections
+                    FROM enriched
                     {where_sql}
                     GROUP BY bin_ts
                     ORDER BY bin_ts
@@ -485,11 +503,12 @@ def fetch_analytics_aggregates(time_range="all"):
 
             elif time_range == "today":
                 ts_sql = f"""
+                    {cte_base}
                     SELECT
                         HOUR(timestamp_iso) AS hour_utc,
                         SUM(warn_start)    AS warnings,
-                        SUM(CASE WHEN detect_start = 1 THEN child_count ELSE 0 END) AS detections
-                    FROM ({session_base}) s
+                        SUM(CASE WHEN detect_start = 1 THEN session_max_children ELSE 0 END) AS detections
+                    FROM enriched
                     {where_sql}
                     GROUP BY hour_utc
                     ORDER BY hour_utc
@@ -514,11 +533,12 @@ def fetch_analytics_aggregates(time_range="all"):
 
             else:  # "all" — daily bins
                 ts_sql = f"""
+                    {cte_base}
                     SELECT
                         DATE(timestamp_iso) AS bin_date,
                         SUM(warn_start)    AS warnings,
-                        SUM(CASE WHEN detect_start = 1 THEN child_count ELSE 0 END) AS detections
-                    FROM ({session_base}) s
+                        SUM(CASE WHEN detect_start = 1 THEN session_max_children ELSE 0 END) AS detections
+                    FROM enriched
                     {where_sql}
                     GROUP BY bin_date
                     ORDER BY bin_date
@@ -549,10 +569,11 @@ def fetch_analytics_aggregates(time_range="all"):
             # ── 3. PEAK HOUR (session-based, Manila time) ────────────────────
             peak_hour = "--"
             peak_sql = f"""
+                {cte_base}
                 SELECT
                     HOUR(timestamp_iso)  AS hour_utc,
                     SUM(warn_start)      AS warn_count
-                FROM ({session_base}) s
+                FROM enriched
                 {where_sql}
                 GROUP BY hour_utc
                 ORDER BY warn_count DESC
