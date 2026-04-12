@@ -183,6 +183,35 @@ body.sidebar-collapsed .nav-label {
     display: none;
 }
 
+/* Sidebar Footer (Logout) */
+.sidebar-footer {
+    margin-top: auto;
+    padding: 0 12px 16px;
+}
+
+.sidebar-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 0 8px 8px;
+}
+
+.nav-item-logout:hover {
+    color: var(--critical-alert) !important;
+    background-color: rgba(255, 36, 0, 0.06) !important;
+}
+
+.nav-item-logout:hover .nav-icon {
+    color: var(--critical-alert) !important;
+}
+
+body.sidebar-collapsed .sidebar-footer {
+    padding: 0 0 16px;
+}
+
+body.sidebar-collapsed .sidebar-divider {
+    margin: 0 12px 8px;
+}
+
 /* Main Content */
 .main-content {
     flex: 1;

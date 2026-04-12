@@ -1,6 +1,22 @@
 // Dashboard Application Logic
 
 // ---------------------------------------------------------
+// GLOBAL AUTH INTERCEPTOR — redirects to login on 401
+// ---------------------------------------------------------
+(function() {
+    const _origFetch = window.fetch;
+    window.fetch = async function(...args) {
+        const response = await _origFetch.apply(this, args);
+        if (response.status === 401) {
+            // Session expired or not authenticated — redirect to login
+            window.location.href = '/';
+            return response;
+        }
+        return response;
+    };
+})();
+
+// ---------------------------------------------------------
 // GLOBAL STORE (Single Source of Truth)
 // ---------------------------------------------------------
 window.EventStore = {

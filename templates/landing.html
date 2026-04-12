@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Crosswalk Alert System — Login</title>
+    <meta name="description"
+        content="IoT-Based Smart School-Zone Crosswalk Alert System — Traffic Management Center Officer Portal">
+
+    <!-- Fonts: Satoshi (primary UI) + JetBrains Mono (data/inputs) -->
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700,900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Landing CSS -->
+    <link rel="stylesheet" href="/static/css/landing.css">
+</head>
+
+<body>
+    <div class="landing-container">
+
+        <!-- ═══════════ LEFT PANEL — Brand & System Info ═══════════ -->
+        <div class="landing-left">
+
+            <!-- System Badge -->
+            <div class="landing-system-badge anim-fade-in" style="--delay: 0s;">
+                <i class="fa-solid fa-microchip"></i>
+                <span>IoT-Based Technology</span>
+            </div>
+
+            <!-- Hero Text -->
+            <div class="landing-hero anim-fade-in" style="--delay: 0.1s;">
+                <h1>
+                    Smart School-Zone<br>
+                    <span class="accent">Crosswalk Alert</span><br>
+                    System
+                </h1>
+                <p class="landing-subtitle">
+                    AI-powered child pedestrian detection and real-time IoT warning
+                    system designed for safer school zones and crosswalks.
+                </p>
+            </div>
+
+            <!-- Feature Points -->
+            <div class="landing-features anim-fade-in" style="--delay: 0.2s;">
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <i class="fa-solid fa-brain"></i>
+                    </div>
+                    <div class="feature-text">
+                        <strong>Smart Detection</strong>
+                        <span>Automatically identifies children near the crosswalk using a live camera</span>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <i class="fa-solid fa-bolt"></i>
+                    </div>
+                    <div class="feature-text">
+                        <strong>Instant Alerts</strong>
+                        <span>Warning lights activate immediately when a child steps onto the crosswalk</span>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <i class="fa-solid fa-chart-line"></i>
+                    </div>
+                    <div class="feature-text">
+                        <strong>Analytics Dashboard</strong>
+                        <span>Detection logs, event history, and system monitoring</span>
+                    </div>
+                </div>
+            </div>
+
+
+            <div class="landing-footer-text">
+                &copy; 2026 Tech Tribe &mdash; All rights reserved.
+            </div>
+        </div>
+
+        <!-- ═══════════ RIGHT PANEL — Login ═══════════ -->
+        <div class="landing-right">
+            <div class="login-card anim-fade-in" style="--delay: 0.15s;">
+
+                <!-- TMC Logo -->
+                <div class="login-card-logo">
+                    <img src="/static/img/TMC_Logo.png" alt="TMC Logo" class="login-logo-img">
+                </div>
+
+                <h2>Officer Login</h2>
+                <p class="login-card-subtitle">
+                    Sign in to access the monitoring dashboard and analytics.
+                </p>
+
+                <!-- Error Message (hidden by default) -->
+                <div class="login-error" id="login-error">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span id="login-error-text">Invalid username or password.</span>
+                </div>
+
+                <!-- Login Form -->
+                <form class="login-form" id="login-form" autocomplete="off">
+                    <!-- Username -->
+                    <div class="form-group">
+                        <label for="login-username">Username</label>
+                        <div class="input-wrapper">
+                            <i class="fa-solid fa-user"></i>
+                            <input type="text" id="login-username" class="form-input" placeholder="Enter your username"
+                                autocomplete="username" required>
+                        </div>
+                    </div>
+
+                    <!-- Password -->
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <div class="input-wrapper">
+                            <i class="fa-solid fa-lock"></i>
+                            <input type="password" id="login-password" class="form-input"
+                                placeholder="Enter your password" autocomplete="current-password" required>
+                            <button type="button" class="password-toggle" id="password-toggle" title="Show password">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Submit -->
+                    <button type="submit" class="login-btn" id="login-btn">
+                        <span class="btn-content">
+                            <span class="btn-label">Sign In</span>
+                            <span class="spinner"></span>
+                            <i class="fa-solid fa-arrow-right btn-label"></i>
+                        </span>
+                    </button>
+                </form>
+
+                <p class="login-card-footer-note">
+                    <i class="fa-solid fa-lock fa-xs"></i>
+                    Authorized TMC personnel only
+                </p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        (function () {
+            const form = document.getElementById('login-form');
+            const usernameInput = document.getElementById('login-username');
+            const passwordInput = document.getElementById('login-password');
+            const loginBtn = document.getElementById('login-btn');
+            const errorDiv = document.getElementById('login-error');
+            const errorText = document.getElementById('login-error-text');
+            const passwordToggle = document.getElementById('password-toggle');
+
+            // ── Password visibility toggle ──
+            passwordToggle.addEventListener('click', () => {
+                const isPassword = passwordInput.type === 'password';
+                passwordInput.type = isPassword ? 'text' : 'password';
+                passwordToggle.querySelector('i').className = isPassword
+                    ? 'fa-solid fa-eye-slash'
+                    : 'fa-solid fa-eye';
+                passwordToggle.title = isPassword ? 'Hide password' : 'Show password';
+            });
+
+            // ── Clear error state on input ──
+            [usernameInput, passwordInput].forEach(input => {
+                input.addEventListener('input', () => {
+                    input.classList.remove('error');
+                    errorDiv.classList.remove('visible');
+                });
+            });
+
+            // ── Form submission (Ajax) ──
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const username = usernameInput.value.trim();
+                const password = passwordInput.value.trim();
+
+                // Client-side validation
+                if (!username || !password) {
+                    showError('Please fill in all fields.');
+                    if (!username) usernameInput.classList.add('error');
+                    if (!password) passwordInput.classList.add('error');
+                    return;
+                }
+
+                // Set loading state
+                loginBtn.classList.add('loading');
+                loginBtn.disabled = true;
+                errorDiv.classList.remove('visible');
+
+                try {
+                    const response = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.ok && data.redirect) {
+                        // Success — redirect to dashboard
+                        window.location.href = data.redirect;
+                    } else {
+                        // Failed
+                        showError(data.error || 'Invalid username or password.');
+                        usernameInput.classList.add('error');
+                        passwordInput.classList.add('error');
+                        passwordInput.value = '';
+                        passwordInput.focus();
+                    }
+                } catch (err) {
+                    showError('Unable to connect to the server. Please try again.');
+                } finally {
+                    loginBtn.classList.remove('loading');
+                    loginBtn.disabled = false;
+                }
+            });
+
+            function showError(msg) {
+                errorText.textContent = msg;
+                errorDiv.classList.add('visible');
+            }
+
+            // Auto-focus username input
+            usernameInput.focus();
+        })();
+    </script>
+</body>
+
+</html>

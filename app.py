@@ -1,11 +1,12 @@
 import os
 import threading
 import time
+import functools
 from datetime import datetime, timezone
 from typing import Optional, Union
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
 from flask_socketio import SocketIO
 
 import cv2
@@ -96,10 +97,36 @@ os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
 from db import init_db, insert_event, fetch_events, fetch_analytics_aggregates
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "dev-secret"
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 # cors_allowed_origins="*" allows the frontend to connect from different ports
 # This is crucial for local dev where frontend might be served differently (though here it's same origin)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+# --------------------------------------------------------------------------------
+# Authentication
+# --------------------------------------------------------------------------------
+
+# TMC Officer credentials — read fresh from .env on each login attempt
+# so that changes to the .env file take effect after a server restart.
+
+def _get_tmc_credentials():
+    """Return (username, password) from environment variables."""
+    return (
+        os.getenv("TMC_USERNAME", "tmc_officer"),
+        os.getenv("TMC_PASSWORD", "SmartCrosswalk2026"),
+    )
+
+def login_required(f):
+    """Decorator to protect routes that require authentication."""
+    @functools.wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get("logged_in"):
+            # API routes return 401, page routes redirect to login
+            if request.path.startswith("/api/"):
+                return jsonify({"ok": False, "error": "unauthorized"}), 401
+            return redirect(url_for("landing"))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # --------------------------------------------------------------------------------
 # Helper Functions
@@ -136,10 +163,44 @@ def load_roi_for_frame(frame_w: int, frame_h: int) -> ROI:
 # --------------------------------------------------------------------------------
 
 @app.route("/")
-def index():
+def landing():
+    """Landing / Welcome page with login form."""
+    if session.get("logged_in"):
+        return redirect(url_for("dashboard"))
+    return render_template("landing.html")
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    """Protected dashboard — requires authentication."""
     return render_template("index.html")
 
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    """Validate username/password against .env credentials."""
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = (data.get("password") or "").strip()
+
+    expected_user, expected_pass = _get_tmc_credentials()
+
+    if username == expected_user and password == expected_pass:
+        session["logged_in"] = True
+        session["username"] = username
+        session["role"] = "tmc_officer"
+        session.permanent = True
+        return jsonify({"ok": True, "redirect": url_for("dashboard")})
+
+    return jsonify({"ok": False, "error": "Invalid username or password."}), 401
+
+@app.route("/api/logout")
+def api_logout():
+    """Clear the session and redirect to the landing page."""
+    session.clear()
+    return redirect(url_for("landing"))
+
 @app.get("/api/roi")
+@login_required
 def api_get_roi():
     if not ROI_PATH.exists():
         return jsonify({"ok": False, "error": "roi_not_set"}), 404
@@ -188,6 +249,7 @@ def _validate_roi_payload(d: dict):
         return True, "", clean
 
 @app.post("/api/roi")
+@login_required
 def api_set_roi():
     d = request.get_json(silent=True) or {}
     ok, err, clean = _validate_roi_payload(d)
@@ -879,6 +941,7 @@ def _emit_camera_status(session: LiveSession):
 # --------------------------------------------------------------------------------
 
 @app.route("/video_feed")
+@login_required
 def video_feed_route():
     """MJPEG stream from the active session (live camera or video test)."""
     overlay = request.args.get("overlay", "1") == "1"
@@ -891,6 +954,7 @@ def video_feed_route():
 
 
 @app.get("/api/camera/snapshot")
+@login_required
 def api_camera_snapshot():
     """Return a single JPEG frame from the active session (full resolution, no overlay).
     Used by the ROI 'Capture Frame' button."""
@@ -981,6 +1045,7 @@ def gen_frames(session: LiveSession, overlay: bool = True):
 
 
 @app.get("/api/camera/status")
+@login_required
 def api_camera_status():
     """Returns the current active session / AI pipeline status."""
     if active_session is None:
@@ -999,6 +1064,7 @@ def api_camera_status():
 
 
 @app.post("/api/camera/reconnect")
+@login_required
 def api_camera_reconnect():
     """Force the active session to reconnect (only if actually broken)."""
     if active_session is None:
@@ -1032,6 +1098,7 @@ def api_health():
     return jsonify({"ok": True})
 
 @app.route("/api/events")
+@login_required
 def api_events_route():
     """
     Get historical events from DB.
@@ -1080,6 +1147,7 @@ def api_events_route():
         return jsonify({"ok": False, "error": "db_unavailable"}), 503
 
 @app.route("/api/analytics")
+@login_required
 def api_analytics_route():
     """
     Returns server-side computed analytics aggregates for a given time range.
@@ -1170,6 +1238,7 @@ def _start_video_test_session(filename: str):
 
 
 @app.get("/api/mode")
+@login_required
 def api_get_mode():
     """Return the current operating mode."""
     info = {"ok": True, "mode": current_mode}
@@ -1179,6 +1248,7 @@ def api_get_mode():
 
 
 @app.post("/api/mode/live")
+@login_required
 def api_switch_to_live():
     """Switch to live camera mode."""
     with _session_lock:
@@ -1190,6 +1260,7 @@ def api_switch_to_live():
 
 
 @app.post("/api/mode/video_test")
+@login_required
 def api_switch_to_video_test():
     """Switch to video test mode with a specific .mp4 file."""
     data = request.get_json(silent=True) or {}
@@ -1210,6 +1281,7 @@ def api_switch_to_video_test():
 
 
 @app.get("/api/test_videos")
+@login_required
 def api_list_test_videos():
     """List all .mp4 files available in the test_videos/ directory."""
     videos = []
@@ -1236,6 +1308,7 @@ def api_list_test_videos():
 
 
 @app.post("/api/test_videos/upload")
+@login_required
 def api_upload_test_video():
     """Upload a new .mp4 file to the test_videos/ directory."""
     if "file" not in request.files:
