@@ -16,7 +16,7 @@ from cv_inference import ChildLikeDetector, ROI
 from warning_controller import TemporalVoteStabilizer, WarningController
 from detection_tracker import DetectionTracker
 
-load_dotenv()
+load_dotenv()\
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "manual_crosswalk_detector.pt"

@@ -2771,3 +2771,348 @@ body.dark-mode .report-footer {
         border: none !important;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LOGS FILTER BAR — Refined Components
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Search Input with Icon ─────────────────────────────────────────────── */
+.logs-search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.logs-search-icon {
+    position: absolute;
+    left: 14px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    pointer-events: none;
+    transition: color 0.2s ease;
+}
+
+.logs-search-input {
+    width: 300px;
+    padding: 10px 14px 10px 38px;
+    border: 1.5px solid var(--border-color);
+    border-radius: 10px;
+    font-size: 0.88rem;
+    font-family: var(--font-primary);
+    color: var(--deep-text);
+    background: var(--white);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    outline: none;
+}
+
+.logs-search-input::placeholder {
+    color: #b0b8c8;
+    font-weight: 400;
+}
+
+.logs-search-input:focus {
+    border-color: var(--primary-accent);
+    box-shadow: 0 0 0 3px rgba(255, 146, 128, 0.15);
+}
+
+.logs-search-input:focus + .logs-search-icon,
+.logs-search-wrapper:focus-within .logs-search-icon {
+    color: var(--primary-accent);
+}
+
+/* ── Toggle Switch (replaces checkbox) ──────────────────────────────────── */
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-text {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--deep-text);
+    white-space: nowrap;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+}
+
+.toggle-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-track {
+    display: block;
+    width: 38px;
+    height: 22px;
+    border-radius: 12px;
+    background: #d1d5db;
+    position: relative;
+    transition: background 0.25s ease;
+    cursor: pointer;
+}
+
+.toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--white);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toggle-switch input:checked + .toggle-track {
+    background: var(--primary-accent);
+}
+
+.toggle-switch input:checked + .toggle-track .toggle-thumb {
+    transform: translateX(16px);
+}
+
+.toggle-switch input:focus-visible + .toggle-track {
+    box-shadow: 0 0 0 3px rgba(255, 146, 128, 0.25);
+}
+
+/* ── Filter Divider ─────────────────────────────────────────────────────── */
+.filter-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--border-color);
+    margin: 0 8px;
+    align-self: center;
+}
+
+/* ── Filter Label ───────────────────────────────────────────────────────── */
+.filter-label {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--deep-text);
+    white-space: nowrap;
+}
+
+/* ── Range Slider ───────────────────────────────────────────────────────── */
+.logs-range-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 110px;
+    height: 6px;
+    border-radius: 3px;
+    background: #e0e4ec;
+    outline: none;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.logs-range-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--primary-accent);
+    border: 2.5px solid var(--white);
+    box-shadow: 0 1px 4px rgba(255, 146, 128, 0.4);
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.logs-range-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 2px 8px rgba(255, 146, 128, 0.5);
+}
+
+.logs-range-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--primary-accent);
+    border: 2.5px solid var(--white);
+    box-shadow: 0 1px 4px rgba(255, 146, 128, 0.4);
+    cursor: pointer;
+}
+
+/* ── Confidence Value Badge ─────────────────────────────────────────────── */
+.conf-value-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    padding: 2px 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    color: var(--primary-accent);
+    background: rgba(255, 146, 128, 0.1);
+    border-radius: 6px;
+    letter-spacing: -0.3px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LOGS FILTER BAR — Dark Mode
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-theme="dark"] .logs-search-input {
+    background: #2a2d3a;
+    border-color: #3d4150;
+    color: #e8e8e8;
+}
+
+[data-theme="dark"] .logs-search-input::placeholder {
+    color: #6b7280;
+}
+
+[data-theme="dark"] .logs-search-input:focus {
+    border-color: var(--primary-accent);
+    box-shadow: 0 0 0 3px rgba(255, 146, 128, 0.12);
+}
+
+[data-theme="dark"] .logs-search-icon {
+    color: #6b7280;
+}
+
+[data-theme="dark"] .toggle-text,
+[data-theme="dark"] .filter-label {
+    color: #d1d5db;
+}
+
+[data-theme="dark"] .toggle-track {
+    background: #4b5563;
+}
+
+[data-theme="dark"] .toggle-thumb {
+    background: #e5e7eb;
+}
+
+[data-theme="dark"] .filter-divider {
+    background: #3d4150;
+}
+
+[data-theme="dark"] .logs-range-slider {
+    background: #3d4150;
+}
+
+[data-theme="dark"] .conf-value-badge {
+    background: rgba(255, 146, 128, 0.15);
+    color: #ffb0a0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SYSTEM STATUS PANEL — Refined Components
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Status Card Container ──────────────────────────────────────────────── */
+.lv-status-card .cam-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.lv-status-card .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.lv-status-card .control-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
+}
+
+/* ── Last Frame Timestamp ───────────────────────────────────────────────── */
+.lv-last-frame {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    letter-spacing: -0.3px;
+}
+
+/* ── Options Divider ────────────────────────────────────────────────────── */
+.lv-options-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 2px 0 6px 0;
+}
+
+/* ── Reconnect Button ───────────────────────────────────────────────────── */
+.lv-reconnect-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 10px;
+    padding: 9px 16px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border-color);
+    background: var(--white);
+    font-family: var(--font-primary);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--deep-text);
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.lv-reconnect-btn:hover {
+    border-color: var(--primary-accent);
+    color: var(--primary-accent);
+    background: rgba(255, 146, 128, 0.06);
+    box-shadow: 0 2px 8px rgba(255, 146, 128, 0.15);
+}
+
+.lv-reconnect-btn:hover i {
+    animation: lv-spin-once 0.6s ease;
+}
+
+@keyframes lv-spin-once {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.lv-reconnect-btn:active {
+    transform: scale(0.97);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SYSTEM STATUS PANEL — Dark Mode
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-theme="dark"] .lv-status-card .control-label,
+body.dark-mode .lv-status-card .control-label {
+    color: #9ca3af;
+}
+
+[data-theme="dark"] .lv-last-frame,
+body.dark-mode .lv-last-frame {
+    color: #9ca3af;
+}
+
+[data-theme="dark"] .lv-options-divider,
+body.dark-mode .lv-options-divider {
+    background: #3d4150;
+}
+
+[data-theme="dark"] .lv-reconnect-btn,
+body.dark-mode .lv-reconnect-btn {
+    background: #2a2d3a;
+    border-color: #3d4150;
+    color: #d1d5db;
+}
+
+[data-theme="dark"] .lv-reconnect-btn:hover,
+body.dark-mode .lv-reconnect-btn:hover {
+    border-color: var(--primary-accent);
+    color: var(--primary-accent);
+    background: rgba(255, 146, 128, 0.08);
+}

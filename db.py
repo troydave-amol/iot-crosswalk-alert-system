@@ -269,12 +269,16 @@ def fetch_events(
             conditions.append(f"{scenario_case} = %s")
             params.append(scenario)
 
-        # 5. Search (Flexible — includes computed scenario label)
+        # 5. Search (Flexible — includes computed scenario label + Manila timestamp)
         if search:
-            search_clause = f"(source LIKE %s OR {scenario_case} LIKE %s OR roi_status LIKE %s)"
+            manila_ts = "DATE_FORMAT(DATE_ADD(timestamp_iso, INTERVAL 8 HOUR), '%%Y-%%m-%%d %%h:%%i:%%s %%p')"
+            search_clause = (
+                f"(source LIKE %s OR {scenario_case} LIKE %s"
+                f" OR roi_status LIKE %s OR {manila_ts} LIKE %s)"
+            )
             conditions.append(search_clause)
             search_pattern = f"%{search}%"
-            params.extend([search_pattern, search_pattern, search_pattern])
+            params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
 
         where_sql = ""
         if conditions:
