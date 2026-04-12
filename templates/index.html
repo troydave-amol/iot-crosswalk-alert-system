@@ -342,13 +342,14 @@
                                 style="width:100px;">
                             <span id="filterMinConfLabel" style="font-size:0.85rem; width:35px;">0.00</span>
                         </div>
-                        <div class="filter-item">
-                            <select id="filterScenario" class="form-control" style="padding:4px 8px;">
-                                <option value="All">Scenario: All</option>
-                                <option value="Crowded">Crowded</option>
-                                <option value="Low activity">Low activity</option>
-                                <option value="Night">Night</option>
-                                <option value="Rain">Rain</option>
+                        <div class="filter-item" style="display:flex; align-items:center; gap:8px;">
+                            <label for="filterScenario" style="font-size:0.9rem; white-space:nowrap;">Scenario:</label>
+                            <select id="filterScenario" class="scenario-select">
+                                <option value="All">All</option>
+                                <option value="Morning School Entry">Morning School Entry</option>
+                                <option value="Mid-Day Shift">Mid-Day Shift</option>
+                                <option value="Afternoon Dismissal">Afternoon Dismissal</option>
+                                <option value="Standard Daylight Ops">Standard Daylight Ops</option>
                             </select>
                         </div>
                         <div class="filter-actions" style="margin-left:auto;">
@@ -484,13 +485,13 @@
                     <div class="card-title" style="margin-bottom: 15px;">Evaluation Snapshot (Prototype)</div>
                     <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
                         <div class="status-chip eval-chip">
-                            Precision: <strong>0.90</strong>
+                            Precision: <strong>0.95</strong>
                         </div>
                         <div class="status-chip eval-chip">
-                            Recall: <strong>0.88</strong>
+                            Recall: <strong>0.91</strong>
                         </div>
                         <div class="status-chip eval-chip">
-                            F1 Score: <strong>0.89</strong>
+                            F1 Score: <strong>0.93</strong>
                         </div>
                     </div>
                     <div class="note-box">

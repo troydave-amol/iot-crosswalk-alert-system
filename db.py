@@ -224,6 +224,15 @@ def fetch_events(
             cursorclass=pymysql.cursors.DictCursor
         )
 
+        # Dynamic time-based scenario label (same logic as analytics chart)
+        manila_t = "TIME(DATE_ADD(timestamp_iso, INTERVAL 8 HOUR))"
+        scenario_case = f"""CASE
+            WHEN {manila_t} >= '06:00:00' AND {manila_t} < '08:30:00' THEN 'Morning School Entry'
+            WHEN {manila_t} >= '11:00:00' AND {manila_t} < '13:30:00' THEN 'Mid-Day Shift'
+            WHEN {manila_t} >= '15:30:00' AND {manila_t} < '17:00:00' THEN 'Afternoon Dismissal'
+            ELSE 'Standard Daylight Ops'
+        END"""
+
         # Build WHERE clause
         conditions = []
         params = []
@@ -255,15 +264,14 @@ def fetch_events(
             conditions.append("confidence >= %s")
             params.append(min_conf)
 
-        # 4. Scenario (Exact Match)
+        # 4. Scenario (Exact Match against computed time-based label)
         if scenario:
-            conditions.append("scenario = %s")
+            conditions.append(f"{scenario_case} = %s")
             params.append(scenario)
 
-        # 5. Search (Flexible)
+        # 5. Search (Flexible — includes computed scenario label)
         if search:
-            # Search across source, scenario, roi_status
-            search_clause = "(source LIKE %s OR scenario LIKE %s OR roi_status LIKE %s)"
+            search_clause = f"(source LIKE %s OR {scenario_case} LIKE %s OR roi_status LIKE %s)"
             conditions.append(search_clause)
             search_pattern = f"%{search}%"
             params.extend([search_pattern, search_pattern, search_pattern])
@@ -279,12 +287,13 @@ def fetch_events(
             total_rows = cursor.fetchone()["total"]
 
             # B. Fetch Data
-            # Explicit columns only
+            # Explicit columns — scenario is dynamically computed from timestamp
             fields = [
                 "id", "timestamp_iso", "source", "child_in_roi", "roi_status", 
                 "confidence", "latency_ms", "warning_logic_on", "switch_enabled", 
                 "warning_device_on", "battery_percent", "solar_status", 
-                "scenario", "camera_status", "edge_status", "led_driver_status"
+                f"{scenario_case} AS scenario",
+                "camera_status", "edge_status", "led_driver_status"
             ]
             fields_str = ", ".join(fields)
             

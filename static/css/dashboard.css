@@ -665,6 +665,40 @@ td {
     font-size: 0.9rem;
 }
 
+/* ── Scenario Dropdown (Styled Select) ──────────────────────────── */
+.scenario-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding: 7px 32px 7px 12px;
+    border: 1.5px solid var(--border-color);
+    border-radius: 8px;
+    font-family: var(--font-primary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--deep-text);
+    background-color: var(--white);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2345315D' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    min-width: 170px;
+}
+.scenario-select:hover {
+    border-color: var(--primary-accent);
+}
+.scenario-select:focus {
+    outline: none;
+    border-color: var(--primary-accent);
+    box-shadow: 0 0 0 3px rgba(255, 146, 128, 0.18);
+}
+.scenario-select option {
+    font-weight: 500;
+    padding: 6px 10px;
+}
+
 .btn {
     padding: 8px 16px;
     border: none;
@@ -1625,6 +1659,20 @@ body.dark-mode .form-control {
 
 body.dark-mode .form-control::placeholder {
     color: #777;
+}
+
+body.dark-mode .scenario-select {
+    background-color: #2d2d2d;
+    border-color: #444;
+    color: #e0e0e0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23e0e0e0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+}
+body.dark-mode .scenario-select:hover {
+    border-color: var(--primary-accent);
+}
+body.dark-mode .scenario-select option {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
 }
 
 body.dark-mode .btn-outline {
