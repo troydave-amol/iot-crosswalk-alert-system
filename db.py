@@ -501,35 +501,18 @@ def fetch_analytics_aggregates(time_range="all"):
                 cursor.execute(ts_sql, params)
                 ts_rows = cursor.fetchall()
 
-                # Build a lookup of bin_ts → {warnings, detections} from SQL results
-                bin_data = {}
-                for row in ts_rows:
-                    bin_data[int(row["bin_ts"])] = {
-                        "warnings": int(row["warnings"] or 0),
-                        "detections": int(row["detections"] or 0),
-                    }
-
-                # Fill ALL expected bins from range_start to range_end
-                # so the chart always shows a continuous timeline (no gaps)
                 time_series = []
-                start_ts = int(range_start_utc.timestamp())
-                end_ts = int(range_end_utc.timestamp())
-                # Align start_ts to the bin boundary
-                start_ts = (start_ts // bin_seconds) * bin_seconds
-
-                current_ts = start_ts
-                while current_ts <= end_ts:
-                    bin_dt_utc = datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=current_ts)
+                for row in ts_rows:
+                    bin_ts_val = int(row["bin_ts"])
+                    bin_dt_utc = datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=bin_ts_val)
                     bin_dt_manila = bin_dt_utc.astimezone(manila_tz)
                     label = bin_dt_manila.strftime("%H:%M")
-                    data = bin_data.get(current_ts, {"warnings": 0, "detections": 0})
                     time_series.append({
                         "label": label,
-                        "ts_ms": current_ts * 1000,
-                        "warnings": data["warnings"],
-                        "detections": data["detections"],
+                        "ts_ms": bin_ts_val * 1000,
+                        "warnings": int(row["warnings"] or 0),
+                        "detections": int(row["detections"] or 0)
                     })
-                    current_ts += bin_seconds
 
             elif time_range == "today":
                 ts_sql = f"""
@@ -546,32 +529,19 @@ def fetch_analytics_aggregates(time_range="all"):
                 cursor.execute(ts_sql, params)
                 ts_rows = cursor.fetchall()
 
-                # Build a lookup of hour_utc → {warnings, detections} from SQL results
-                hour_data = {}
-                for row in ts_rows:
-                    hour_data[int(row["hour_utc"])] = {
-                        "warnings": int(row["warnings"] or 0),
-                        "detections": int(row["detections"] or 0),
-                    }
-
-                # Fill ALL hourly bins from midnight Manila to the current Manila hour
-                # so the chart always shows a complete timeline (no missing gaps)
                 time_series = []
                 today_date_utc = range_start_utc.date()
-                manila_now = now_utc + timedelta(hours=8)
-                current_manila_hour = manila_now.hour
-
-                for manila_hour in range(current_manila_hour + 1):
-                    hour_utc = (manila_hour - 8) % 24
-                    label = f"{manila_hour:02d}:00"
+                for row in ts_rows:
+                    hour_utc = int(row["hour_utc"])
+                    hour_manila = (hour_utc + 8) % 24
+                    label = f"{hour_manila:02d}:00"
                     bin_dt = datetime(today_date_utc.year, today_date_utc.month,
                                       today_date_utc.day, hour_utc, 0, 0, tzinfo=timezone.utc)
-                    data = hour_data.get(hour_utc, {"warnings": 0, "detections": 0})
                     time_series.append({
                         "label": label,
                         "ts_ms": int(bin_dt.timestamp()) * 1000,
-                        "warnings": data["warnings"],
-                        "detections": data["detections"],
+                        "warnings": int(row["warnings"] or 0),
+                        "detections": int(row["detections"] or 0)
                     })
 
             else:  # "all" — daily bins

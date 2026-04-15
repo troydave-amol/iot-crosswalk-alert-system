@@ -15,6 +15,7 @@ from pathlib import Path
 from cv_inference import ChildLikeDetector, ROI
 from warning_controller import TemporalVoteStabilizer, WarningController
 from detection_tracker import DetectionTracker
+from hardware_controller import ESP32Relay
 
 load_dotenv()\
 
@@ -104,6 +105,11 @@ TEST_VIDEOS_DIR.mkdir(exist_ok=True)
 HIKVISION_RTSP_URL = (os.getenv("HIKVISION_RTSP_URL") or "").strip()
 HIKVISION_RECONNECT_SEC = _env_float("HIKVISION_RECONNECT_SEC", 5.0)
 
+# ESP32 Warning Relay
+ESP32_ENABLED = os.getenv("ESP32_ENABLED", "false").strip().lower() in ("true", "1", "yes")
+ESP32_PORT = (os.getenv("ESP32_PORT") or "COM5").strip()
+ESP32_BAUD = _env_int("ESP32_BAUD", 115200)
+
 # FFMPEG low-latency flags for RTSP capture (must be set before VideoCapture)
 # - rtsp_transport=tcp: reliable delivery (same as Hikvision's own viewer)
 # - fflags=nobuffer: don't buffer input packets
@@ -122,6 +128,13 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key-change-in-pro
 # cors_allowed_origins="*" allows the frontend to connect from different ports
 # This is crucial for local dev where frontend might be served differently (though here it's same origin)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+# ESP32 Hardware Relay (lazy init — connects on first detection, not at import)
+esp32_relay = ESP32Relay(
+    port=ESP32_PORT,
+    baud=ESP32_BAUD,
+    enabled=ESP32_ENABLED,
+)
 
 # --------------------------------------------------------------------------------
 # Authentication
@@ -648,7 +661,7 @@ class LiveSession:
             "scenario": get_time_scenario(),
             "camera_status": "OK",
             "edge_status": "OK",
-            "led_driver_status": "Ready",
+            "led_driver_status": esp32_relay.status,
         }
         insert_event(db_payload)
 
@@ -745,6 +758,9 @@ class LiveSession:
                 "detections": tracked_detections,
             }
             warning_device_on = bool(self.warn_ctrl.update(out["child_in_roi"]))
+
+            # --- Send command to ESP32 relay ---
+            esp32_relay.set_state(warning_device_on)
 
             payload = {
                 "timestamp_iso": out["timestamp_iso"],
