@@ -18,6 +18,7 @@ description: |
 
 - live camera mode and video-test mode both exist in the dashboard
 - a trained checkpoint already exists at `models/yolov8n_crosswalk_v2_1111_frames.pt`
+- active annotation dataset lives in `datasets/August 11, 2026 Frames/` (5,650 frames in 57 batch folders)
 - current archived datasets and training runs live under `datasets/`
 - the dashboard persists ROI as a rectangle in `roi_config.json`
 - analytics and reports are backed by server-side APIs, not just client-side calculations

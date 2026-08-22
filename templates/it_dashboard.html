@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Specialist Dashboard — Smart Crosswalk Alert System</title>
+    <!-- Fonts: Satoshi (primary UI) + JetBrains Mono (data/KPIs) -->
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700,900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- CSS -->
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <!-- Scripts -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-brand">
+                <img src="/static/img/TMC_Logo.png" alt="TMC Logo" class="sidebar-logo">
+                <span>IT Dashboard</span>
+            </div>
+            <button class="sidebar-toggle" id="btnHamburger" aria-label="Toggle sidebar" aria-expanded="false"
+                aria-controls="sidebar">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+        </div>
+        <div class="sidebar-nav">
+            <a href="#live" class="nav-item active">
+                <span class="nav-icon"><i class="fa-solid fa-server"></i></span>
+                <span class="nav-label">System Status</span>
+            </a>
+
+            <a href="#logs" class="nav-item">
+                <span class="nav-icon"><i class="fa-solid fa-database"></i></span>
+                <span class="nav-label">Data Export</span>
+            </a>
+            <a href="#analytics" class="nav-item">
+                <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span>
+                <span class="nav-label">Model Accuracy</span>
+            </a>
+        </div>
+        <div class="sidebar-footer">
+            <div class="sidebar-divider"></div>
+            <!-- User Info -->
+            <div class="nav-item nav-item-user" style="cursor: default; padding: 10px 16px; opacity: 0.7;">
+                <span class="nav-icon"><i class="fa-solid fa-user-gear"></i></span>
+                <span class="nav-label" style="font-size: 0.8rem;">{{ full_name }}</span>
+            </div>
+            <!-- Change Password -->
+            <a href="#" class="nav-item" id="btn-change-password" onclick="document.getElementById('passwordModal').style.display='flex'; return false;">
+                <span class="nav-icon"><i class="fa-solid fa-key"></i></span>
+                <span class="nav-label">Change Password</span>
+            </a>
+            <a href="/api/logout" class="nav-item nav-item-logout" id="btn-logout">
+                <span class="nav-icon"><i class="fa-solid fa-right-from-bracket"></i></span>
+                <span class="nav-label">Logout</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Topbar -->
+        <header class="topbar">
+            <div class="topbar-left brand-lockup">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-microchip"></i>
+                </div>
+                <div class="brand-titles">
+                    <h1 class="brand-title">
+                        <span class="title-prefix">IT Systems</span>
+                        Smart Crosswalk — Administration
+                    </h1>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <!-- System Time Display -->
+                <div class="system-time" title="Last Sync Time">
+                    <i class="fa-regular fa-clock"></i>
+                    <span class="time-label">Sync:</span>
+                    <span id="last-update" class="time-value">--:--:--</span>
+                </div>
+
+                <!-- Divider -->
+                <div class="topbar-divider"></div>
+
+                <!-- Theme Toggle -->
+                <button class="topbar-action-btn" id="theme-toggle" title="Toggle Dark/Light Mode">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+
+                <!-- Status Pill -->
+                <div class="status-chip disconnected" id="connection-chip">
+                    <div class="status-indicator"></div>
+                    <span class="status-text">Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <div class="content-area">
+
+            <!-- ═══════════ SYSTEM STATUS SECTION ═══════════ -->
+            <section id="live-section" class="page-section active">
+                <div class="live-metrics-grid">
+                    <div class="card">
+                        <div class="card-title">Child-class in ROI</div>
+                        <div class="card-value" id="live-child">NO</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Warning Device</div>
+                        <div class="card-value" id="live-warning">OFF</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Confidence</div>
+                        <div class="card-value" id="live-conf">0.00</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">ROI Status</div>
+                        <div class="card-value" id="live-roi">OUTSIDE</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Latency</div>
+                        <div class="card-value" id="live-latency">24ms</div>
+                    </div>
+                </div>
+
+
+                <!-- Camera Feed -->
+                <div class="camera-grid">
+                    <div class="card">
+                        <div class="card-title" id="cameraCardTitle">Live Camera View</div>
+                        <div id="liveRoiBadge" class="status-chip"
+                            style="margin-top: 5px; display: none; background-color: rgba(76, 175, 80, 0.1); color: #2e7d32; width: fit-content; margin-bottom: 10px;">
+                            <i class="fa-solid fa-crosshairs"></i> ROI Active
+                        </div>
+                        <div class="video-wrapper">
+                            <img id="liveCam" src="" alt="Live Camera Feed"
+                                style="display:none; width: 100%; height: auto; object-fit: cover;">
+                            <div id="camPlaceholder" class="cam-placeholder">
+                                <div style="font-size: 2rem; margin-bottom: 10px; color: #ccc;">
+                                    <i class="fa-solid fa-spinner fa-spin"></i>
+                                </div>
+                                <p><strong>Connecting to CCTV...</strong><br>Waiting for Hikvision stream.</p>
+                                <p style="font-size: 0.8rem; margin-top: 10px; color: #888;">Auto-connect on startup.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card lv-status-card">
+                        <div class="card-title"><i class="fa-solid fa-tower-broadcast"
+                                style="margin-right: 6px;"></i>System Status</div>
+                        <div class="cam-controls">
+                            <div class="control-group">
+                                <div class="control-label">Camera</div>
+                                <div class="status-chip disconnected" id="sysStatusCamera">
+                                    <div class="status-indicator"></div> Checking...
+                                </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">Stream</div>
+                                <div class="status-chip disconnected" id="sysStatusStream">
+                                    <div class="status-indicator"></div> Waiting
+                                </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">AI Inference</div>
+                                <div class="status-chip disconnected" id="sysStatusAI">
+                                    <div class="status-indicator"></div> Checking...
+                                </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">Warning Output</div>
+                                <div class="status-chip disconnected" id="sysStatusWarning">
+                                    <div class="status-indicator"></div> Standby
+                                </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">Last Frame</div>
+                                <small id="sysLastFrame" class="lv-last-frame">---</small>
+                            </div>
+
+                            <div class="lv-options-divider"></div>
+
+                            <div class="control-group">
+                                <div class="control-label">Options</div>
+                                <label class="toggle-label" for="debugOverlayToggle">
+                                    <div class="toggle-switch">
+                                        <input type="checkbox" id="debugOverlayToggle" checked>
+                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                    </div>
+                                    <span class="toggle-text">AI Overlay (ROI + Boxes)</span>
+                                </label>
+                                <button id="btnReconnect" class="lv-reconnect-btn">
+                                    <i class="fa-solid fa-rotate-right"></i> Reconnect Camera
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="card" style="grid-column: span 2;">
+                        <h3>Live Event Feed</h3>
+                        <div id="event-feed" style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
+                            <!-- Feed items -->
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>Power System</h3>
+                        <div class="row mt-4">
+                            <div class="flex-col">
+                                <small>Solar Status</small>
+                                <strong id="power-solar-status">N/A — Hardware pending</strong>
+                            </div>
+                            <div class="flex-col mt-4">
+                                <small>Battery Level</small>
+                                <div class="power-bar-track">
+                                    <div id="power-battery-bar" class="power-bar-fill" style="width:0%"></div>
+                                </div>
+                                <small id="power-battery-text">N/A</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- ═══════════ DATA EXPORT & AUDIT SECTION ═══════════ -->
+            <section id="logs-section" class="page-section">
+                <div class="logs-header"
+                    style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <h2><i class="fa-solid fa-database" style="margin-right: 8px;"></i>Data Export & Audit</h2>
+                    <div class="export-actions">
+                        <button class="btn btn-outline" id="btnExportCSV"><i class="fa-solid fa-file-csv"></i>
+                            CSV</button>
+                        <button class="btn btn-outline" id="btnExportJSON"><i class="fa-solid fa-file-code"></i>
+                            JSON</button>
+                    </div>
+                </div>
+
+                <div class="filter-wrapper">
+                    <!-- Top Row: Search & Date Presets -->
+                    <div class="filter-row">
+                        <div class="logs-search-wrapper">
+                            <i class="fa-solid fa-magnifying-glass logs-search-icon"></i>
+                            <input type="text" id="logsSearch" placeholder="Search by time, scenario, status..."
+                                class="logs-search-input">
+                        </div>
+                        <div class="preset-group">
+                            <label style="margin-right:8px; font-weight:600; font-size:0.9rem;">Range:</label>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-preset" data-range="15m">Last 15m</button>
+                                <button class="btn btn-sm btn-preset" data-range="1h">Last Hour</button>
+                                <button class="btn btn-sm btn-preset active" data-range="today">Today</button>
+                                <button class="btn btn-sm btn-preset" data-range="all">All</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Middle Row: Toggles, Slider, Scenario -->
+                    <div class="filter-row mt-3">
+                        <div class="filter-item">
+                            <label class="toggle-label" for="filterWarningOn">
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="filterWarningOn">
+                                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                </div>
+                                <span class="toggle-text">Warning ON</span>
+                            </label>
+                        </div>
+                        <div class="filter-item">
+                            <label class="toggle-label" for="filterInRoi">
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="filterInRoi">
+                                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                </div>
+                                <span class="toggle-text">In ROI Only</span>
+                            </label>
+                        </div>
+                        <div class="filter-divider"></div>
+                        <div class="filter-item" style="display:flex; align-items:center; gap:8px;">
+                            <label for="filterMinConf" class="filter-label">Min Conf:</label>
+                            <input type="range" id="filterMinConf" min="0" max="1" step="0.01" value="0.00"
+                                class="logs-range-slider">
+                            <span id="filterMinConfLabel" class="conf-value-badge">0.00</span>
+                        </div>
+                        <div class="filter-divider"></div>
+                        <div class="filter-item" style="display:flex; align-items:center; gap:8px;">
+                            <label for="filterScenario" class="filter-label">Scenario:</label>
+                            <select id="filterScenario" class="scenario-select">
+                                <option value="All">All</option>
+                                <option value="Morning School Entry">Morning School Entry</option>
+                                <option value="Mid-Day Shift">Mid-Day Shift</option>
+                                <option value="Afternoon Dismissal">Afternoon Dismissal</option>
+                                <option value="Standard Daylight Ops">Standard Daylight Ops</option>
+                            </select>
+                        </div>
+                        <div class="filter-actions" style="margin-left:auto;">
+                            <button class="btn btn-primary btn-sm" id="btnApplyLogsFilters"><i class="fa-solid fa-check"
+                                    style="margin-right:5px;"></i>Apply</button>
+                            <button class="btn btn-outline btn-sm" id="btnResetLogsFilters"><i
+                                    class="fa-solid fa-rotate-left" style="margin-right:5px;"></i>Reset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-container mt-4">
+                    <div id="logsDbWarning" class="alert alert-warning"
+                        style="display:none; margin-bottom: 15px; padding: 10px; border-radius: 6px; background-color: #fff3cd; color: #856404; font-size: 0.9rem;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> DB unavailable — no data available
+                    </div>
+
+                    <table id="logsTable">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Child-class in ROI</th>
+                                <th>ROI Status</th>
+                                <th>Warning Device</th>
+                                <th>Confidence</th>
+                                <th>Latency (ms)</th>
+                                <th>Scenario</th>
+                                <th>False Warning</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                            <!-- Logs injected here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination-bar">
+                    <div class="page-size-group">
+                        <label>Rows:</label>
+                        <select id="pageSizeSelect" class="form-control" style="width:60px; padding:4px;">
+                            <option value="10">10</option>
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                        </select>
+                        <span id="resultCount" class="text-muted ml-3"
+                            style="font-size:0.9rem; margin-left:15px;">Showing 0
+                            of 0 events</span>
+                    </div>
+                    <div class="page-nav">
+                        <button class="btn btn-outline btn-sm" id="pagePrev" disabled><i
+                                class="fa-solid fa-chevron-left"></i></button>
+                        <span id="pageIndicator" style="margin:0 10px; font-weight:600; font-size:0.9rem;">Page 1</span>
+                        <button class="btn btn-outline btn-sm" id="pageNext" disabled><i
+                                class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════ MODEL ACCURACY / ANALYTICS SECTION ═══════════ -->
+            <section id="analytics-section" class="page-section">
+                <!-- DB Fetch Warning -->
+                <div id="anaDbWarning"
+                    style="display:none; margin-bottom: 15px; padding: 10px; border-radius: 6px; background-color: #fff3cd; color: #856404; font-size: 0.9rem;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> DB unavailable — no data available
+                </div>
+
+                <!-- A) Filter Bar -->
+                <div class="filter-bar" style="justify-content: space-between;">
+                    <div style="font-weight: 700; font-size: 1.1rem;">Model Accuracy & System Analytics</div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-preset" data-ana-range="15m">Last 15m</button>
+                        <button class="btn btn-sm btn-preset" data-ana-range="1h">Last Hour</button>
+                        <button class="btn btn-sm btn-preset active" data-ana-range="today">Today</button>
+                        <button class="btn btn-sm btn-preset" data-ana-range="all">All</button>
+                    </div>
+                </div>
+
+                <!-- B) KPI Cards -->
+                <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                    <div class="card">
+                        <div class="card-title">Total Warnings</div>
+                        <div class="card-value" id="ana-kpi-warnings">0</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Child Detections</div>
+                        <div class="card-value" id="ana-kpi-detections">0</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">False Warnings</div>
+                        <div class="card-value" id="ana-kpi-false">0</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Avg Latency</div>
+                        <div class="card-value" id="ana-kpi-latency">0ms</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Peak Hour</div>
+                        <div class="card-value" id="ana-kpi-peak">--</div>
+                    </div>
+                </div>
+
+                <!-- C) Charts Grid -->
+                <div class="charts-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-bottom: 24px;">
+                    <div class="card chart-card">
+                        <div class="card-title">Warnings Over Time</div>
+                        <div class="chart-container" style="position: relative; height: 250px;">
+                            <canvas id="chartWarnings"></canvas>
+                        </div>
+                    </div>
+                    <div class="card chart-card">
+                        <div class="card-title">Detections Over Time</div>
+                        <div class="chart-container" style="position: relative; height: 250px;">
+                            <canvas id="chartDetections"></canvas>
+                        </div>
+                    </div>
+                    <div class="card chart-card">
+                        <div class="card-title">Confidence Distribution</div>
+                        <div class="chart-container" style="position: relative; height: 250px;">
+                            <canvas id="chartConfidence"></canvas>
+                        </div>
+                    </div>
+                    <div class="card chart-card">
+                        <div class="card-title">Scenario Comparison</div>
+                        <div class="chart-container" style="position: relative; height: 250px;">
+                            <canvas id="chartScenario"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- D) Evaluation Snapshot -->
+                <div class="card">
+                    <div class="card-title" style="margin-bottom: 15px;">Evaluation Snapshot (Prototype)</div>
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
+                        <div class="status-chip eval-chip">
+                            Precision: <strong>0.95</strong>
+                        </div>
+                        <div class="status-chip eval-chip">
+                            Recall: <strong>0.91</strong>
+                        </div>
+                        <div class="status-chip eval-chip">
+                            F1 Score: <strong>0.93</strong>
+                        </div>
+                    </div>
+                    <div class="note-box">
+                        <i class="fa-solid fa-circle-info" style="margin-right: 6px;"></i>
+                        <strong>Note:</strong> Prototype evaluation sample: metrics are based on controlled tests and
+                        labeled review samples. The system does not estimate biological age; it classifies pedestrians
+                        as children using visual features commonly associated with school-age learners.
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Change Password Modal -->
+    <div id="passwordModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); backdrop-filter:blur(6px); align-items:center; justify-content:center;">
+        <div style="background:var(--card-bg, #1a1d27); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:32px; width:420px; max-width:90vw;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3 style="margin:0; font-size:1.1rem;"><i class="fa-solid fa-key" style="margin-right:8px; color:var(--primary-accent);"></i>Change Password</h3>
+                <button onclick="document.getElementById('passwordModal').style.display='none';" style="background:none; border:none; color:inherit; cursor:pointer; font-size:1.2rem;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="pwdMsg" style="display:none; padding:10px; border-radius:8px; margin-bottom:14px; font-size:0.9rem;"></div>
+            <form id="changePasswordForm" autocomplete="off">
+                <div style="margin-bottom:14px;">
+                    <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Current Password</label>
+                    <input type="password" id="pwdCurrent" required style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.06); color:inherit; font-size:0.95rem;">
+                </div>
+                <div style="margin-bottom:14px;">
+                    <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">New Password <small style="color:#888;">(min. 6 chars)</small></label>
+                    <input type="password" id="pwdNew" required minlength="6" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.06); color:inherit; font-size:0.95rem;">
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Confirm New Password</label>
+                    <input type="password" id="pwdConfirm" required minlength="6" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.06); color:inherit; font-size:0.95rem;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%; padding:12px; font-weight:600;">
+                    <i class="fa-solid fa-check" style="margin-right:6px;"></i>Update Password
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="sidebarBackdrop" class="backdrop"></div>
+    <script src="/static/js/contract.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        // ── Change Password Form Handler ──
+        (function() {
+            const form = document.getElementById('changePasswordForm');
+            const msgDiv = document.getElementById('pwdMsg');
+            if (!form) return;
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                msgDiv.style.display = 'none';
+                const current = document.getElementById('pwdCurrent').value.trim();
+                const newPwd = document.getElementById('pwdNew').value.trim();
+                const confirm = document.getElementById('pwdConfirm').value.trim();
+                if (newPwd !== confirm) {
+                    msgDiv.textContent = 'New passwords do not match.';
+                    msgDiv.style.display = 'block';
+                    msgDiv.style.background = 'rgba(239,68,68,0.15)';
+                    msgDiv.style.color = '#f87171';
+                    return;
+                }
+                try {
+                    const res = await fetch('/api/user/change-password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ current_password: current, new_password: newPwd })
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        msgDiv.textContent = 'Password updated successfully!';
+                        msgDiv.style.display = 'block';
+                        msgDiv.style.background = 'rgba(34,197,94,0.15)';
+                        msgDiv.style.color = '#4ade80';
+                        form.reset();
+                        setTimeout(() => { document.getElementById('passwordModal').style.display = 'none'; msgDiv.style.display = 'none'; }, 2000);
+                    } else {
+                        msgDiv.textContent = data.error || 'Failed to update password.';
+                        msgDiv.style.display = 'block';
+                        msgDiv.style.background = 'rgba(239,68,68,0.15)';
+                        msgDiv.style.color = '#f87171';
+                    }
+                } catch (err) {
+                    msgDiv.textContent = 'Server error. Please try again.';
+                    msgDiv.style.display = 'block';
+                    msgDiv.style.background = 'rgba(239,68,68,0.15)';
+                    msgDiv.style.color = '#f87171';
+                }
+            });
+        })();
+
+
+    </script>
+</body>
+
+</html>

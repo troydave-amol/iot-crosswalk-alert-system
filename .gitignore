@@ -11,6 +11,7 @@ test_videos/
 datasets/02_yolo_dataset/images/
 datasets/04_raw_frames_backup/
 datasets/visual_verify_output/
+datasets/August 11, 2026 Frames/
 
 # Globally ignore all other large random tensor files, but permit our specific models
 *.pt

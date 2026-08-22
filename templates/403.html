@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>403 — Access Denied</title>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700,900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Satoshi', -apple-system, sans-serif;
+            background: #0f1117;
+            color: #e1e4ea;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .forbidden-card {
+            text-align: center;
+            max-width: 480px;
+            padding: 48px 40px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+        }
+        .forbidden-icon {
+            font-size: 4rem;
+            color: #ef4444;
+            margin-bottom: 20px;
+        }
+        .forbidden-card h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 8px;
+            color: #f8f9fa;
+        }
+        .forbidden-card .code {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #ef4444;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+        .forbidden-card p {
+            font-size: 1rem;
+            color: #8b8fa3;
+            line-height: 1.6;
+            margin-bottom: 28px;
+        }
+        .role-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: rgba(239,68,68,0.12);
+            color: #f87171;
+            margin: 0 4px;
+        }
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 28px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+        }
+        .back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(59,130,246,0.3);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="forbidden-card">
+        <div class="forbidden-icon">
+            <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <div class="code">403 — Forbidden</div>
+        <h1>Access Denied</h1>
+        <p>
+            Your current role <span class="role-badge">{{ user_role or 'unknown' }}</span>
+            does not have permission to access this page.
+        </p>
+        <a href="/dashboard" class="back-btn">
+            <i class="fa-solid fa-arrow-left"></i> Return to Your Dashboard
+        </a>
+    </div>
+</body>
+
+</html>

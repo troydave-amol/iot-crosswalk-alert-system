@@ -2178,6 +2178,7 @@ const App = {
             document.getElementById('btnModeTest')?.classList.add('active');
         });
 
+
         // Collapse/expand toggle for video test content
         document.getElementById('videoTestHeader')?.addEventListener('click', () => {
             const content = document.getElementById('videoTestContent');
@@ -2412,6 +2413,7 @@ const App = {
             }
         }
 
+
         // Video test panel visibility
         const panel = document.getElementById('videoTestPanel');
         if (panel) {
@@ -2423,7 +2425,7 @@ const App = {
         const camTitle = document.getElementById('cameraCardTitle');
         if (camTitle) {
             if (isTest && window.AppMode.testVideoFile) {
-                camTitle.textContent = `Video Test — ${window.AppMode.testVideoFile}`;
+                camTitle.textContent = `Video Test Simulation — ${window.AppMode.testVideoFile}`;
             } else {
                 camTitle.textContent = 'Live Camera View';
             }

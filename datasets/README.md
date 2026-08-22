@@ -27,11 +27,22 @@ datasets/
 │       ├── Box*_curve.png         #   F1, PR, P, R curves
 │       └── *.jpg                  #   Train/val batch previews
 │
-└── 04_raw_frames_backup/          # Re-extracted raw frames (Label Studio reference)
-    └── afternoon_v2_frames/       #   908 frames from Afternoon V2 videos
+├── 04_raw_frames_backup/          # Re-extracted raw frames (Label Studio reference)
+│   └── afternoon_v2_frames/       #   908 frames from Afternoon V2 videos
+│
+└── August 11, 2026 Frames/        # Active dataset for Label Studio annotation
+    └── batch_001/ ... batch_057/  #   5,650 frames split into 57 batches (100 frames each)
 ```
 
-## Latest Model
+## Active Annotation Dataset (August 11, 2026)
+
+- **Source Videos:** Morning (6 clips), Afternoon 12 PM (4 clips), Afternoon 2 PM (12 clips) — 22 clips total.
+- **Extraction Rate:** 1 FPS frame extraction.
+- **Consolidation:** 5,650 total frames consolidated into a single sequence (`frame_00001.jpg` to `frame_05650.jpg`).
+- **Batching:** Grouped into 57 batch folders (`batch_001` through `batch_057`) of 100 frames each (batch 57 has 50 frames) for Label Studio import.
+- **Batching Script:** `scripts/batch_for_labelstudio.py`
+
+## Latest Trained Model Checkpoint
 
 - **File:** `03_training_runs/run_2026_04_03_merged_v2/weights/yolov8n_crosswalk_v2_1111_frames.pt`
 - **mAP50:** 96.75%
@@ -41,3 +52,4 @@ datasets/
 - **F1 Score:** 0.91
 - **Dataset:** 1,111 frames (Morning V1 + Afternoon V1 + Afternoon V2)
 - **Classes:** adult (0), child (1)
+

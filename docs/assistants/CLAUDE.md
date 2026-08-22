@@ -16,7 +16,8 @@ Treat these as the current ground truth for this repository:
 
 - the repo already contains a trained checkpoint at `models/yolov8n_crosswalk_v2_1111_frames.pt`
 - the dashboard supports both live camera mode and video-test mode
-- the current merged dataset and archived training assets live under `datasets/`
+- the active dataset under annotation is `datasets/August 11, 2026 Frames/` (5,650 frames split into 57 batches of 100 images for Label Studio)
+- archived dataset and training assets live under `datasets/`
 - the checked-in ROI config is rectangular, even though the lower-level ROI helper is polygon-capable
 - logs and analytics are server-side and DB-backed, not browser-only summaries
 

@@ -3,6 +3,7 @@ import pymysql
 import pymysql.cursors
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
+from werkzeug.security import generate_password_hash, check_password_hash
 
 load_dotenv()
 
@@ -20,6 +21,19 @@ def get_connection():
         # Strategy: Connect without DB first to ensure it exists, then connect with DB.
         # However, for simplicity and standard usage, we usually connect with DB.
         # Given the requirement to generic "init_db", we will handle the DB selection dynamically.
+        charset='utf8mb4',
+        cursorclass=pymysql.cursors.DictCursor,
+        autocommit=True
+    )
+
+def _get_db_connection():
+    """Return a connection to the target database (not root-level)."""
+    target_db = os.getenv("DB_NAME", "crosswalk_db")
+    return pymysql.connect(
+        host=os.getenv("DB_HOST", "localhost"),
+        user=os.getenv("DB_USER", "root"),
+        password=os.getenv("DB_PASS", ""),
+        database=target_db,
         charset='utf8mb4',
         cursorclass=pymysql.cursors.DictCursor,
         autocommit=True
@@ -48,7 +62,7 @@ def init_db():
             cursor.execute(f"CREATE DATABASE IF NOT EXISTS {target_db}")
             cursor.execute(f"USE {target_db}")
             
-            # Create Table
+            # Create events table
             create_table_sql = """
             CREATE TABLE IF NOT EXISTS events (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -94,10 +108,130 @@ def init_db():
                 pass  # Column already exists
 
             print(f"Database '{target_db}' and table 'events' checked/initialized successfully.")
-            
+
+            # ── RBAC: Create users table ──────────────────────────────
+            create_users_sql = """
+            CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(64) NOT NULL UNIQUE,
+                password_hash VARCHAR(255) NOT NULL,
+                role ENUM('tmc_officer', 'it_specialist') NOT NULL DEFAULT 'tmc_officer',
+                full_name VARCHAR(128) NOT NULL,
+                created_at DATETIME NOT NULL,
+                last_login DATETIME NULL,
+                INDEX idx_username (username),
+                INDEX idx_role (role)
+            )
+            """
+            cursor.execute(create_users_sql)
+            print(f"  → Table 'users' checked/initialized successfully.")
+
+            # Seed default accounts if the users table is empty
+            cursor.execute("SELECT COUNT(*) AS cnt FROM users")
+            row = cursor.fetchone()
+            if row and row["cnt"] == 0:
+                now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+                # TMC Officer seed
+                tmc_user = os.getenv("TMC_USERNAME", "tmc_officer")
+                tmc_pass = os.getenv("TMC_PASSWORD", "SmartCrosswalk2026")
+                tmc_hash = generate_password_hash(tmc_pass)
+
+                cursor.execute(
+                    "INSERT INTO users (username, password_hash, role, full_name, created_at) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (tmc_user, tmc_hash, "tmc_officer", "TMC Officer", now_iso)
+                )
+
+                # IT Specialist seed
+                it_user = os.getenv("IT_SPECIALIST_USERNAME", "it_specialist")
+                it_pass = os.getenv("IT_SPECIALIST_PASSWORD", "uswagmalaybalay")
+                it_hash = generate_password_hash(it_pass)
+
+                cursor.execute(
+                    "INSERT INTO users (username, password_hash, role, full_name, created_at) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (it_user, it_hash, "it_specialist", "IT Systems Specialist", now_iso)
+                )
+
+                print(f"  → Seeded default users: '{tmc_user}' (tmc_officer), '{it_user}' (it_specialist)")
+            else:
+                print(f"  → Users table already populated ({row['cnt']} users). Skipping seed.")
+
     except Exception as e:
         print(f"DB INIT INVALID: {e}")
         # We do not raise, so the app can continue running even if DB fails
+    finally:
+        if conn:
+            conn.close()
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# RBAC: User Authentication Helpers
+# ────────────────────────────────────────────────────────────────────────────
+
+def authenticate_user(username: str, password: str) -> dict | None:
+    """
+    Authenticate a user against the users table.
+    Returns the user row dict on success, None on failure.
+    """
+    conn = None
+    try:
+        conn = _get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+            user = cursor.fetchone()
+            if user and check_password_hash(user["password_hash"], password):
+                # Update last_login timestamp
+                now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                cursor.execute(
+                    "UPDATE users SET last_login = %s WHERE id = %s",
+                    (now_iso, user["id"])
+                )
+                return user
+            return None
+    except Exception as e:
+        print(f"[AUTH] authenticate_user error: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_user_by_username(username: str) -> dict | None:
+    """Fetch a single user row by username. Returns None if not found."""
+    conn = None
+    try:
+        conn = _get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+            return cursor.fetchone()
+    except Exception as e:
+        print(f"[AUTH] get_user_by_username error: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
+def update_user_password(username: str, new_password: str) -> bool:
+    """
+    Update a user's password hash in the database.
+    Returns True on success, False on failure.
+    """
+    conn = None
+    try:
+        conn = _get_db_connection()
+        new_hash = generate_password_hash(new_password)
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE users SET password_hash = %s WHERE username = %s",
+                (new_hash, username)
+            )
+            return cursor.rowcount > 0
+    except Exception as e:
+        print(f"[AUTH] update_user_password error: {e}")
+        return False
     finally:
         if conn:
             conn.close()

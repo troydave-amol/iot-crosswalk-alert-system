@@ -1,4 +1,4 @@
-# Capsone Project Overview & System Context
+# Capstone Project Overview & System Context
 
 **Project Title:** Smart Crosswalk Alert System for Real-Time Child Detection
 **Purpose of this Document:** This Markdown file serves as the definitive architecture, context, and foundational guide for the Capstone Project. It is designed to immediately bring AI assistants up to speed on the system's goals, tech stack, and logic parameters whenever a new chat is initialized.
@@ -35,7 +35,11 @@ The project is divided into tightly integrated modules managed through a central
 - **Files:** `detection_tracker.py`, `warning_controller.py`
 - **Function:** In the real world, AI models experience "flicker" (a detected object disappearing for a split second due to lighting or occlusion). The tracker assigns temporal IDs to bounding boxes via Intersection-over-Union (IoU) logic. The Warning Controller ensures the physical alarm is only triggered using a steady buffer protocol (e.g., waiting for consistently positive frames before emitting the trigger) to prevent erratic hardware switching.
 
-### E. Database & Logging Analytics
+### E. Hardware Relay Bridge
+- **Files:** `hardware_controller.py`
+- **Function:** Thread-safe controller managing serial communication (`pyserial` over USB COM port) between the Python AI backend and the ESP32 microcontroller controlling the physical warning relay. Non-blocking design ensures AI pipeline continues even if ESP32 is disconnected.
+
+### F. Database & Logging Analytics
 - **Files:** `db.py`
 - **Function:** An SQLite/MySQL controller responsible for maintaining extensive event logs. Whenever a child triggers the warning, a detailed database row is written. This allows the dashboard to generate reports, historical aggregations, and traffic metrics over set timelines (e.g., "15m", "1h", "today").
 

@@ -19,6 +19,7 @@ This project is the working dashboard and backend for the IoT-Based Smart School
   - `datasets/02_yolo_dataset/`
   - `datasets/03_training_runs/run_2026_04_03_merged_v2/`
   - `datasets/04_raw_frames_backup/`
+  - `datasets/August 11, 2026 Frames/` (5,650 extracted frames split into 57 batches of 100 images for Label Studio)
 - Three demo videos under `test_videos/` for video-test mode.
 
 ## Core Dashboard Behavior
@@ -95,6 +96,7 @@ Detailed contracts live in:
 
 These scripts are currently safe to rely on:
 
+- `python scripts/batch_for_labelstudio.py` (consolidates Morning/Afternoon frames into 100-frame batches for Label Studio)
 - `python scripts/validate_labels.py --dataset <dataset_name>`
 - `python scripts/split_dataset.py --dataset <dataset_name>`
 - `python scripts/smoke_test_api.py --host http://localhost:5000`

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
+    <title>TMC Officer Dashboard — Smart Crosswalk Alert System</title>
     <!-- Fonts: Satoshi (primary UI) + JetBrains Mono (data/KPIs) -->
     <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700,900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
@@ -20,13 +20,12 @@
 
 <body>
 
-
     <!-- Sidebar -->
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="sidebar-brand">
                 <img src="/static/img/TMC_Logo.png" alt="TMC Logo" class="sidebar-logo">
-                <span>Dashboard</span>
+                <span>TMC Dashboard</span>
             </div>
             <button class="sidebar-toggle" id="btnHamburger" aria-label="Toggle sidebar" aria-expanded="false"
                 aria-controls="sidebar">
@@ -51,12 +50,22 @@
                 <span class="nav-label">Reports</span>
             </a>
             <a href="#settings" class="nav-item">
-                <span class="nav-icon"><i class="fa-solid fa-gear"></i></span>
-                <span class="nav-label">Settings</span>
+                <span class="nav-icon"><i class="fa-solid fa-crosshairs"></i></span>
+                <span class="nav-label">ROI Setup</span>
             </a>
         </div>
         <div class="sidebar-footer">
             <div class="sidebar-divider"></div>
+            <!-- User Info -->
+            <div class="nav-item nav-item-user" style="cursor: default; padding: 10px 16px; opacity: 0.7;">
+                <span class="nav-icon"><i class="fa-solid fa-user-shield"></i></span>
+                <span class="nav-label" style="font-size: 0.8rem;">{{ full_name }}</span>
+            </div>
+            <!-- Change Password -->
+            <a href="#" class="nav-item" id="btn-change-password" onclick="document.getElementById('passwordModal').style.display='flex'; return false;">
+                <span class="nav-icon"><i class="fa-solid fa-key"></i></span>
+                <span class="nav-label">Change Password</span>
+            </a>
             <a href="/api/logout" class="nav-item nav-item-logout" id="btn-logout">
                 <span class="nav-icon"><i class="fa-solid fa-right-from-bracket"></i></span>
                 <span class="nav-label">Logout</span>
@@ -133,7 +142,7 @@
                     </div>
                 </div>
 
-                <!-- Mode Toggle Bar -->
+                <!-- Mode Toggle Bar (TMC Officer owns video test) -->
                 <div class="mode-toggle-bar card">
                     <div class="mode-toggle-left">
                         <div class="mode-toggle" id="modeToggle">
@@ -141,7 +150,7 @@
                                 <i class="fa-solid fa-video"></i> Live Camera
                             </button>
                             <button class="mode-btn" data-mode="video_test" id="btnModeTest">
-                                <i class="fa-solid fa-film"></i> Video Test
+                                <i class="fa-solid fa-flask"></i> Video Test
                             </button>
                         </div>
                         <span class="mode-badge" id="modeBadge">
@@ -150,13 +159,13 @@
                     </div>
                 </div>
 
+
                 <!-- Video Test Panel (hidden by default) -->
                 <div class="video-test-panel card" id="videoTestPanel" style="display: none;">
                     <div class="video-test-header" id="videoTestHeader">
                         <div class="video-test-header-left">
                             <h4><i class="fa-solid fa-flask"></i> Video Test Mode</h4>
-                            <small class="text-muted">Upload or select a pre-recorded .mp4 to simulate live
-                                detection</small>
+                            <small class="text-muted">Upload or select a pre-recorded .mp4 to run through the detection pipeline</small>
                         </div>
                         <i class="fa-solid fa-chevron-up video-test-collapse-icon" id="videoTestCollapseIcon"></i>
                     </div>
@@ -626,7 +635,7 @@
                 </div>
             </section>
 
-            <!-- SETTINGS SECTION -->
+            <!-- SETTINGS / ROI SECTION -->
             <section id="settings-section" class="page-section">
                 <div class="card">
                     <div class="roi-header">
@@ -773,9 +782,85 @@
         </div>
     </main>
 
+    <!-- Change Password Modal -->
+    <div id="passwordModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); backdrop-filter:blur(6px); align-items:center; justify-content:center;">
+        <div style="background:var(--card-bg, #1a1d27); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:32px; width:420px; max-width:90vw;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3 style="margin:0; font-size:1.1rem;"><i class="fa-solid fa-key" style="margin-right:8px; color:var(--primary-accent);"></i>Change Password</h3>
+                <button onclick="document.getElementById('passwordModal').style.display='none';" style="background:none; border:none; color:inherit; cursor:pointer; font-size:1.2rem;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="pwdMsg" style="display:none; padding:10px; border-radius:8px; margin-bottom:14px; font-size:0.9rem;"></div>
+            <form id="changePasswordForm" autocomplete="off">
+                <div style="margin-bottom:14px;">
+                    <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Current Password</label>
+                    <input type="password" id="pwdCurrent" required style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.06); color:inherit; font-size:0.95rem;">
+                </div>
+                <div style="margin-bottom:14px;">
+                    <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">New Password <small style="color:#888;">(min. 6 chars)</small></label>
+                    <input type="password" id="pwdNew" required minlength="6" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.06); color:inherit; font-size:0.95rem;">
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Confirm New Password</label>
+                    <input type="password" id="pwdConfirm" required minlength="6" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.06); color:inherit; font-size:0.95rem;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%; padding:12px; font-weight:600;">
+                    <i class="fa-solid fa-check" style="margin-right:6px;"></i>Update Password
+                </button>
+            </form>
+        </div>
+    </div>
+
     <div id="sidebarBackdrop" class="backdrop"></div>
     <script src="/static/js/contract.js"></script>
     <script src="/static/js/dashboard.js"></script>
+    <script>
+        // ── Change Password Form Handler ──
+        (function() {
+            const form = document.getElementById('changePasswordForm');
+            const msgDiv = document.getElementById('pwdMsg');
+            if (!form) return;
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                msgDiv.style.display = 'none';
+                const current = document.getElementById('pwdCurrent').value.trim();
+                const newPwd = document.getElementById('pwdNew').value.trim();
+                const confirm = document.getElementById('pwdConfirm').value.trim();
+                if (newPwd !== confirm) {
+                    msgDiv.textContent = 'New passwords do not match.';
+                    msgDiv.style.display = 'block';
+                    msgDiv.style.background = 'rgba(239,68,68,0.15)';
+                    msgDiv.style.color = '#f87171';
+                    return;
+                }
+                try {
+                    const res = await fetch('/api/user/change-password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ current_password: current, new_password: newPwd })
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        msgDiv.textContent = 'Password updated successfully!';
+                        msgDiv.style.display = 'block';
+                        msgDiv.style.background = 'rgba(34,197,94,0.15)';
+                        msgDiv.style.color = '#4ade80';
+                        form.reset();
+                        setTimeout(() => { document.getElementById('passwordModal').style.display = 'none'; msgDiv.style.display = 'none'; }, 2000);
+                    } else {
+                        msgDiv.textContent = data.error || 'Failed to update password.';
+                        msgDiv.style.display = 'block';
+                        msgDiv.style.background = 'rgba(239,68,68,0.15)';
+                        msgDiv.style.color = '#f87171';
+                    }
+                } catch (err) {
+                    msgDiv.textContent = 'Server error. Please try again.';
+                    msgDiv.style.display = 'block';
+                    msgDiv.style.background = 'rgba(239,68,68,0.15)';
+                    msgDiv.style.color = '#f87171';
+                }
+            });
+        })();
+    </script>
 </body>
 
 </html>

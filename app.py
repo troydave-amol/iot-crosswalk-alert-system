@@ -7,7 +7,7 @@ from typing import Optional, Union
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, join_room
 
 import cv2
 import json
@@ -121,7 +121,7 @@ os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
 
 
 # DB Imports
-from db import init_db, insert_event, fetch_events, fetch_analytics_aggregates
+from db import init_db, insert_event, fetch_events, fetch_analytics_aggregates, authenticate_user, get_user_by_username, update_user_password
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
@@ -137,30 +137,43 @@ esp32_relay = ESP32Relay(
 )
 
 # --------------------------------------------------------------------------------
-# Authentication
+# Authentication & RBAC
 # --------------------------------------------------------------------------------
 
-# TMC Officer credentials — read fresh from .env on each login attempt
-# so that changes to the .env file take effect after a server restart.
-
-def _get_tmc_credentials():
-    """Return (username, password) from environment variables."""
-    return (
-        os.getenv("TMC_USERNAME", "tmc_officer"),
-        os.getenv("TMC_PASSWORD", "SmartCrosswalk2026"),
-    )
-
 def login_required(f):
-    """Decorator to protect routes that require authentication."""
+    """Decorator to protect routes that require authentication (any role)."""
     @functools.wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get("logged_in"):
-            # API routes return 401, page routes redirect to login
             if request.path.startswith("/api/"):
                 return jsonify({"ok": False, "error": "unauthorized"}), 401
             return redirect(url_for("landing"))
         return f(*args, **kwargs)
     return decorated_function
+
+def role_required(*allowed_roles):
+    """Decorator to enforce role-based access control.
+    Usage: @role_required('tmc_officer') or @role_required('tmc_officer', 'it_specialist')
+    """
+    def decorator(f):
+        @functools.wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not session.get("logged_in"):
+                if request.path.startswith("/api/"):
+                    return jsonify({"ok": False, "error": "unauthorized"}), 401
+                return redirect(url_for("landing"))
+            user_role = session.get("role")
+            if allowed_roles and user_role not in allowed_roles:
+                if request.path.startswith("/api/"):
+                    return jsonify({
+                        "ok": False,
+                        "error": "forbidden",
+                        "message": f"Requires one of roles: {', '.join(allowed_roles)}"
+                    }), 403
+                return render_template("403.html", user_role=user_role), 403
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
 
 # --------------------------------------------------------------------------------
 # Helper Functions
@@ -206,24 +219,46 @@ def landing():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    """Protected dashboard — requires authentication."""
-    return render_template("index.html")
+    """Dynamic router — redirects to the role-appropriate dashboard."""
+    role = session.get("role")
+    if role == "it_specialist":
+        return redirect(url_for("dashboard_it"))
+    return redirect(url_for("dashboard_tmc"))
+
+@app.route("/dashboard/tmc")
+@role_required("tmc_officer")
+def dashboard_tmc():
+    """TMC Officer dashboard — live view, ROI, logs, analytics, reports."""
+    return render_template("tmc_dashboard.html",
+                           username=session.get("username"),
+                           role=session.get("role"),
+                           full_name=session.get("full_name", "TMC Officer"))
+
+@app.route("/dashboard/it")
+@role_required("it_specialist")
+def dashboard_it():
+    """IT Specialist dashboard — system status, video sim, data export, model accuracy."""
+    return render_template("it_dashboard.html",
+                           username=session.get("username"),
+                           role=session.get("role"),
+                           full_name=session.get("full_name", "IT Specialist"))
 
 @app.route("/api/login", methods=["POST"])
 def api_login():
-    """Validate username/password against .env credentials."""
+    """Authenticate credentials against MySQL users table."""
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
     password = (data.get("password") or "").strip()
 
-    expected_user, expected_pass = _get_tmc_credentials()
-
-    if username == expected_user and password == expected_pass:
+    user = authenticate_user(username, password)
+    if user:
         session["logged_in"] = True
-        session["username"] = username
-        session["role"] = "tmc_officer"
+        session["username"] = user["username"]
+        session["role"] = user["role"]
+        session["full_name"] = user["full_name"]
+        session["user_id"] = user["id"]
         session.permanent = True
-        return jsonify({"ok": True, "redirect": url_for("dashboard")})
+        return jsonify({"ok": True, "role": user["role"], "redirect": url_for("dashboard")})
 
     return jsonify({"ok": False, "error": "Invalid username or password."}), 401
 
@@ -232,6 +267,31 @@ def api_logout():
     """Clear the session and redirect to the landing page."""
     session.clear()
     return redirect(url_for("landing"))
+
+@app.route("/api/user/change-password", methods=["POST"])
+@login_required
+def api_change_password():
+    """Allow authenticated users to update their own password."""
+    data = request.get_json(silent=True) or {}
+    current_password = (data.get("current_password") or "").strip()
+    new_password = (data.get("new_password") or "").strip()
+
+    if not current_password or not new_password:
+        return jsonify({"ok": False, "error": "Both current and new password are required."}), 400
+
+    if len(new_password) < 6:
+        return jsonify({"ok": False, "error": "New password must be at least 6 characters."}), 400
+
+    # Verify current password matches
+    username = session.get("username")
+    user = authenticate_user(username, current_password)
+    if not user:
+        return jsonify({"ok": False, "error": "Current password is incorrect."}), 401
+
+    # Update to new password
+    if update_user_password(username, new_password):
+        return jsonify({"ok": True, "message": "Password updated successfully."})
+    return jsonify({"ok": False, "error": "Failed to update password. Please try again."}), 500
 
 @app.get("/api/roi")
 @login_required
@@ -283,7 +343,7 @@ def _validate_roi_payload(d: dict):
         return True, "", clean
 
 @app.post("/api/roi")
-@login_required
+@role_required("tmc_officer")
 def api_set_roi():
     d = request.get_json(silent=True) or {}
     ok, err, clean = _validate_roi_payload(d)
@@ -300,18 +360,34 @@ def api_set_roi():
 def handle_connect():
     """
     Triggered when a client connects (dashboard loads or refreshes).
-    Sends the current camera status so the dashboard shows the real state.
+    Joins the client into a role-specific Socket.IO room so that
+    video-test telemetry can be scoped exclusively to TMC officers.
     """
-    print("Client connected")
-    # Send current camera status immediately
-    if active_session is not None:
-        cam_status = "OK" if active_session.camera_online else "OFFLINE"
-        socketio.emit("status_update", _build_idle_payload(camera_status=cam_status))
-        socketio.emit("camera_status", active_session.get_status())
-        socketio.emit("mode_update", {"mode": current_mode})
+    from flask import request as _req  # Socket.IO connect has access to Flask session
+    role = session.get("role", "unknown")
+    join_room(f"role_{role}")
+    print(f"Client connected (role={role}, sid={_req.sid})")
+
+    if role == "tmc_officer":
+        # TMC gets full state: current mode + session telemetry
+        if active_session is not None:
+            cam_status = "OK" if active_session.camera_online else "OFFLINE"
+            socketio.emit("status_update", _build_idle_payload(camera_status=cam_status), room=_req.sid)
+            socketio.emit("camera_status", active_session.get_status(), room=_req.sid)
+            socketio.emit("mode_update", {"mode": current_mode}, room=_req.sid)
+        else:
+            socketio.emit("status_update", _build_idle_payload(camera_status="OFFLINE"), room=_req.sid)
+            socketio.emit("mode_update", {"mode": current_mode}, room=_req.sid)
     else:
-        socketio.emit("status_update", _build_idle_payload(camera_status="OFFLINE"))
-        socketio.emit("mode_update", {"mode": current_mode})
+        # IT Specialist (and any other role): only sees live CCTV status.
+        # If the server is running a video test, IT sees CCTV as OFFLINE.
+        if active_session is not None and current_mode == "live":
+            cam_status = "OK" if active_session.camera_online else "OFFLINE"
+            socketio.emit("status_update", _build_idle_payload(camera_status=cam_status), room=_req.sid)
+            socketio.emit("camera_status", active_session.get_status(), room=_req.sid)
+        else:
+            socketio.emit("status_update", _build_idle_payload(camera_status="OFFLINE"), room=_req.sid)
+        socketio.emit("mode_update", {"mode": "live"}, room=_req.sid)
 
 # --------------------------------------------------------------------------------
 # Live Pipeline
@@ -773,7 +849,11 @@ class LiveSession:
                 "warning_device_on": warning_device_on,
                 "source": "yolo",
             }
-            socketio.emit("status_update", payload)
+            # Scope telemetry: video_test → TMC only; live → all clients
+            if self.source_key == "video_test":
+                socketio.emit("status_update", payload, room="role_tmc_officer")
+            else:
+                socketio.emit("status_update", payload)
 
             try:
                 self._log_db(out, warning_device_on)
@@ -966,9 +1046,12 @@ _session_lock = threading.Lock()
 
 
 def _emit_camera_status(session: LiveSession):
-    """Push camera status to all connected dashboard clients."""
+    """Push camera status — scoped to TMC-only when in video_test mode."""
     try:
-        socketio.emit("camera_status", session.get_status())
+        if current_mode == "video_test":
+            socketio.emit("camera_status", session.get_status(), room="role_tmc_officer")
+        else:
+            socketio.emit("camera_status", session.get_status())
     except Exception:
         pass
 
@@ -980,10 +1063,16 @@ def _emit_camera_status(session: LiveSession):
 @app.route("/video_feed")
 @login_required
 def video_feed_route():
-    """MJPEG stream from the active session (live camera or video test)."""
+    """MJPEG stream from the active session (live camera or video test).
+    IT Specialist is blocked from receiving video test frames."""
     overlay = request.args.get("overlay", "1") == "1"
     if active_session is None:
         return Response("No active session", status=503)
+
+    # Block video test feed from leaking to IT Specialist dashboard
+    if current_mode == "video_test" and session.get("role") == "it_specialist":
+        return Response("Live camera offline — simulation active on TMC console", status=503)
+
     return Response(
         gen_frames(active_session, overlay=overlay),
         mimetype="multipart/x-mixed-replace; boundary=frame",
@@ -1277,7 +1366,11 @@ def _start_video_test_session(filename: str):
 @app.get("/api/mode")
 @login_required
 def api_get_mode():
-    """Return the current operating mode."""
+    """Return the current operating mode.
+    IT Specialist always sees mode='live' — video_test state is TMC-only."""
+    user_role = session.get("role")
+    if user_role == "it_specialist":
+        return jsonify({"ok": True, "mode": "live"})
     info = {"ok": True, "mode": current_mode}
     if current_mode == "video_test" and active_session and hasattr(active_session, '_video_filename'):
         info["video_filename"] = active_session._video_filename
@@ -1285,21 +1378,24 @@ def api_get_mode():
 
 
 @app.post("/api/mode/live")
-@login_required
+@role_required("tmc_officer")
 def api_switch_to_live():
-    """Switch to live camera mode."""
+    """Switch to live camera mode (TMC Officer only)."""
     with _session_lock:
         ok = _start_live_session()
     if ok:
-        socketio.emit("mode_update", {"mode": "live"})
+        # Notify TMC that mode changed back to live
+        socketio.emit("mode_update", {"mode": "live"}, room="role_tmc_officer")
+        # Notify IT that live CCTV is back (so their camera view can reconnect)
+        socketio.emit("mode_update", {"mode": "live"}, room="role_it_specialist")
         return jsonify({"ok": True, "mode": "live"})
     return jsonify({"ok": False, "error": "RTSP URL not configured"}), 400
 
 
 @app.post("/api/mode/video_test")
-@login_required
+@role_required("tmc_officer")
 def api_switch_to_video_test():
-    """Switch to video test mode with a specific .mp4 file."""
+    """Switch to video test mode with a specific .mp4 file (TMC Officer only)."""
     data = request.get_json(silent=True) or {}
     filename = data.get("filename", "").strip()
     if not filename:
@@ -1312,13 +1408,14 @@ def api_switch_to_video_test():
     with _session_lock:
         ok = _start_video_test_session(filename)
     if ok:
-        socketio.emit("mode_update", {"mode": "video_test", "video_filename": filename})
+        # Only notify TMC — IT must never see video_test mode
+        socketio.emit("mode_update", {"mode": "video_test", "video_filename": filename}, room="role_tmc_officer")
         return jsonify({"ok": True, "mode": "video_test", "video_filename": filename})
     return jsonify({"ok": False, "error": "Video file not found"}), 404
 
 
 @app.get("/api/test_videos")
-@login_required
+@role_required("tmc_officer")
 def api_list_test_videos():
     """List all .mp4 files available in the test_videos/ directory."""
     videos = []
@@ -1345,7 +1442,7 @@ def api_list_test_videos():
 
 
 @app.post("/api/test_videos/upload")
-@login_required
+@role_required("tmc_officer")
 def api_upload_test_video():
     """Upload a new .mp4 file to the test_videos/ directory."""
     if "file" not in request.files:

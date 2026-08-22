@@ -5,22 +5,25 @@ from pathlib import Path
 # ── Configuration ──────────────────────────────────────────────
 PROJECT_ROOT = Path(r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics")
 # Input directly from the user's gathering folder
-VIDEO_ROOT = Path(r"C:\Users\Acer\Documents\CAPSTONE\CAMERA\VIDEOS\Morning_V1")
-# Output to the project's dataset folder mirroring afternoon_v1 structure
-OUTPUT_ROOT = PROJECT_ROOT / "datasets" / "source_morning_v1" / "raw_frames"
-INTERVAL_SECONDS = 3  # 1 frame every 3 seconds
+VIDEO_ROOT = Path(r"C:\Users\Acer\Documents\CAPSTONE\CAMERA\VIDEOS\August 11, 2026\Afternoon\2 pm")
+# Output to the project's dataset folder
+OUTPUT_ROOT = PROJECT_ROOT / "datasets" / "August 11, 2026 Frames" / "Afternoon" / "2 pm"
+INTERVAL_SECONDS = 1  # 1 frame every 1 second (1 FPS)
 # ───────────────────────────────────────────────────────────────
 
 def extract_frames():
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     
-    # Supported video formats
-    video_files = (
-        list(VIDEO_ROOT.rglob("*.mp4"))
-        + list(VIDEO_ROOT.rglob("*.avi"))
-        + list(VIDEO_ROOT.rglob("*.mkv"))
-        + list(VIDEO_ROOT.rglob("*.mov"))
-    )
+    # Supported video formats (handles single file or directory)
+    if VIDEO_ROOT.is_file():
+        video_files = [VIDEO_ROOT]
+    else:
+        video_files = (
+            list(VIDEO_ROOT.rglob("*.mp4"))
+            + list(VIDEO_ROOT.rglob("*.avi"))
+            + list(VIDEO_ROOT.rglob("*.mkv"))
+            + list(VIDEO_ROOT.rglob("*.mov"))
+        )
     
     if not video_files:
         print(f"No video files found in {VIDEO_ROOT}")

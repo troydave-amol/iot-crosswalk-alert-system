@@ -21,6 +21,8 @@ The repository already contains:
   - archived YOLO run artifacts
 - `datasets/04_raw_frames_backup/`
   - raw frame backups
+- `datasets/August 11, 2026 Frames/`
+  - active dataset: 5,650 frames from Morning, Afternoon 12 PM, and Afternoon 2 PM videos, consolidated into 57 batch folders (`batch_001` to `batch_057`) of 100 frames each for Label Studio annotation
 
 Separately, `scripts/setup_datasets.py` can still scaffold a fresh manual workspace such as `datasets/site_dataset_v1/`.
 
