@@ -119,29 +119,6 @@
 
             <!-- LIVE VIEW SECTION -->
             <section id="live-section" class="page-section active">
-                <div class="live-metrics-grid">
-                    <div class="card">
-                        <div class="card-title">Child-class in ROI</div>
-                        <div class="card-value" id="live-child">NO</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">Warning Device</div>
-                        <div class="card-value" id="live-warning">OFF</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">Confidence</div>
-                        <div class="card-value" id="live-conf">0.00</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">ROI Status</div>
-                        <div class="card-value" id="live-roi">OUTSIDE</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">Latency</div>
-                        <div class="card-value" id="live-latency">24ms</div>
-                    </div>
-                </div>
-
                 <!-- Mode Toggle Bar (TMC Officer owns video test) -->
                 <div class="mode-toggle-bar card">
                     <div class="mode-toggle-left">
@@ -280,30 +257,6 @@
                     </div>
                 </div>
 
-                <div class="dashboard-grid">
-                    <div class="card" style="grid-column: span 2;">
-                        <h3>Live Event Feed</h3>
-                        <div id="event-feed" style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
-                            <!-- Feed items -->
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3>Power System</h3>
-                        <div class="row mt-4">
-                            <div class="flex-col">
-                                <small>Solar Status</small>
-                                <strong id="power-solar-status">N/A — Hardware pending</strong>
-                            </div>
-                            <div class="flex-col mt-4">
-                                <small>Battery Level</small>
-                                <div class="power-bar-track">
-                                    <div id="power-battery-bar" class="power-bar-fill" style="width:0%"></div>
-                                </div>
-                                <small id="power-battery-text">N/A</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </section>
 
             <!-- LOGS SECTION -->
@@ -311,12 +264,6 @@
                 <div class="logs-header"
                     style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <h2>System Logs</h2>
-                    <div class="export-actions">
-                        <button class="btn btn-outline" id="btnExportCSV"><i class="fa-solid fa-file-csv"></i>
-                            CSV</button>
-                        <button class="btn btn-outline" id="btnExportJSON"><i class="fa-solid fa-file-code"></i>
-                            JSON</button>
-                    </div>
                 </div>
 
                 <div class="filter-wrapper">
@@ -338,7 +285,7 @@
                         </div>
                     </div>
 
-                    <!-- Middle Row: Toggles, Slider, Scenario -->
+                    <!-- Middle Row: Toggles -->
                     <div class="filter-row mt-3">
                         <div class="filter-item">
                             <label class="toggle-label" for="filterWarningOn">
@@ -358,24 +305,6 @@
                                 <span class="toggle-text">In ROI Only</span>
                             </label>
                         </div>
-                        <div class="filter-divider"></div>
-                        <div class="filter-item" style="display:flex; align-items:center; gap:8px;">
-                            <label for="filterMinConf" class="filter-label">Min Conf:</label>
-                            <input type="range" id="filterMinConf" min="0" max="1" step="0.01" value="0.00"
-                                class="logs-range-slider">
-                            <span id="filterMinConfLabel" class="conf-value-badge">0.00</span>
-                        </div>
-                        <div class="filter-divider"></div>
-                        <div class="filter-item" style="display:flex; align-items:center; gap:8px;">
-                            <label for="filterScenario" class="filter-label">Scenario:</label>
-                            <select id="filterScenario" class="scenario-select">
-                                <option value="All">All</option>
-                                <option value="Morning School Entry">Morning School Entry</option>
-                                <option value="Mid-Day Shift">Mid-Day Shift</option>
-                                <option value="Afternoon Dismissal">Afternoon Dismissal</option>
-                                <option value="Standard Daylight Ops">Standard Daylight Ops</option>
-                            </select>
-                        </div>
                         <div class="filter-actions" style="margin-left:auto;">
                             <button class="btn btn-primary btn-sm" id="btnApplyLogsFilters"><i class="fa-solid fa-check"
                                     style="margin-right:5px;"></i>Apply</button>
@@ -392,17 +321,12 @@
                         <i class="fa-solid fa-triangle-exclamation"></i> DB unavailable — no data available
                     </div>
 
-                    <table id="logsTable">
+                    <table id="logsTable" class="tmc-logs-table">
                         <thead>
                             <tr>
-                                <th>Timestamp</th>
-                                <th>Child-class in ROI</th>
-                                <th>ROI Status</th>
-                                <th>Warning Device</th>
-                                <th>Confidence</th>
-                                <th>Latency (ms)</th>
-                                <th>Scenario</th>
-                                <th>False Warning</th>
+                                <th style="width: 160px;">Time</th>
+                                <th>Crosswalk Status</th>
+                                <th style="width: 160px; text-align: right;">Warning Device</th>
                             </tr>
                         </thead>
                         <tbody id="logsTableBody">

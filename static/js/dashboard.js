@@ -415,12 +415,18 @@ const App = {
         }
         document.getElementById('last-update').textContent = status.last_update_str;
 
-        // Live View Cards
-        document.getElementById('live-child').textContent = status.child_in_roi ? 'YES' : 'NO';
-        document.getElementById('live-warning').textContent = status.warning_on ? 'ON' : 'OFF';
+        // Live View Cards (IT Specialist Dashboard exclusive)
+        const liveChild = document.getElementById('live-child');
+        if (liveChild) {
+            liveChild.textContent = status.child_in_roi ? 'YES' : 'NO';
+            liveChild.style.color = status.child_in_roi ? '#d32f2f' : 'inherit';
+        }
 
-        document.getElementById('live-child').style.color = status.child_in_roi ? '#d32f2f' : 'inherit';
-        document.getElementById('live-warning').style.color = status.warning_on ? '#d32f2f' : '#2e7d32';
+        const liveWarn = document.getElementById('live-warning');
+        if (liveWarn) {
+            liveWarn.textContent = status.warning_on ? 'ON' : 'OFF';
+            liveWarn.style.color = status.warning_on ? '#d32f2f' : '#2e7d32';
+        }
 
         // Sync the System Status "Warning Output" pill instantly with the metric card
         const warnChip = document.getElementById('sysStatusWarning');
@@ -438,11 +444,21 @@ const App = {
             }
         }
 
-        document.getElementById('live-conf').textContent = status.confidence.toFixed(2);
-        document.getElementById('live-roi').textContent = status.roi_status;
-        document.getElementById('live-roi').className = `card-value ${status.roi_status === 'INSIDE' ? 'text-danger' : ''}`;
+        const liveConf = document.getElementById('live-conf');
+        if (liveConf) {
+            liveConf.textContent = status.confidence.toFixed(2);
+        }
 
-        document.getElementById('live-latency').textContent = status.latency_ms + 'ms';
+        const liveRoi = document.getElementById('live-roi');
+        if (liveRoi) {
+            liveRoi.textContent = status.roi_status;
+            liveRoi.className = `card-value ${status.roi_status === 'INSIDE' ? 'text-danger' : ''}`;
+        }
+
+        const liveLat = document.getElementById('live-latency');
+        if (liveLat) {
+            liveLat.textContent = status.latency_ms + 'ms';
+        }
 
         // Power System — N/A (hardware pending)
         const solarEl = document.getElementById('power-solar-status');
@@ -491,8 +507,9 @@ const App = {
         // UI Loading State (optional but good)
         const tbody = document.getElementById('logsTableBody');
         if (tbody && f.currentPage === 1 && !this.state.logsPollingTimer) {
+            const colCount = document.querySelector('#logsTable.tmc-logs-table') ? 3 : (document.querySelector('#logsTable.it-logs-table') ? 6 : 8);
             // Only show explicit loading on first load or manual filter change, not every poll
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> Loading DB logs...</td></tr>';
+            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding:20px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> Loading DB logs...</td></tr>`;
         }
 
         try {
@@ -766,9 +783,13 @@ const App = {
         if (f.currentPage > f.totalPages) f.currentPage = f.totalPages;
         if (f.currentPage < 1) f.currentPage = 1;
 
+        const isTmcSimplified = document.querySelector('#logsTable.tmc-logs-table') !== null;
+        const isItAudit = document.querySelector('#logsTable.it-logs-table') !== null;
+
         // Render Rows
         if (displayLogs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:#888;">No logs found.</td></tr>';
+            const colCount = isTmcSimplified ? 3 : (isItAudit ? 6 : 8);
+            tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding:20px; color:#888;">No logs found.</td></tr>`;
         } else {
             tbody.innerHTML = displayLogs.map(log => {
                 // Always parse timestamp from ISO (DB source)
@@ -777,6 +798,88 @@ const App = {
                 if (d) timeStr = d.toLocaleTimeString();
                 else timeStr = log.timestamp_iso || log.timestamp || 'Unknown';
 
+                if (isTmcSimplified) {
+                    // Consolidated status: warning triggered if child_in_roi OR warning device on
+                    const isWarning = log.child_in_roi || this.isOn(log.warning_device_on ?? log.warning_on);
+                    const rowClass = isWarning ? 'tmc-row-warning' : 'tmc-row-clear';
+
+                    // Status pill
+                    const pillClass = isWarning ? 'warning' : 'clear';
+                    const pillIcon = isWarning
+                        ? '<i class="fa-solid fa-triangle-exclamation"></i>'
+                        : '<i class="fa-solid fa-check"></i>';
+                    const pillLabel = isWarning ? 'Warning Triggered' : 'Clear';
+
+                    // Contextual description
+                    const statusDesc = isWarning
+                        ? 'Child detected in crosswalk ROI'
+                        : 'Crosswalk clear · Standby';
+
+                    // Warning device badge
+                    const deviceOn = this.isOn(log.warning_device_on ?? log.warning_on);
+                    const deviceClass = deviceOn ? 'active' : 'standby';
+                    const deviceLabel = deviceOn ? 'ACTIVE' : 'STANDBY';
+
+                    return `
+                    <tr class="${rowClass}">
+                        <td><span class="tmc-log-time">${timeStr}</span></td>
+                        <td>
+                            <div class="tmc-status-cell">
+                                <span class="tmc-status-pill ${pillClass}">${pillIcon} ${pillLabel}</span>
+                                <span class="tmc-status-desc">${statusDesc}</span>
+                            </div>
+                        </td>
+                        <td class="tmc-device-cell">
+                            <span class="tmc-device-badge ${deviceClass}">
+                                <span class="tmc-device-dot"></span>
+                                ${deviceLabel}
+                            </span>
+                        </td>
+                    </tr>`;
+                }
+
+                if (isItAudit) {
+                    // Consolidated status from 3 redundant columns
+                    const isWarning = log.child_in_roi || this.isOn(log.warning_device_on ?? log.warning_on);
+                    const isFalse = log.false_warning;
+
+                    // Row class: false warning takes priority for amber accent
+                    let rowClass = 'it-row-clear';
+                    if (isFalse) rowClass = 'it-row-false-warning';
+                    else if (isWarning) rowClass = 'it-row-warning';
+
+                    // Status pill (same visual language as TMC)
+                    const pillClass = isWarning ? 'warning' : 'clear';
+                    const pillIcon = isWarning
+                        ? '<i class="fa-solid fa-triangle-exclamation"></i>'
+                        : '<i class="fa-solid fa-check"></i>';
+                    const pillLabel = isWarning ? 'Warning Triggered' : 'Clear';
+
+                    // Confidence styling — highlight if >= threshold
+                    const conf = (log.confidence || 0).toFixed(2);
+                    const confClass = log.confidence >= 0.65 ? 'it-mono-val it-conf-high' : 'it-mono-val';
+
+                    // False warning badge
+                    const falseHtml = isFalse
+                        ? '<span class="it-false-badge yes"><i class="fa-solid fa-flag"></i> YES</span>'
+                        : '<span class="it-false-badge no">NO</span>';
+
+                    return `
+                    <tr class="${rowClass}">
+                        <td><span class="it-log-time">${timeStr}</span></td>
+                        <td>
+                            <div class="tmc-status-cell">
+                                <span class="tmc-status-pill ${pillClass}">${pillIcon} ${pillLabel}</span>
+                            </div>
+                        </td>
+                        <td style="text-align: right;"><span class="${confClass}">${conf}</span></td>
+                        <td style="text-align: right;"><span class="it-mono-val">${log.latency_ms}ms</span></td>
+                        <td><span class="it-scenario-tag">${log.scenario}</span></td>
+                        <td style="text-align: center;">${falseHtml}</td>
+                    </tr>`;
+                }
+
+                // Fallback: generic 8-column (should not normally be reached)
                 return `
                 <tr>
                     <td>${timeStr}</td>
@@ -787,8 +890,8 @@ const App = {
                     <td>${log.latency_ms}ms</td>
                     <td>${log.scenario}</td>
                     <td>${log.false_warning ? '<span style="color:red">YES</span>' : 'NO'}</td>
-                </tr>
-            `}).join('');
+                </tr>`;
+            }).join('');
         }
 
         // Pagination info
@@ -2240,10 +2343,17 @@ const App = {
 
     handleModeUpdate(data) {
         const mode = data?.mode || 'live';
+        const prevMode = window.AppMode.current;
+        const prevVideo = window.AppMode.testVideoFile;
         window.AppMode.current = mode;
         window.AppMode.testVideoFile = data?.video_filename || null;
         window.AppMode.switching = false;
         this.updateModeUI();
+
+        // If mode or test video changed, re-bind the MJPEG stream
+        if (prevMode !== mode || prevVideo !== window.AppMode.testVideoFile) {
+            setTimeout(() => this.connectLiveStream(), 300);
+        }
     },
 
     async switchMode(targetMode, filename) {

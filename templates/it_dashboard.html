@@ -323,17 +323,15 @@
                         <i class="fa-solid fa-triangle-exclamation"></i> DB unavailable — no data available
                     </div>
 
-                    <table id="logsTable">
+                    <table id="logsTable" class="it-logs-table">
                         <thead>
                             <tr>
-                                <th>Timestamp</th>
-                                <th>Child-class in ROI</th>
-                                <th>ROI Status</th>
-                                <th>Warning Device</th>
-                                <th>Confidence</th>
-                                <th>Latency (ms)</th>
-                                <th>Scenario</th>
-                                <th>False Warning</th>
+                                <th style="width: 140px;">Timestamp</th>
+                                <th>Detection & Status</th>
+                                <th style="width: 110px; text-align: right;">Confidence</th>
+                                <th style="width: 110px; text-align: right;">Latency</th>
+                                <th style="width: 200px;">Scenario</th>
+                                <th style="width: 130px; text-align: center;">False Warning</th>
                             </tr>
                         </thead>
                         <tbody id="logsTableBody">

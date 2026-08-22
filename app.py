@@ -360,34 +360,25 @@ def api_set_roi():
 def handle_connect():
     """
     Triggered when a client connects (dashboard loads or refreshes).
-    Joins the client into a role-specific Socket.IO room so that
-    video-test telemetry can be scoped exclusively to TMC officers.
+    Joins the client into a role-specific Socket.IO room and sends
+    the current session state and telemetry.
     """
     from flask import request as _req  # Socket.IO connect has access to Flask session
     role = session.get("role", "unknown")
     join_room(f"role_{role}")
     print(f"Client connected (role={role}, sid={_req.sid})")
 
-    if role == "tmc_officer":
-        # TMC gets full state: current mode + session telemetry
-        if active_session is not None:
-            cam_status = "OK" if active_session.camera_online else "OFFLINE"
-            socketio.emit("status_update", _build_idle_payload(camera_status=cam_status), room=_req.sid)
-            socketio.emit("camera_status", active_session.get_status(), room=_req.sid)
-            socketio.emit("mode_update", {"mode": current_mode}, room=_req.sid)
-        else:
-            socketio.emit("status_update", _build_idle_payload(camera_status="OFFLINE"), room=_req.sid)
-            socketio.emit("mode_update", {"mode": current_mode}, room=_req.sid)
+    if active_session is not None:
+        cam_status = "OK" if active_session.camera_online else "OFFLINE"
+        socketio.emit("status_update", _build_idle_payload(camera_status=cam_status), room=_req.sid)
+        socketio.emit("camera_status", active_session.get_status(), room=_req.sid)
+        socketio.emit("mode_update", {
+            "mode": current_mode,
+            "video_filename": getattr(active_session, '_video_filename', None)
+        }, room=_req.sid)
     else:
-        # IT Specialist (and any other role): only sees live CCTV status.
-        # If the server is running a video test, IT sees CCTV as OFFLINE.
-        if active_session is not None and current_mode == "live":
-            cam_status = "OK" if active_session.camera_online else "OFFLINE"
-            socketio.emit("status_update", _build_idle_payload(camera_status=cam_status), room=_req.sid)
-            socketio.emit("camera_status", active_session.get_status(), room=_req.sid)
-        else:
-            socketio.emit("status_update", _build_idle_payload(camera_status="OFFLINE"), room=_req.sid)
-        socketio.emit("mode_update", {"mode": "live"}, room=_req.sid)
+        socketio.emit("status_update", _build_idle_payload(camera_status="OFFLINE"), room=_req.sid)
+        socketio.emit("mode_update", {"mode": current_mode}, room=_req.sid)
 
 # --------------------------------------------------------------------------------
 # Live Pipeline
@@ -849,11 +840,7 @@ class LiveSession:
                 "warning_device_on": warning_device_on,
                 "source": "yolo",
             }
-            # Scope telemetry: video_test → TMC only; live → all clients
-            if self.source_key == "video_test":
-                socketio.emit("status_update", payload, room="role_tmc_officer")
-            else:
-                socketio.emit("status_update", payload)
+            socketio.emit("status_update", payload)
 
             try:
                 self._log_db(out, warning_device_on)
@@ -1046,12 +1033,9 @@ _session_lock = threading.Lock()
 
 
 def _emit_camera_status(session: LiveSession):
-    """Push camera status — scoped to TMC-only when in video_test mode."""
+    """Push camera status to all connected dashboard clients."""
     try:
-        if current_mode == "video_test":
-            socketio.emit("camera_status", session.get_status(), room="role_tmc_officer")
-        else:
-            socketio.emit("camera_status", session.get_status())
+        socketio.emit("camera_status", session.get_status())
     except Exception:
         pass
 
@@ -1063,15 +1047,10 @@ def _emit_camera_status(session: LiveSession):
 @app.route("/video_feed")
 @login_required
 def video_feed_route():
-    """MJPEG stream from the active session (live camera or video test).
-    IT Specialist is blocked from receiving video test frames."""
+    """MJPEG stream from the active session (live camera or video test)."""
     overlay = request.args.get("overlay", "1") == "1"
     if active_session is None:
         return Response("No active session", status=503)
-
-    # Block video test feed from leaking to IT Specialist dashboard
-    if current_mode == "video_test" and session.get("role") == "it_specialist":
-        return Response("Live camera offline — simulation active on TMC console", status=503)
 
     return Response(
         gen_frames(active_session, overlay=overlay),
@@ -1366,11 +1345,7 @@ def _start_video_test_session(filename: str):
 @app.get("/api/mode")
 @login_required
 def api_get_mode():
-    """Return the current operating mode.
-    IT Specialist always sees mode='live' — video_test state is TMC-only."""
-    user_role = session.get("role")
-    if user_role == "it_specialist":
-        return jsonify({"ok": True, "mode": "live"})
+    """Return the current operating mode."""
     info = {"ok": True, "mode": current_mode}
     if current_mode == "video_test" and active_session and hasattr(active_session, '_video_filename'):
         info["video_filename"] = active_session._video_filename
@@ -1384,10 +1359,7 @@ def api_switch_to_live():
     with _session_lock:
         ok = _start_live_session()
     if ok:
-        # Notify TMC that mode changed back to live
-        socketio.emit("mode_update", {"mode": "live"}, room="role_tmc_officer")
-        # Notify IT that live CCTV is back (so their camera view can reconnect)
-        socketio.emit("mode_update", {"mode": "live"}, room="role_it_specialist")
+        socketio.emit("mode_update", {"mode": "live"})
         return jsonify({"ok": True, "mode": "live"})
     return jsonify({"ok": False, "error": "RTSP URL not configured"}), 400
 
@@ -1408,8 +1380,7 @@ def api_switch_to_video_test():
     with _session_lock:
         ok = _start_video_test_session(filename)
     if ok:
-        # Only notify TMC — IT must never see video_test mode
-        socketio.emit("mode_update", {"mode": "video_test", "video_filename": filename}, room="role_tmc_officer")
+        socketio.emit("mode_update", {"mode": "video_test", "video_filename": filename})
         return jsonify({"ok": True, "mode": "video_test", "video_filename": filename})
     return jsonify({"ok": False, "error": "Video file not found"}), 404
 
