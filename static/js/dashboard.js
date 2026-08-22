@@ -21,12 +21,19 @@
 // ---------------------------------------------------------
 window.EventStore = {
     events: [],       // All events (Logs/Analytics)
-    systemStatus: {   // Detection Status
+    systemStatus: {   // Detection & Telemetry Status
         child_in_roi: false,
         warning_on: false,
         confidence: 0.0,
         roi_status: 'OUTSIDE',
         latency_ms: 0,
+        stream_latency_ms: 0,
+        fps: 0.0,
+        capture_fps: 0.0,
+        infer_fps: 0.0,
+        frame_drop_rate: 0.0,
+        edge_compute: { cpu_percent: 0.0, ram_percent: 0.0 },
+        relay_status: { connected: false, label: 'Disconnected', port: 'COM5', heartbeat_ok: false, heartbeat_label: 'Not Responding' },
         last_update_str: '---',
         connection_status: 'Connecting...',
         // Warning logic helpers
@@ -155,6 +162,9 @@ const App = {
 
         // Sidebar Init
         this.initSidebar();
+
+        // Change Password Modal Init (Shared)
+        this.setupPasswordModal();
 
         // Initial Load for Logs if starting there
         if (window.location.hash === '#logs') {
@@ -311,6 +321,13 @@ const App = {
         status.confidence = data.confidence;
         status.roi_status = data.child_in_roi ? 'INSIDE' : 'OUTSIDE';
         status.latency_ms = data.latency_ms || data.latency || 0;
+        status.stream_latency_ms = data.stream_latency_ms || 0;
+        status.fps = (typeof data.fps === 'number') ? data.fps : (data.capture_fps || 0.0);
+        status.capture_fps = data.capture_fps || 0.0;
+        status.infer_fps = data.infer_fps || 0.0;
+        status.frame_drop_rate = (typeof data.frame_drop_rate === 'number') ? data.frame_drop_rate : 0.0;
+        if (data.edge_compute) status.edge_compute = data.edge_compute;
+        if (data.relay_status) status.relay_status = data.relay_status;
         status.last_update_str = new Date().toLocaleTimeString();
 
         if (data.source === "yolo") {
@@ -413,7 +430,8 @@ const App = {
             connChip.innerHTML = `<div class="status-indicator"></div><span class="status-text">${status.connection_status}</span>`;
             connChip.className = `status-chip ${chipClass}`;
         }
-        document.getElementById('last-update').textContent = status.last_update_str;
+        const lastUpdateEl = document.getElementById('last-update');
+        if (lastUpdateEl) lastUpdateEl.textContent = status.last_update_str;
 
         // Live View Cards (IT Specialist Dashboard exclusive)
         const liveChild = document.getElementById('live-child');
@@ -446,7 +464,7 @@ const App = {
 
         const liveConf = document.getElementById('live-conf');
         if (liveConf) {
-            liveConf.textContent = status.confidence.toFixed(2);
+            liveConf.textContent = (typeof status.confidence === 'number') ? status.confidence.toFixed(2) : '0.00';
         }
 
         const liveRoi = document.getElementById('live-roi');
@@ -457,7 +475,63 @@ const App = {
 
         const liveLat = document.getElementById('live-latency');
         if (liveLat) {
-            liveLat.textContent = status.latency_ms + 'ms';
+            liveLat.textContent = (status.latency_ms || 0) + 'ms';
+        }
+
+        const liveStreamLat = document.getElementById('live-stream-latency');
+        if (liveStreamLat) {
+            liveStreamLat.textContent = (status.stream_latency_ms || 0) + 'ms';
+        }
+
+        const liveFps = document.getElementById('live-fps');
+        if (liveFps) {
+            const fpsVal = (status.fps || status.capture_fps || 0);
+            liveFps.textContent = fpsVal > 0 ? fpsVal.toFixed(1) : '--';
+        }
+
+        const liveDrop = document.getElementById('live-drop-rate');
+        if (liveDrop) {
+            const dropRate = (status.frame_drop_rate || 0);
+            liveDrop.textContent = dropRate.toFixed(1) + '%';
+            if (dropRate > 5.0) {
+                liveDrop.classList.add('critical');
+            } else {
+                liveDrop.classList.remove('critical');
+            }
+        }
+
+        // Relay Controller Status Chip
+        const relayChip = document.getElementById('sysStatusRelay');
+        const relayText = document.getElementById('sysStatusRelayText');
+        const relayPort = document.getElementById('sysRelayPort');
+        if (relayChip && status.relay_status) {
+            const isRelayConn = Boolean(status.relay_status.connected);
+            relayChip.className = `status-chip ${isRelayConn ? 'connected' : 'disconnected'}`;
+            if (relayText) relayText.textContent = status.relay_status.label || (isRelayConn ? 'Connected' : 'Disconnected');
+            if (relayPort) relayPort.textContent = `(${status.relay_status.port || 'COM5'})`;
+        }
+
+        // Hardware Pulse (Heartbeat) Status Chip
+        const hbChip = document.getElementById('sysStatusHeartbeat');
+        const hbText = document.getElementById('sysStatusHeartbeatText');
+        if (hbChip && status.relay_status) {
+            const isHbOk = Boolean(status.relay_status.heartbeat_ok);
+            hbChip.className = `status-chip ${isHbOk ? 'connected' : 'disconnected'}`;
+            if (hbText) hbText.textContent = status.relay_status.heartbeat_label || (isHbOk ? 'Responding' : 'Not Responding');
+        }
+
+        // Edge Compute Load
+        const cpuBar = document.getElementById('cpu-load-bar');
+        const cpuVal = document.getElementById('cpu-load-val');
+        const ramBar = document.getElementById('ram-load-bar');
+        const ramVal = document.getElementById('ram-load-val');
+        if (status.edge_compute) {
+            const cpuPct = Math.min(100, Math.max(0, status.edge_compute.cpu_percent || 0));
+            const ramPct = Math.min(100, Math.max(0, status.edge_compute.ram_percent || 0));
+            if (cpuBar) cpuBar.style.width = cpuPct + '%';
+            if (cpuVal) cpuVal.textContent = cpuPct.toFixed(0) + '%';
+            if (ramBar) ramBar.style.width = ramPct + '%';
+            if (ramVal) ramVal.textContent = ramPct.toFixed(0) + '%';
         }
 
         // Power System — N/A (hardware pending)
@@ -1300,11 +1374,21 @@ const App = {
     },
 
     renderKPIs(agg) {
-        document.getElementById('ana-kpi-warnings').textContent = agg.total_warnings;
-        document.getElementById('ana-kpi-detections').textContent = agg.total_detections;
-        document.getElementById('ana-kpi-false').textContent = agg.false_warnings;
-        document.getElementById('ana-kpi-latency').textContent = (agg.avg_latency || 0) + 'ms';
-        document.getElementById('ana-kpi-peak').textContent = agg.peak_hour || '--';
+        const warnEl = document.getElementById('ana-kpi-warnings');
+        if (warnEl) warnEl.textContent = agg.total_warnings;
+
+        const detEl = document.getElementById('ana-kpi-detections');
+        if (detEl) detEl.textContent = agg.total_detections;
+
+        const falseEl = document.getElementById('ana-kpi-false');
+        if (falseEl) falseEl.textContent = agg.false_warnings;
+
+        const latEl = document.getElementById('ana-kpi-latency');
+        if (latEl) latEl.textContent = (agg.avg_latency || 0) + 'ms';
+
+        const peakEl = document.getElementById('ana-kpi-peak');
+        if (peakEl) peakEl.textContent = agg.peak_hour || '--';
+
         console.debug(
             `[Analytics KPIs] warnings=${agg.total_warnings}, detections=${agg.total_detections},` +
             ` false=${agg.false_warnings}, avg_lat=${agg.avg_latency}ms, peak=${agg.peak_hour}`
@@ -1429,14 +1513,26 @@ const App = {
         this.state.reports.lastSummary = null;
         window.EventStore.reportAggregate = null;
 
-        document.getElementById('rep-range-label').textContent = rangeLabel || 'Today';
-        document.getElementById('rep-generated-at').textContent = '\u2014';
+        const rangeEl = document.getElementById('rep-range-label');
+        if (rangeEl) rangeEl.textContent = rangeLabel || 'Today';
 
-        document.getElementById('rep-total-warnings').textContent = '\u2014';
-        document.getElementById('rep-total-detections').textContent = '\u2014';
-        document.getElementById('rep-false-warnings').textContent = '\u2014';
-        document.getElementById('rep-avg-latency').textContent = '\u2014';
-        document.getElementById('rep-peak-hour').textContent = '\u2014';
+        const genEl = document.getElementById('rep-generated-at');
+        if (genEl) genEl.textContent = '\u2014';
+
+        const warnEl = document.getElementById('rep-total-warnings');
+        if (warnEl) warnEl.textContent = '\u2014';
+
+        const detEl = document.getElementById('rep-total-detections');
+        if (detEl) detEl.textContent = '\u2014';
+
+        const falseEl = document.getElementById('rep-false-warnings');
+        if (falseEl) falseEl.textContent = '\u2014';
+
+        const latEl = document.getElementById('rep-avg-latency');
+        if (latEl) latEl.textContent = '\u2014';
+
+        const peakEl = document.getElementById('rep-peak-hour');
+        if (peakEl) peakEl.textContent = '\u2014';
 
         const list = document.getElementById('rep-insights-list');
         if (list) {
@@ -1499,13 +1595,6 @@ const App = {
             if (peakHour !== '--') {
                 insights.push(`A <strong>Critical Risk Interval</strong> was identified at <strong>${peakHour}</strong> — representing the period of highest crosswalk utilization requiring the greatest driver and pedestrian vigilance.`);
             }
-
-            // Latency / performance
-            if (avgLatency < 100) {
-                insights.push(`Real-time processing benchmarks were met — average system latency of <strong>${avgLatency}ms</strong> ensures instantaneous alert triggering upon pedestrian entry into the detection zone.`);
-            } else {
-                insights.push(`Average system latency recorded at <strong>${avgLatency}ms</strong>. While within functional range, optimization of inference pipeline is recommended to reduce alert response time.`);
-            }
         }
 
         const summary = {
@@ -1528,15 +1617,27 @@ const App = {
     },
 
     renderReport(summary) {
-        // Update DOM elements directly
-        document.getElementById('rep-range-label').textContent = summary.rangeLabel;
-        document.getElementById('rep-generated-at').textContent = summary.generatedAt;
+        // Update DOM elements directly with null-safe checks
+        const rangeEl = document.getElementById('rep-range-label');
+        if (rangeEl) rangeEl.textContent = summary.rangeLabel;
 
-        document.getElementById('rep-total-warnings').textContent = summary.totalWarnings;
-        document.getElementById('rep-total-detections').textContent = summary.totalDetections;
-        document.getElementById('rep-false-warnings').textContent = summary.falseWarnings;
-        document.getElementById('rep-avg-latency').textContent = summary.avgLatency + 'ms';
-        document.getElementById('rep-peak-hour').textContent = summary.peakHour;
+        const genEl = document.getElementById('rep-generated-at');
+        if (genEl) genEl.textContent = summary.generatedAt;
+
+        const warnEl = document.getElementById('rep-total-warnings');
+        if (warnEl) warnEl.textContent = summary.totalWarnings;
+
+        const detEl = document.getElementById('rep-total-detections');
+        if (detEl) detEl.textContent = summary.totalDetections;
+
+        const falseEl = document.getElementById('rep-false-warnings');
+        if (falseEl) falseEl.textContent = summary.falseWarnings;
+
+        const latEl = document.getElementById('rep-avg-latency');
+        if (latEl) latEl.textContent = summary.avgLatency + 'ms';
+
+        const peakEl = document.getElementById('rep-peak-hour');
+        if (peakEl) peakEl.textContent = summary.peakHour;
 
         const list = document.getElementById('rep-insights-list');
         if (list) {
@@ -2753,8 +2854,64 @@ const App = {
         setChip('sysStatusStream', data.stream_connected, 'Connected', 'Disconnected');
         setChip('sysStatusAI', data.ai_running, 'Running', data.ai_error ? 'Not Loaded' : 'Stopped');
 
-        // Warning Output pill is now updated in the high-speed updateUI() loop
-        // for perfect synchronization with the Warning Device metric card.
+        // Relay Controller & Heartbeat
+        if (data.relay_status) {
+            const relayChip = document.getElementById('sysStatusRelay');
+            const relayText = document.getElementById('sysStatusRelayText');
+            const relayPort = document.getElementById('sysRelayPort');
+            if (relayChip) {
+                const isRelayConn = Boolean(data.relay_status.connected);
+                relayChip.className = `status-chip ${isRelayConn ? 'connected' : 'disconnected'}`;
+                if (relayText) relayText.textContent = data.relay_status.label || (isRelayConn ? 'Connected' : 'Disconnected');
+                if (relayPort) relayPort.textContent = `(${data.relay_status.port || 'COM5'})`;
+            }
+
+            const hbChip = document.getElementById('sysStatusHeartbeat');
+            const hbText = document.getElementById('sysStatusHeartbeatText');
+            if (hbChip) {
+                const isHbOk = Boolean(data.relay_status.heartbeat_ok);
+                hbChip.className = `status-chip ${isHbOk ? 'connected' : 'disconnected'}`;
+                if (hbText) hbText.textContent = data.relay_status.heartbeat_label || (isHbOk ? 'Responding' : 'Not Responding');
+            }
+        }
+
+        // FPS & Latencies
+        if (data.fps !== undefined || data.capture_fps !== undefined) {
+            const liveFps = document.getElementById('live-fps');
+            if (liveFps) {
+                const fpsVal = ((data.fps !== undefined ? data.fps : data.capture_fps) || 0);
+                liveFps.textContent = fpsVal > 0 ? fpsVal.toFixed(1) : '--';
+            }
+        }
+        if (data.stream_latency_ms !== undefined) {
+            const liveStreamLat = document.getElementById('live-stream-latency');
+            if (liveStreamLat) liveStreamLat.textContent = data.stream_latency_ms + 'ms';
+        }
+        if (data.frame_drop_rate !== undefined) {
+            const liveDrop = document.getElementById('live-drop-rate');
+            if (liveDrop) {
+                liveDrop.textContent = data.frame_drop_rate.toFixed(1) + '%';
+                if (data.frame_drop_rate > 5.0) {
+                    liveDrop.classList.add('critical');
+                } else {
+                    liveDrop.classList.remove('critical');
+                }
+            }
+        }
+
+        // Edge Compute Load
+        if (data.edge_compute) {
+            const cpuBar = document.getElementById('cpu-load-bar');
+            const cpuVal = document.getElementById('cpu-load-val');
+            const ramBar = document.getElementById('ram-load-bar');
+            const ramVal = document.getElementById('ram-load-val');
+            const cpuPct = Math.min(100, Math.max(0, data.edge_compute.cpu_percent || 0));
+            const ramPct = Math.min(100, Math.max(0, data.edge_compute.ram_percent || 0));
+            if (cpuBar) cpuBar.style.width = cpuPct + '%';
+            if (cpuVal) cpuVal.textContent = cpuPct.toFixed(0) + '%';
+            if (ramBar) ramBar.style.width = ramPct + '%';
+            if (ramVal) ramVal.textContent = ramPct.toFixed(0) + '%';
+        }
 
         // Last frame time
         const lastFrame = document.getElementById('sysLastFrame');
@@ -2821,6 +2978,102 @@ const App = {
                 chart.options.scales.y.ticks.color = textColor;
             }
             chart.update();
+        });
+    },
+
+    // ---------------------------------------------------------
+    // Change Password Modal Handler (Shared across roles)
+    // ---------------------------------------------------------
+    setupPasswordModal() {
+        const modal = document.getElementById('passwordModal');
+        const form = document.getElementById('changePasswordForm');
+        const msgDiv = document.getElementById('pwdMsg');
+        const triggerBtn = document.getElementById('btn-change-password');
+
+        if (!modal || !form) return;
+
+        // Open modal
+        if (triggerBtn) {
+            triggerBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                form.reset();
+                if (msgDiv) {
+                    msgDiv.style.display = 'none';
+                    msgDiv.className = 'modal-msg';
+                }
+                modal.style.display = 'flex';
+                const firstInput = document.getElementById('pwdCurrent');
+                if (firstInput) firstInput.focus();
+            });
+        }
+
+        // Close on backdrop click (click outside modal-card)
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+                if (msgDiv) msgDiv.style.display = 'none';
+            }
+        });
+
+        // Close on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.style.display === 'flex') {
+                modal.style.display = 'none';
+                if (msgDiv) msgDiv.style.display = 'none';
+            }
+        });
+
+        // Form submit
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!msgDiv) return;
+            msgDiv.style.display = 'none';
+            msgDiv.className = 'modal-msg';
+
+            const current = document.getElementById('pwdCurrent')?.value.trim();
+            const newPwd = document.getElementById('pwdNew')?.value.trim();
+            const confirm = document.getElementById('pwdConfirm')?.value.trim();
+
+            if (newPwd !== confirm) {
+                msgDiv.textContent = 'New passwords do not match.';
+                msgDiv.classList.add('error');
+                return;
+            }
+
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:6px;"></i>Updating...';
+            }
+
+            try {
+                const res = await fetch('/api/user/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ current_password: current, new_password: newPwd })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    msgDiv.textContent = 'Password updated successfully!';
+                    msgDiv.classList.add('success');
+                    form.reset();
+                    setTimeout(() => {
+                        modal.style.display = 'none';
+                        msgDiv.style.display = 'none';
+                    }, 1800);
+                } else {
+                    msgDiv.textContent = data.error || 'Failed to update password.';
+                    msgDiv.classList.add('error');
+                }
+            } catch (err) {
+                msgDiv.textContent = 'Server error. Please try again.';
+                msgDiv.classList.add('error');
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fa-solid fa-check" style="margin-right:6px;"></i>Update Password';
+                }
+            }
         });
     },
 

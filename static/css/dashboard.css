@@ -463,23 +463,29 @@ body.dark-mode .topbar-action-btn:hover {
     margin-bottom: 24px;
 }
 
-/* Live View — always 5 columns on desktop, never wraps */
+/* Live View — 4 columns on desktop for 8 cards (2 balanced rows of 4) */
 .live-metrics-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 15px;
     margin-bottom: 24px;
 }
 
+@media (max-width: 1100px) {
+    .live-metrics-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
 @media (max-width: 900px) {
     .live-metrics-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
 @media (max-width: 520px) {
     .live-metrics-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: 1fr;
     }
 }
 
@@ -1952,6 +1958,149 @@ body.dark-mode .roi-unsaved-badge {
     color: #e65100;
 }
 
+/* =========================================
+   MODAL COMPONENT (Light & Dark Theme)
+   ========================================= */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 99999;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal-card {
+    background-color: var(--white);
+    color: var(--deep-text);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 32px;
+    width: 420px;
+    max-width: 92vw;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
+    position: relative;
+    z-index: 100000;
+    transition: background-color var(--transition-speed), border-color var(--transition-speed), color var(--transition-speed);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--deep-text);
+    display: flex;
+    align-items: center;
+}
+
+.modal-header-icon {
+    margin-right: 10px;
+    color: var(--primary-accent);
+}
+
+.modal-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.25rem;
+    padding: 6px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background-color 0.15s;
+}
+
+.modal-close-btn:hover {
+    color: var(--deep-text);
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.modal-msg {
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    display: none;
+}
+
+.modal-msg.success {
+    display: block;
+    background-color: rgba(34, 197, 94, 0.12);
+    color: #16a34a;
+    border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.modal-msg.error {
+    display: block;
+    background-color: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.modal-card .form-group {
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+.modal-card .form-group label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--deep-text);
+    margin-bottom: 6px;
+}
+
+.modal-input {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background-color: #f8f9fa;
+    color: var(--deep-text);
+    font-family: inherit;
+    font-size: 0.95rem;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
+}
+
+.modal-input:focus {
+    border-color: var(--primary-accent);
+    background-color: var(--white);
+    box-shadow: 0 0 0 3px rgba(255, 146, 128, 0.2);
+}
+
+.modal-submit-btn {
+    width: 100%;
+    padding: 12px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    border-radius: 8px;
+    cursor: pointer;
+    border: none;
+    margin-top: 6px;
+    box-shadow: 0 2px 8px rgba(255, 146, 128, 0.3);
+}
+
 
 /* =========================================
    DARK MODE THEME
@@ -2167,6 +2316,55 @@ body.dark-mode .feed-item {
 
 body.dark-mode .feed-meta {
     color: #a0a0a0;
+}
+
+/* Modal Dark Mode overrides */
+body.dark-mode .modal-card {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border-color: #333333;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+body.dark-mode .modal-header h3 {
+    color: #ffffff;
+}
+
+body.dark-mode .modal-close-btn {
+    color: #a0a0a0;
+}
+
+body.dark-mode .modal-close-btn:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+body.dark-mode .modal-card .form-group label {
+    color: #e0e0e0;
+}
+
+body.dark-mode .modal-input {
+    background-color: #2a2a2a;
+    border-color: #444444;
+    color: #ffffff;
+}
+
+body.dark-mode .modal-input:focus {
+    border-color: var(--primary-accent);
+    background-color: #222222;
+    box-shadow: 0 0 0 3px rgba(255, 146, 128, 0.25);
+}
+
+body.dark-mode .modal-msg.success {
+    background-color: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+    border-color: rgba(34, 197, 94, 0.35);
+}
+
+body.dark-mode .modal-msg.error {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.35);
 }
 
 
@@ -3512,6 +3710,201 @@ body.dark-mode .lv-options-divider {
 
 [data-theme="dark"] .lv-reconnect-btn,
 body.dark-mode .lv-reconnect-btn {
+    transition: background 0.2s ease;
+}
+
+.logs-range-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--primary-accent);
+    border: 2.5px solid var(--white);
+    box-shadow: 0 1px 4px rgba(255, 146, 128, 0.4);
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.logs-range-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 2px 8px rgba(255, 146, 128, 0.5);
+}
+
+.logs-range-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--primary-accent);
+    border: 2.5px solid var(--white);
+    box-shadow: 0 1px 4px rgba(255, 146, 128, 0.4);
+    cursor: pointer;
+}
+
+/* ── Confidence Value Badge ─────────────────────────────────────────────── */
+.conf-value-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    padding: 2px 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    color: var(--primary-accent);
+    background: rgba(255, 146, 128, 0.1);
+    border-radius: 6px;
+    letter-spacing: -0.3px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LOGS FILTER BAR — Dark Mode
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-theme="dark"] .logs-search-input {
+    background: #2a2d3a;
+    border-color: #3d4150;
+    color: #e8e8e8;
+}
+
+[data-theme="dark"] .logs-search-input::placeholder {
+    color: #6b7280;
+}
+
+[data-theme="dark"] .logs-search-input:focus {
+    border-color: var(--primary-accent);
+    box-shadow: 0 0 0 3px rgba(255, 146, 128, 0.12);
+}
+
+[data-theme="dark"] .logs-search-icon {
+    color: #6b7280;
+}
+
+[data-theme="dark"] .toggle-text,
+[data-theme="dark"] .filter-label {
+    color: #d1d5db;
+}
+
+[data-theme="dark"] .toggle-track {
+    background: #4b5563;
+}
+
+[data-theme="dark"] .toggle-thumb {
+    background: #e5e7eb;
+}
+
+[data-theme="dark"] .filter-divider {
+    background: #3d4150;
+}
+
+[data-theme="dark"] .logs-range-slider {
+    background: #3d4150;
+}
+
+[data-theme="dark"] .conf-value-badge {
+    background: rgba(255, 146, 128, 0.15);
+    color: #ffb0a0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SYSTEM STATUS PANEL — Refined Components
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Status Card Container ──────────────────────────────────────────────── */
+.lv-status-card .cam-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.lv-status-card .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.lv-status-card .control-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
+}
+
+/* ── Last Frame Timestamp ───────────────────────────────────────────────── */
+.lv-last-frame {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    letter-spacing: -0.3px;
+}
+
+/* ── Options Divider ────────────────────────────────────────────────────── */
+.lv-options-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 2px 0 6px 0;
+}
+
+/* ── Reconnect Button ───────────────────────────────────────────────────── */
+.lv-reconnect-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 10px;
+    padding: 9px 16px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border-color);
+    background: var(--white);
+    font-family: var(--font-primary);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--deep-text);
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.lv-reconnect-btn:hover {
+    border-color: var(--primary-accent);
+    color: var(--primary-accent);
+    background: rgba(255, 146, 128, 0.06);
+    box-shadow: 0 2px 8px rgba(255, 146, 128, 0.15);
+}
+
+.lv-reconnect-btn:hover i {
+    animation: lv-spin-once 0.6s ease;
+}
+
+@keyframes lv-spin-once {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.lv-reconnect-btn:active {
+    transform: scale(0.97);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SYSTEM STATUS PANEL — Dark Mode
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-theme="dark"] .lv-status-card .control-label,
+body.dark-mode .lv-status-card .control-label {
+    color: #9ca3af;
+}
+
+[data-theme="dark"] .lv-last-frame,
+body.dark-mode .lv-last-frame {
+    color: #9ca3af;
+}
+
+[data-theme="dark"] .lv-options-divider,
+body.dark-mode .lv-options-divider {
+    background: #3d4150;
+}
+
+[data-theme="dark"] .lv-reconnect-btn,
+body.dark-mode .lv-reconnect-btn {
     background: #2a2d3a;
     border-color: #3d4150;
     color: #d1d5db;
@@ -3522,4 +3915,168 @@ body.dark-mode .lv-reconnect-btn:hover {
     border-color: var(--primary-accent);
     color: var(--primary-accent);
     background: rgba(255, 146, 128, 0.08);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HARDWARE & SYSTEM DIAGNOSTICS TELEMETRY
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.telemetry-badges-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+    margin-bottom: 12px;
+}
+
+.telemetry-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: 20px;
+    background: rgba(79, 70, 229, 0.08);
+    color: #4f46e5;
+    border: 1px solid rgba(79, 70, 229, 0.2);
+}
+
+.telemetry-badge.fps-badge {
+    background: rgba(14, 165, 233, 0.09);
+    color: #0284c7;
+    border-color: rgba(14, 165, 233, 0.25);
+}
+
+.telemetry-badge.drop-badge {
+    background: rgba(16, 185, 129, 0.09);
+    color: #059669;
+    border-color: rgba(16, 185, 129, 0.25);
+}
+
+.telemetry-badge.drop-badge.warn {
+    background: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.telemetry-badge.latency-badge {
+    background: rgba(139, 92, 246, 0.09);
+    color: #7c3aed;
+    border-color: rgba(139, 92, 246, 0.25);
+}
+
+.telemetry-subdetail {
+    font-size: 0.72rem;
+    font-weight: 500;
+    opacity: 0.75;
+    margin-left: 4px;
+}
+
+.edge-compute-box {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+}
+
+.edge-compute-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.telemetry-metric-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.telemetry-metric-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--deep-text);
+    min-width: 45px;
+}
+
+.telemetry-bar-track {
+    flex: 1;
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+}
+
+.telemetry-bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #3b82f6, #6366f1);
+    transition: width 0.4s ease;
+}
+
+.telemetry-bar-fill.ram {
+    background: linear-gradient(90deg, #06b6d4, #3b82f6);
+}
+
+.telemetry-metric-val {
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    color: var(--deep-text);
+    min-width: 42px;
+    text-align: right;
+}
+
+/* Dark mode overrides */
+body.dark-mode .telemetry-badge.fps-badge {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.3);
+}
+
+body.dark-mode .telemetry-badge.drop-badge {
+    background: rgba(52, 211, 153, 0.15);
+    color: #34d399;
+    border-color: rgba(52, 211, 153, 0.3);
+}
+
+body.dark-mode .telemetry-badge.drop-badge.warn {
+    background: rgba(251, 191, 36, 0.18);
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.35);
+}
+
+body.dark-mode .telemetry-badge.latency-badge {
+    background: rgba(167, 139, 250, 0.15);
+    color: #a78bfa;
+    border-color: rgba(167, 139, 250, 0.3);
+}
+
+body.dark-mode .edge-compute-box {
+    border-top-color: #3d4150;
+}
+
+body.dark-mode .edge-compute-title {
+    color: #9ca3af;
+}
+
+body.dark-mode .telemetry-metric-label {
+    color: #e5e7eb;
+}
+
+body.dark-mode .telemetry-bar-track {
+    background: #374151;
+}
+
+body.dark-mode .telemetry-metric-val {
+    color: #f3f4f6;
 }

@@ -387,7 +387,33 @@ def handle_connect():
 # (Multi-source camera helpers removed — Hikvision is the sole source)
 
 
+_last_cpu_sample_ts = 0.0
+_cached_cpu_pct = 0.0
+_cached_ram_pct = 0.0
+
+def get_edge_compute_metrics() -> dict:
+    """Sample CPU % and RAM % using psutil with 1-second cached throttling."""
+    global _last_cpu_sample_ts, _cached_cpu_pct, _cached_ram_pct
+    now = time.time()
+    if (now - _last_cpu_sample_ts) >= 1.0:
+        try:
+            import psutil
+            _cached_cpu_pct = round(psutil.cpu_percent(interval=None), 1)
+            _cached_ram_pct = round(psutil.virtual_memory().percent, 1)
+            _last_cpu_sample_ts = now
+        except Exception:
+            pass
+    return {
+        "cpu_percent": _cached_cpu_pct,
+        "ram_percent": _cached_ram_pct,
+    }
+
+
 def _build_idle_payload(camera_status: str, edge_status: str = "OK") -> dict:
+    relay_diag = esp32_relay.get_diagnostics() if "esp32_relay" in globals() else {
+        "connected": False, "label": "Disconnected", "heartbeat_ok": False, "heartbeat_label": "Not Responding", "port": "COM5"
+    }
+    edge_metrics = get_edge_compute_metrics()
     return {
         "timestamp_iso": datetime.now(timezone.utc).isoformat(),
         "child_in_roi": False,
@@ -396,6 +422,19 @@ def _build_idle_payload(camera_status: str, edge_status: str = "OK") -> dict:
         "confidence": 0.0,
         "confidence_raw": 0.0,
         "latency_ms": 0,
+        "stream_latency_ms": 0,
+        "fps": 0.0,
+        "capture_fps": 0.0,
+        "infer_fps": 0.0,
+        "frame_drop_rate": 0.0,
+        "edge_compute": edge_metrics,
+        "relay_status": {
+            "connected": relay_diag["connected"],
+            "label": relay_diag["label"],
+            "port": relay_diag["port"],
+            "heartbeat_ok": relay_diag["heartbeat_ok"],
+            "heartbeat_label": relay_diag["heartbeat_label"],
+        },
         "warning_device_on": False,
         "source": "idle",
         "camera_status": camera_status,
@@ -511,9 +550,14 @@ class LiveSession:
         self.capture_frames = 0
         self.infer_frames = 0
         self.viewer_count = 0
+        self.capture_fps = 0.0
+        self.infer_fps = 0.0
+        self.stream_latency_ms = 0
+        self.latest_frame_capture_perf = 0.0
         self.last_perf_ts = time.time()
         self.last_perf_capture = 0
         self.last_perf_infer = 0
+        self.last_relay_hb_ts = 0.0
 
     def _load_detector(self):
         if not MODEL_PATH.exists():
@@ -538,7 +582,15 @@ class LiveSession:
             print(f"[LIVE] Detector load failed | {self.detector_error}")
 
     def get_status(self) -> dict:
-        """Return a snapshot of camera/AI status for the dashboard."""
+        """Return a snapshot of camera/AI status and system telemetry for the dashboard."""
+        relay_diag = esp32_relay.get_diagnostics() if "esp32_relay" in globals() else {
+            "connected": False, "label": "Disconnected", "heartbeat_ok": False, "heartbeat_label": "Not Responding", "port": "COM5"
+        }
+        edge_metrics = get_edge_compute_metrics()
+        total_cap = max(1, self.capture_frames)
+        dropped = max(0, total_cap - self.infer_frames)
+        drop_rate = round((dropped / total_cap) * 100, 1)
+
         return {
             "camera_online": self.camera_online,
             "stream_connected": self.stream_connected,
@@ -547,6 +599,19 @@ class LiveSession:
             "reconnect_attempts": self.reconnect_attempts,
             "last_frame_time": self.last_frame_time,
             "rtsp_url_masked": self._mask_url(self.rtsp_url),
+            "fps": self.capture_fps,
+            "capture_fps": self.capture_fps,
+            "infer_fps": self.infer_fps,
+            "stream_latency_ms": self.stream_latency_ms,
+            "frame_drop_rate": drop_rate,
+            "edge_compute": edge_metrics,
+            "relay_status": {
+                "connected": relay_diag["connected"],
+                "label": relay_diag["label"],
+                "port": relay_diag["port"],
+                "heartbeat_ok": relay_diag["heartbeat_ok"],
+                "heartbeat_label": relay_diag["heartbeat_label"],
+            },
         }
 
     @staticmethod
@@ -679,10 +744,22 @@ class LiveSession:
                 self.stop_event.wait(self.reconnect_sec)
                 continue
 
+            now_perf = time.perf_counter()
             with self.state_lock:
                 self.latest_frame_raw = frame
+                self.latest_frame_capture_perf = now_perf
             self.last_frame_time = time.time()
             self.capture_frames += 1
+
+            # Rolling FPS calculation (updated every 1s)
+            now = time.time()
+            dt = now - self.last_perf_ts
+            if dt >= 1.0:
+                self.capture_fps = round((self.capture_frames - self.last_perf_capture) / max(0.001, dt), 1)
+                self.infer_fps = round((self.infer_frames - self.last_perf_infer) / max(0.001, dt), 1)
+                self.last_perf_ts = now
+                self.last_perf_capture = self.capture_frames
+                self.last_perf_infer = self.infer_frames
 
 
     def _refresh_roi(self, frame_w: int, frame_h: int):
@@ -764,8 +841,27 @@ class LiveSession:
 
             with self.state_lock:
                 raw = self.latest_frame_raw
+                capture_perf = self.latest_frame_capture_perf
             if raw is None:
                 continue
+
+            # Stream transport latency (camera grab to inference entry)
+            stream_latency_ms = max(0, int((time.perf_counter() - capture_perf) * 1000)) if capture_perf > 0 else 0
+            self.stream_latency_ms = stream_latency_ms
+
+            # Frame drop rate calculation
+            total_cap = max(1, self.capture_frames)
+            dropped = max(0, total_cap - self.infer_frames)
+            frame_drop_rate = round((dropped / total_cap) * 100, 1)
+
+            # Periodic ESP32 heartbeat check (every 3s)
+            now = time.time()
+            if (now - self.last_relay_hb_ts) >= 3.0:
+                self.last_relay_hb_ts = now
+                try:
+                    esp32_relay.check_heartbeat()
+                except Exception:
+                    pass
 
             frame = raw.copy()
             h, w = frame.shape[:2]
@@ -829,9 +925,25 @@ class LiveSession:
             # --- Send command to ESP32 relay ---
             esp32_relay.set_state(warning_device_on)
 
+            relay_diag = esp32_relay.get_diagnostics()
+            edge_metrics = get_edge_compute_metrics()
+
             payload = {
                 "timestamp_iso": out["timestamp_iso"],
                 "latency_ms": out["latency_ms"],
+                "stream_latency_ms": stream_latency_ms,
+                "fps": self.capture_fps,
+                "capture_fps": self.capture_fps,
+                "infer_fps": self.infer_fps,
+                "frame_drop_rate": frame_drop_rate,
+                "edge_compute": edge_metrics,
+                "relay_status": {
+                    "connected": relay_diag["connected"],
+                    "label": relay_diag["label"],
+                    "port": relay_diag["port"],
+                    "heartbeat_ok": relay_diag["heartbeat_ok"],
+                    "heartbeat_label": relay_diag["heartbeat_label"],
+                },
                 "confidence": out["confidence"],
                 "child_in_roi": out["child_in_roi"],
                 "confidence_raw": out["confidence_raw"],
@@ -885,7 +997,15 @@ class VideoTestSession(LiveSession):
         self._video_current_frame: int = 0
 
     def get_status(self) -> dict:
-        """Override to provide video-specific metadata instead of RTSP info."""
+        """Override to provide video-specific metadata and system telemetry."""
+        relay_diag = esp32_relay.get_diagnostics() if "esp32_relay" in globals() else {
+            "connected": False, "label": "Disconnected", "heartbeat_ok": False, "heartbeat_label": "Not Responding", "port": "COM5"
+        }
+        edge_metrics = get_edge_compute_metrics()
+        total_cap = max(1, self.capture_frames)
+        dropped = max(0, total_cap - self.infer_frames)
+        drop_rate = round((dropped / total_cap) * 100, 1)
+
         return {
             "camera_online": self.camera_online,
             "stream_connected": self.stream_connected,
@@ -900,6 +1020,19 @@ class VideoTestSession(LiveSession):
             "video_total_frames": self._video_total_frames,
             "video_duration_sec": round(self._video_duration_sec, 1),
             "video_current_frame": self._video_current_frame,
+            "fps": self.capture_fps or self._video_fps,
+            "capture_fps": self.capture_fps or self._video_fps,
+            "infer_fps": self.infer_fps,
+            "stream_latency_ms": self.stream_latency_ms,
+            "frame_drop_rate": drop_rate,
+            "edge_compute": edge_metrics,
+            "relay_status": {
+                "connected": relay_diag["connected"],
+                "label": relay_diag["label"],
+                "port": relay_diag["port"],
+                "heartbeat_ok": relay_diag["heartbeat_ok"],
+                "heartbeat_label": relay_diag["heartbeat_label"],
+            },
         }
 
     def _open_capture(self) -> cv2.VideoCapture:
@@ -972,10 +1105,22 @@ class VideoTestSession(LiveSession):
 
             self._video_current_frame = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
 
+            now_perf = time.perf_counter()
             with self.state_lock:
                 self.latest_frame_raw = frame
+                self.latest_frame_capture_perf = now_perf
             self.last_frame_time = time.time()
             self.capture_frames += 1
+
+            # Rolling FPS calculation
+            now = time.time()
+            dt = now - self.last_perf_ts
+            if dt >= 1.0:
+                self.capture_fps = round((self.capture_frames - self.last_perf_capture) / max(0.001, dt), 1)
+                self.infer_fps = round((self.infer_frames - self.last_perf_infer) / max(0.001, dt), 1)
+                self.last_perf_ts = now
+                self.last_perf_capture = self.capture_frames
+                self.last_perf_infer = self.infer_frames
 
             # --- Pace to target FPS ---
             playback_fps = target_fps if target_fps > 0 else self._video_fps

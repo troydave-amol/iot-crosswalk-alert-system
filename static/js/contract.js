@@ -24,6 +24,15 @@
  * @property {number} [battery_percent] - 0 to 100 (Optional, N/A if no hardware)
  * @property {string} [solar_status] - "Charging" | "Not charging" | "N/A" (Optional)
  * 
+ * -- Optional Telemetry & Diagnostics (IT Specialist) --
+ * @property {number} [stream_latency_ms] - Transport latency in ms
+ * @property {number} [fps] - Rolling capture FPS
+ * @property {number} [capture_fps] - Rolling capture FPS
+ * @property {number} [infer_fps] - Rolling inference FPS
+ * @property {number} [frame_drop_rate] - Percentage of frames dropped (0.0 - 100.0)
+ * @property {{ cpu_percent: number, ram_percent: number }} [edge_compute] - Edge CPU/RAM usage
+ * @property {{ connected: boolean, label: string, port: string, heartbeat_ok: boolean, heartbeat_label: string }} [relay_status] - Relay bridge status
+ * 
  * -- Optional --
  * @property {string} [scenario] - "Crowded" | "Low activity" | "Night" | "Rain" | "Normal" | "Live"
  * @property {string} [camera_status] - "OK" | "OFF" | "ERROR"
@@ -164,6 +173,15 @@ const DataContract = {
 
             battery_percent: (typeof raw.battery_percent === 'number') ? Math.max(0, Math.min(100, raw.battery_percent)) : 0,
             solar_status: raw.solar_status || 'N/A',
+
+            // Diagnostic Telemetry (IT Specialist)
+            stream_latency_ms: (typeof raw.stream_latency_ms === 'number') ? raw.stream_latency_ms : 0,
+            fps: (typeof raw.fps === 'number') ? raw.fps : ((typeof raw.capture_fps === 'number') ? raw.capture_fps : 0.0),
+            capture_fps: (typeof raw.capture_fps === 'number') ? raw.capture_fps : 0.0,
+            infer_fps: (typeof raw.infer_fps === 'number') ? raw.infer_fps : 0.0,
+            frame_drop_rate: (typeof raw.frame_drop_rate === 'number') ? raw.frame_drop_rate : 0.0,
+            edge_compute: raw.edge_compute || { cpu_percent: 0.0, ram_percent: 0.0 },
+            relay_status: raw.relay_status || { connected: false, label: 'Disconnected', port: 'COM5', heartbeat_ok: false, heartbeat_label: 'Not Responding' },
 
             // Optional / Passthrough
             scenario: raw.scenario || 'Normal',

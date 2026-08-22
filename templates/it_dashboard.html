@@ -40,7 +40,7 @@
 
             <a href="#logs" class="nav-item">
                 <span class="nav-icon"><i class="fa-solid fa-database"></i></span>
-                <span class="nav-label">Data Export</span>
+                <span class="nav-label">Data Logs</span>
             </a>
             <a href="#analytics" class="nav-item">
                 <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span>
@@ -55,7 +55,8 @@
                 <span class="nav-label" style="font-size: 0.8rem;">{{ full_name }}</span>
             </div>
             <!-- Change Password -->
-            <a href="#" class="nav-item" id="btn-change-password" onclick="document.getElementById('passwordModal').style.display='flex'; return false;">
+            <a href="#" class="nav-item" id="btn-change-password"
+                onclick="document.getElementById('passwordModal').style.display='flex'; return false;">
                 <span class="nav-icon"><i class="fa-solid fa-key"></i></span>
                 <span class="nav-label">Change Password</span>
             </a>
@@ -128,8 +129,20 @@
                         <div class="card-value" id="live-roi">OUTSIDE</div>
                     </div>
                     <div class="card">
-                        <div class="card-title">Latency</div>
+                        <div class="card-title">AI Latency</div>
                         <div class="card-value" id="live-latency">24ms</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Stream Latency</div>
+                        <div class="card-value" id="live-stream-latency">--ms</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">FPS</div>
+                        <div class="card-value" id="live-fps">--</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Frame Drop Rate</div>
+                        <div class="card-value" id="live-drop-rate">0.0%</div>
                     </div>
                 </div>
 
@@ -139,7 +152,7 @@
                     <div class="card">
                         <div class="card-title" id="cameraCardTitle">Live Camera View</div>
                         <div id="liveRoiBadge" class="status-chip"
-                            style="margin-top: 5px; display: none; background-color: rgba(76, 175, 80, 0.1); color: #2e7d32; width: fit-content; margin-bottom: 10px;">
+                            style="display: none; background-color: rgba(76, 175, 80, 0.1); color: #2e7d32; width: fit-content; margin-bottom: 12px;">
                             <i class="fa-solid fa-crosshairs"></i> ROI Active
                         </div>
                         <div class="video-wrapper">
@@ -157,24 +170,35 @@
                     </div>
                     <div class="card lv-status-card">
                         <div class="card-title"><i class="fa-solid fa-tower-broadcast"
-                                style="margin-right: 6px;"></i>System Status</div>
+                                style="margin-right: 6px;"></i>System Diagnostics</div>
                         <div class="cam-controls">
                             <div class="control-group">
-                                <div class="control-label">Camera</div>
+                                <div class="control-label">Camera Stream</div>
                                 <div class="status-chip disconnected" id="sysStatusCamera">
                                     <div class="status-indicator"></div> Checking...
                                 </div>
                             </div>
 
                             <div class="control-group">
-                                <div class="control-label">Stream</div>
-                                <div class="status-chip disconnected" id="sysStatusStream">
-                                    <div class="status-indicator"></div> Waiting
+                                <div class="control-label">Relay Controller</div>
+                                <div class="status-chip disconnected" id="sysStatusRelay" title="ESP32 Serial Bridge">
+                                    <div class="status-indicator"></div>
+                                    <span id="sysStatusRelayText">Checking...</span>
+                                    <small id="sysRelayPort" class="telemetry-subdetail">(COM5)</small>
                                 </div>
                             </div>
 
                             <div class="control-group">
-                                <div class="control-label">AI Inference</div>
+                                <div class="control-label">Hardware Pulse</div>
+                                <div class="status-chip disconnected" id="sysStatusHeartbeat"
+                                    title="ESP32 Telemetry Heartbeat">
+                                    <div class="status-indicator"></div>
+                                    <span id="sysStatusHeartbeatText">Checking...</span>
+                                </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">AI Inference Engine</div>
                                 <div class="status-chip disconnected" id="sysStatusAI">
                                     <div class="status-indicator"></div> Checking...
                                 </div>
@@ -190,6 +214,27 @@
                             <div class="control-group">
                                 <div class="control-label">Last Frame</div>
                                 <small id="sysLastFrame" class="lv-last-frame">---</small>
+                            </div>
+
+                            <!-- Edge Compute Utilization -->
+                            <div class="edge-compute-box" id="edgeComputeSection">
+                                <div class="edge-compute-title">
+                                    <i class="fa-solid fa-microchip"></i> Edge Compute Load
+                                </div>
+                                <div class="telemetry-metric-row">
+                                    <span class="telemetry-metric-label">CPU</span>
+                                    <div class="telemetry-bar-track">
+                                        <div id="cpu-load-bar" class="telemetry-bar-fill" style="width: 0%;"></div>
+                                    </div>
+                                    <span id="cpu-load-val" class="telemetry-metric-val">0%</span>
+                                </div>
+                                <div class="telemetry-metric-row">
+                                    <span class="telemetry-metric-label">RAM</span>
+                                    <div class="telemetry-bar-track">
+                                        <div id="ram-load-bar" class="telemetry-bar-fill ram" style="width: 0%;"></div>
+                                    </div>
+                                    <span id="ram-load-val" class="telemetry-metric-val">0%</span>
+                                </div>
                             </div>
 
                             <div class="lv-options-divider"></div>
@@ -462,27 +507,29 @@
     </main>
 
     <!-- Change Password Modal -->
-    <div id="passwordModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); backdrop-filter:blur(6px); align-items:center; justify-content:center;">
-        <div style="background:var(--card-bg, #1a1d27); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:32px; width:420px; max-width:90vw;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h3 style="margin:0; font-size:1.1rem;"><i class="fa-solid fa-key" style="margin-right:8px; color:var(--primary-accent);"></i>Change Password</h3>
-                <button onclick="document.getElementById('passwordModal').style.display='none';" style="background:none; border:none; color:inherit; cursor:pointer; font-size:1.2rem;"><i class="fa-solid fa-xmark"></i></button>
+    <div id="passwordModal" class="modal-overlay" style="display:none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-key modal-header-icon"></i>Change Password</h3>
+                <button class="modal-close-btn"
+                    onclick="document.getElementById('passwordModal').style.display='none';"><i
+                        class="fa-solid fa-xmark"></i></button>
             </div>
-            <div id="pwdMsg" style="display:none; padding:10px; border-radius:8px; margin-bottom:14px; font-size:0.9rem;"></div>
+            <div id="pwdMsg" class="modal-msg" style="display:none;"></div>
             <form id="changePasswordForm" autocomplete="off">
-                <div style="margin-bottom:14px;">
-                    <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Current Password</label>
-                    <input type="password" id="pwdCurrent" required style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.06); color:inherit; font-size:0.95rem;">
+                <div class="form-group">
+                    <label for="pwdCurrent">Current Password</label>
+                    <input type="password" id="pwdCurrent" class="modal-input" required>
                 </div>
-                <div style="margin-bottom:14px;">
-                    <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">New Password <small style="color:#888;">(min. 6 chars)</small></label>
-                    <input type="password" id="pwdNew" required minlength="6" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.06); color:inherit; font-size:0.95rem;">
+                <div class="form-group">
+                    <label for="pwdNew">New Password <small class="text-muted">(min. 6 chars)</small></label>
+                    <input type="password" id="pwdNew" class="modal-input" required minlength="6">
                 </div>
-                <div style="margin-bottom:20px;">
-                    <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:6px;">Confirm New Password</label>
-                    <input type="password" id="pwdConfirm" required minlength="6" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.06); color:inherit; font-size:0.95rem;">
+                <div class="form-group">
+                    <label for="pwdConfirm">Confirm New Password</label>
+                    <input type="password" id="pwdConfirm" class="modal-input" required minlength="6">
                 </div>
-                <button type="submit" class="btn btn-primary" style="width:100%; padding:12px; font-weight:600;">
+                <button type="submit" class="btn btn-primary modal-submit-btn">
                     <i class="fa-solid fa-check" style="margin-right:6px;"></i>Update Password
                 </button>
             </form>
@@ -492,56 +539,6 @@
     <div id="sidebarBackdrop" class="backdrop"></div>
     <script src="/static/js/contract.js"></script>
     <script src="/static/js/dashboard.js"></script>
-    <script>
-        // ── Change Password Form Handler ──
-        (function() {
-            const form = document.getElementById('changePasswordForm');
-            const msgDiv = document.getElementById('pwdMsg');
-            if (!form) return;
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                msgDiv.style.display = 'none';
-                const current = document.getElementById('pwdCurrent').value.trim();
-                const newPwd = document.getElementById('pwdNew').value.trim();
-                const confirm = document.getElementById('pwdConfirm').value.trim();
-                if (newPwd !== confirm) {
-                    msgDiv.textContent = 'New passwords do not match.';
-                    msgDiv.style.display = 'block';
-                    msgDiv.style.background = 'rgba(239,68,68,0.15)';
-                    msgDiv.style.color = '#f87171';
-                    return;
-                }
-                try {
-                    const res = await fetch('/api/user/change-password', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ current_password: current, new_password: newPwd })
-                    });
-                    const data = await res.json();
-                    if (data.ok) {
-                        msgDiv.textContent = 'Password updated successfully!';
-                        msgDiv.style.display = 'block';
-                        msgDiv.style.background = 'rgba(34,197,94,0.15)';
-                        msgDiv.style.color = '#4ade80';
-                        form.reset();
-                        setTimeout(() => { document.getElementById('passwordModal').style.display = 'none'; msgDiv.style.display = 'none'; }, 2000);
-                    } else {
-                        msgDiv.textContent = data.error || 'Failed to update password.';
-                        msgDiv.style.display = 'block';
-                        msgDiv.style.background = 'rgba(239,68,68,0.15)';
-                        msgDiv.style.color = '#f87171';
-                    }
-                } catch (err) {
-                    msgDiv.textContent = 'Server error. Please try again.';
-                    msgDiv.style.display = 'block';
-                    msgDiv.style.background = 'rgba(239,68,68,0.15)';
-                    msgDiv.style.color = '#f87171';
-                }
-            });
-        })();
-
-
-    </script>
 </body>
 
 </html>
