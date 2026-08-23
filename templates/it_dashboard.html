@@ -297,8 +297,8 @@
                 </div>
 
                 <div class="filter-wrapper">
-                    <!-- Top Row: Search & Date Presets -->
-                    <div class="filter-row">
+                    <!-- Top Row: Search & Date Presets / Custom Range -->
+                    <div class="filter-row filter-row-top">
                         <div class="logs-search-wrapper">
                             <i class="fa-solid fa-magnifying-glass logs-search-icon"></i>
                             <input type="text" id="logsSearch" placeholder="Search by time, scenario, status..."
@@ -313,6 +313,15 @@
                                 <button class="btn btn-sm btn-preset" data-range="all">All</button>
                             </div>
                         </div>
+                        <div class="custom-range-group">
+                            <span class="custom-range-label"><i class="fa-regular fa-calendar-days" style="margin-right:4px;"></i>Custom:</span>
+                            <input type="datetime-local" id="logsStartDate" class="datetime-input" title="Start Date & Time (Manila Local Time)">
+                            <span class="custom-range-sep">to</span>
+                            <input type="datetime-local" id="logsEndDate" class="datetime-input" title="End Date & Time (Manila Local Time)">
+                            <button type="button" id="btnClearCustomRange" class="btn btn-outline btn-sm custom-range-clear-btn" title="Clear custom date range" style="display:none;">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Middle Row: Toggles, Slider, Scenario -->
@@ -320,7 +329,7 @@
                         <div class="filter-item">
                             <label class="toggle-label" for="filterWarningOn">
                                 <div class="toggle-switch">
-                                    <input type="checkbox" id="filterWarningOn">
+                                    <input type="checkbox" id="filterWarningOn" checked>
                                     <span class="toggle-track"><span class="toggle-thumb"></span></span>
                                 </div>
                                 <span class="toggle-text">Warning ON</span>

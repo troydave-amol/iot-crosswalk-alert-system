@@ -114,8 +114,10 @@ const App = {
         logsDbError: false,
         logsFilter: {
             range: 'today',
+            startDate: null,
+            endDate: null,
             searchText: '',
-            warningOnly: false,
+            warningOnly: true,
             inRoiOnly: false,
             minConf: 0.00,
             scenario: 'All',
@@ -572,6 +574,8 @@ const App = {
             range: f.range
         });
 
+        if (f.startDate) params.append('start_date', f.startDate);
+        if (f.endDate) params.append('end_date', f.endDate);
         if (f.warningOnly) params.append('warning_only', 'true');
         if (f.inRoiOnly) params.append('in_roi_only', 'true');
         if (f.minConf > 0) params.append('min_conf', f.minConf);
@@ -706,6 +710,16 @@ const App = {
                 document.querySelectorAll('.btn-preset').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
 
+                // Clear Custom Dates
+                filters.startDate = null;
+                filters.endDate = null;
+                const startEl = document.getElementById('logsStartDate');
+                const endEl = document.getElementById('logsEndDate');
+                const clearBtn = document.getElementById('btnClearCustomRange');
+                if (startEl) startEl.value = '';
+                if (endEl) endEl.value = '';
+                if (clearBtn) clearBtn.style.display = 'none';
+
                 // Update State
                 filters.range = e.target.getAttribute('data-range');
                 filters.currentPage = 1;
@@ -713,14 +727,71 @@ const App = {
             });
         });
 
+        // Custom Date Range Inputs
+        const startInput = document.getElementById('logsStartDate');
+        const endInput = document.getElementById('logsEndDate');
+        const clearCustomBtn = document.getElementById('btnClearCustomRange');
+
+        const onCustomDateChange = () => {
+            const startVal = startInput ? startInput.value : '';
+            const endVal = endInput ? endInput.value : '';
+
+            if (startVal || endVal) {
+                // Deactivate preset buttons
+                document.querySelectorAll('.btn-preset').forEach(b => b.classList.remove('active'));
+                if (clearCustomBtn) clearCustomBtn.style.display = 'inline-flex';
+                filters.startDate = startVal || null;
+                filters.endDate = endVal || null;
+            } else {
+                if (clearCustomBtn) clearCustomBtn.style.display = 'none';
+                filters.startDate = null;
+                filters.endDate = null;
+            }
+        };
+
+        if (startInput) {
+            startInput.addEventListener('change', () => {
+                onCustomDateChange();
+                filters.currentPage = 1;
+                this.loadLogsFromDB();
+            });
+        }
+
+        if (endInput) {
+            endInput.addEventListener('change', () => {
+                onCustomDateChange();
+                filters.currentPage = 1;
+                this.loadLogsFromDB();
+            });
+        }
+
+        if (clearCustomBtn) {
+            clearCustomBtn.addEventListener('click', () => {
+                if (startInput) startInput.value = '';
+                if (endInput) endInput.value = '';
+                clearCustomBtn.style.display = 'none';
+                filters.startDate = null;
+                filters.endDate = null;
+                filters.range = 'today';
+                document.querySelectorAll('.btn-preset').forEach(b => {
+                    b.classList.toggle('active', b.getAttribute('data-range') === 'today');
+                });
+                filters.currentPage = 1;
+                this.loadLogsFromDB();
+            });
+        }
+
         // Toggles
         document.getElementById('filterWarningOn')?.addEventListener('change', (e) => {
             filters.warningOnly = e.target.checked;
             filters.currentPage = 1;
+            this.loadLogsFromDB();
         });
 
         document.getElementById('filterInRoi')?.addEventListener('change', (e) => {
             filters.inRoiOnly = e.target.checked;
+            filters.currentPage = 1;
+            this.loadLogsFromDB();
         });
 
         document.getElementById('filterScenario')?.addEventListener('change', (e) => {
@@ -749,8 +820,10 @@ const App = {
         document.getElementById('btnResetLogsFilters')?.addEventListener('click', () => {
             // Reset State
             filters.range = 'today';
+            filters.startDate = null;
+            filters.endDate = null;
             filters.searchText = '';
-            filters.warningOnly = false;
+            filters.warningOnly = true;
             filters.inRoiOnly = false;
             filters.minConf = 0.00;
             filters.scenario = 'All';
@@ -758,8 +831,11 @@ const App = {
 
             // Reset UI Controls
             document.querySelectorAll('.btn-preset').forEach(b => b.classList.toggle('active', b.getAttribute('data-range') === 'today'));
+            if (startInput) startInput.value = '';
+            if (endInput) endInput.value = '';
+            if (clearCustomBtn) clearCustomBtn.style.display = 'none';
             if (searchInput) searchInput.value = '';
-            const chkWarn = document.getElementById('filterWarningOn'); if (chkWarn) chkWarn.checked = false;
+            const chkWarn = document.getElementById('filterWarningOn'); if (chkWarn) chkWarn.checked = true;
             const chkRoi = document.getElementById('filterInRoi'); if (chkRoi) chkRoi.checked = false;
             const rangeMin = document.getElementById('filterMinConf'); if (rangeMin) rangeMin.value = 0;
             const labelMin = document.getElementById('filterMinConfLabel'); if (labelMin) labelMin.textContent = "0.00";
@@ -985,36 +1061,34 @@ const App = {
     },
 
     exportCSV() {
-        // Export from DB dataset (logsRows)
-        const data = window.EventStore.logsRows || [];
-        const headers = ["Timestamp,Message,In ROI,Warning,Confidence,Latency,Scenario,False Warning\n"];
-        const rows = data.map(log => {
-            const d = this.state.parseTimestamp(log.timestamp_iso);
-            const ts = d ? d.toLocaleString() : (log.timestamp_iso || log.timestamp || '');
-            const msg = log.child_in_roi ? 'Child-class Detected' : 'No Detection';
-            return `${ts},${msg},${log.child_in_roi},${log.warning_on},${(log.confidence || 0).toFixed(2)},${log.latency_ms},${log.scenario},${log.false_warning}`;
-        });
-        this.downloadFile(headers.concat(rows).join("\n"), 'csv');
+        this.exportRawData('csv');
     },
 
     exportJSON() {
-        // Export from DB dataset (logsRows)
-        const data = window.EventStore.logsRows || [];
-        const jsonStr = JSON.stringify(data, null, 2);
-        this.downloadFile(jsonStr, 'json');
+        this.exportRawData('json');
     },
 
-    downloadFile(content, type) {
+    exportRawData(format) {
         const f = this.state.logsFilter;
-        // Filename with date and range
-        const dateStr = new Date().toISOString().slice(0, 10);
-        const filename = `logs_${dateStr}_${f.range}.${type}`;
+        const params = new URLSearchParams({
+            format: format,
+            range: f.range || 'all',
+            warning_only: f.warningOnly ? 'true' : 'false',
+            in_roi_only: f.inRoiOnly ? 'true' : 'false',
+            min_conf: f.minConf || 0,
+            scenario: f.scenario || 'All'
+        });
 
-        const blob = new Blob([content], { type: type === 'csv' ? 'text/csv;charset=utf-8;' : 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", filename);
+        if (f.startDate) params.set('start_date', f.startDate);
+        if (f.endDate) params.set('end_date', f.endDate);
+        if (f.searchText) params.set('search', f.searchText);
+
+        const exportUrl = `/api/events/export?${params.toString()}`;
+        console.debug(`[Export] Requesting full server-side streaming export: ${exportUrl}`);
+
+        const link = document.createElement('a');
+        link.href = exportUrl;
+        link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

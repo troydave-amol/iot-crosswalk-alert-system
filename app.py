@@ -121,7 +121,12 @@ os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
 
 
 # DB Imports
-from db import init_db, insert_event, fetch_events, fetch_analytics_aggregates, authenticate_user, get_user_by_username, update_user_password
+import csv
+import io
+from db import (
+    init_db, insert_event, fetch_events, stream_events, RAW_EXPORT_FIELDS,
+    fetch_analytics_aggregates, authenticate_user, get_user_by_username, update_user_password
+)
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
@@ -1357,16 +1362,19 @@ def api_events_route():
     try:
         # Parse Query Params
         range_arg = request.args.get("range", "all")
+        start_date = request.args.get("start_date") or request.args.get("start")
+        end_date = request.args.get("end_date") or request.args.get("end")
         limit = int(request.args.get("limit", 50))
         offset = int(request.args.get("offset", 0))
         
-        # Boolean flags usually come as strings "true"/"false" or just present
-        # Here we assume "true" string for True, anything else False for safety
+        # Boolean flags
         warning_only = request.args.get("warning_only", "false").lower() in ("true", "1")
         in_roi_only = request.args.get("in_roi_only", "false").lower() in ("true", "1")
         
         min_conf = float(request.args.get("min_conf", 0.0))
         scenario = request.args.get("scenario", None)
+        if scenario == "All":
+            scenario = None
         search = request.args.get("search", None)
 
         # Enforce max limit
@@ -1377,6 +1385,8 @@ def api_events_route():
             limit=limit,
             offset=offset,
             time_range=range_arg,
+            start_date=start_date,
+            end_date=end_date,
             warning_only=warning_only,
             in_roi_only=in_roi_only,
             min_conf=min_conf,
@@ -1393,8 +1403,108 @@ def api_events_route():
 
     except Exception as e:
         print(f"API EVENTS ERROR: {e}")
-        # Return 503 Service Unavailable if DB fails
         return jsonify({"ok": False, "error": "db_unavailable"}), 503
+
+
+@app.route("/api/events/export")
+@role_required("it_specialist")
+def api_events_export_route():
+    """
+    Stream full raw dataset export (CSV or JSON) respecting all active filters.
+    IT Specialist-only.
+    """
+    try:
+        format_type = request.args.get("format", "csv").lower()
+        if format_type not in ("csv", "json"):
+            return jsonify({"ok": False, "error": "invalid_format", "message": "Format must be 'csv' or 'json'"}), 400
+
+        range_arg = request.args.get("range", "all")
+        start_date = request.args.get("start_date") or request.args.get("start")
+        end_date = request.args.get("end_date") or request.args.get("end")
+        warning_only = request.args.get("warning_only", "false").lower() in ("true", "1")
+        in_roi_only = request.args.get("in_roi_only", "false").lower() in ("true", "1")
+        min_conf = float(request.args.get("min_conf", 0.0))
+        scenario = request.args.get("scenario", None)
+        if scenario == "All":
+            scenario = None
+        search = request.args.get("search", None)
+
+        # Filename generation with timestamp and filter indicator
+        now_tag = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        if start_date or end_date:
+            range_tag = "custom"
+        else:
+            range_tag = range_arg
+        
+        filename = f"crosswalk_audit_events_{range_tag}_{now_tag}.{format_type}"
+
+        if format_type == "csv":
+            def generate_csv():
+                output = io.StringIO()
+                writer = csv.writer(output)
+                # Write CSV header row
+                writer.writerow(RAW_EXPORT_FIELDS)
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+
+                # Stream matching rows
+                for row in stream_events(
+                    time_range=range_arg,
+                    start_date=start_date,
+                    end_date=end_date,
+                    warning_only=warning_only,
+                    in_roi_only=in_roi_only,
+                    min_conf=min_conf,
+                    scenario=scenario,
+                    search=search
+                ):
+                    writer.writerow([row.get(f, "") for f in RAW_EXPORT_FIELDS])
+                    yield output.getvalue()
+                    output.seek(0)
+                    output.truncate(0)
+
+            return Response(
+                generate_csv(),
+                mimetype="text/csv; charset=utf-8",
+                headers={
+                    "Content-Disposition": f"attachment; filename=\"{filename}\"",
+                    "Cache-Control": "no-cache"
+                }
+            )
+
+        elif format_type == "json":
+            def generate_json():
+                yield "[\n"
+                first = True
+                for row in stream_events(
+                    time_range=range_arg,
+                    start_date=start_date,
+                    end_date=end_date,
+                    warning_only=warning_only,
+                    in_roi_only=in_roi_only,
+                    min_conf=min_conf,
+                    scenario=scenario,
+                    search=search
+                ):
+                    if not first:
+                        yield ",\n"
+                    yield "  " + json.dumps(row, default=str)
+                    first = False
+                yield "\n]"
+
+            return Response(
+                generate_json(),
+                mimetype="application/json; charset=utf-8",
+                headers={
+                    "Content-Disposition": f"attachment; filename=\"{filename}\"",
+                    "Cache-Control": "no-cache"
+                }
+            )
+
+    except Exception as e:
+        print(f"API EXPORT ERROR: {e}")
+        return jsonify({"ok": False, "error": "export_failed", "message": str(e)}), 500
 
 @app.route("/api/analytics")
 @login_required

@@ -1304,6 +1304,121 @@ body.dark-mode .it-false-badge.no {
     background-color: #e0e0e0;
 }
 
+/* Filter Top Row Layout */
+.filter-row-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: nowrap;
+    width: 100%;
+}
+
+.filter-row-top .logs-search-wrapper {
+    flex: 1 1 200px;
+    min-width: 180px;
+    max-width: 320px;
+}
+
+.filter-row-top .logs-search-input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.filter-row-top .preset-group {
+    flex-shrink: 0;
+}
+
+.filter-row-top .custom-range-group {
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+/* Custom Date Range Controls */
+.custom-range-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background-color: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.custom-range-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.custom-range-sep {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.datetime-input {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-size: 0.8rem;
+    font-family: var(--font-primary);
+    color: var(--deep-text);
+    background-color: var(--white);
+    outline: none;
+    width: 155px;
+    min-width: 150px;
+    max-width: 165px;
+    height: 32px;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.datetime-input:focus {
+    border-color: var(--primary-accent);
+    box-shadow: 0 0 0 2px rgba(255, 146, 128, 0.2);
+}
+
+.custom-range-clear-btn {
+    padding: 0 !important;
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 0.75rem !important;
+    line-height: 1 !important;
+    border-radius: 4px !important;
+}
+
+/* Dark Mode support for custom range group */
+body.dark-mode .custom-range-group {
+    background-color: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.dark-mode .datetime-input {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #e2e8f0;
+    color-scheme: dark;
+}
+
+body.dark-mode .datetime-input:focus {
+    border-color: var(--primary-accent);
+    box-shadow: 0 0 0 2px rgba(255, 146, 128, 0.3);
+}
+
+@media (max-width: 1100px) {
+    .filter-row-top {
+        flex-wrap: wrap;
+    }
+}
+
 .checkbox-label {
     display: flex;
     align-items: center;

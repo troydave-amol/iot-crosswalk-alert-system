@@ -13,14 +13,9 @@ def get_connection():
     Intentionally determines database presence to allow creation if missing.
     """
     return pymysql.connect(
-        host=os.getenv("DB_HOST", "localhost"),
+        host=os.getenv("DB_HOST", "127.0.0.1"),
         user=os.getenv("DB_USER", "root"),
         password=os.getenv("DB_PASS", ""),
-        # We don't specify database here initially to allow 'CREATE DATABASE' command
-        # or we specify it if we are sure it exists. 
-        # Strategy: Connect without DB first to ensure it exists, then connect with DB.
-        # However, for simplicity and standard usage, we usually connect with DB.
-        # Given the requirement to generic "init_db", we will handle the DB selection dynamically.
         charset='utf8mb4',
         cursorclass=pymysql.cursors.DictCursor,
         autocommit=True
@@ -30,7 +25,7 @@ def _get_db_connection():
     """Return a connection to the target database (not root-level)."""
     target_db = os.getenv("DB_NAME", "crosswalk_db")
     return pymysql.connect(
-        host=os.getenv("DB_HOST", "localhost"),
+        host=os.getenv("DB_HOST", "127.0.0.1"),
         user=os.getenv("DB_USER", "root"),
         password=os.getenv("DB_PASS", ""),
         database=target_db,
@@ -48,7 +43,7 @@ def init_db():
     try:
         # 1. Connect without selecting a database to create it if needed
         conn = pymysql.connect(
-            host=os.getenv("DB_HOST", "localhost"),
+            host=os.getenv("DB_HOST", "127.0.0.1"),
             user=os.getenv("DB_USER", "root"),
             password=os.getenv("DB_PASS", ""),
             charset='utf8mb4',
@@ -261,15 +256,7 @@ def insert_event(payload):
         payload["roi_status"] = "CHILD_IN_ROI" if int(payload["child_in_roi"]) == 1 else "CLEAR"
 
         # Connect specifically to the database now
-        conn = pymysql.connect(
-            host=os.getenv("DB_HOST", "localhost"),
-            user=os.getenv("DB_USER", "root"),
-            password=os.getenv("DB_PASS", ""),
-            database=os.getenv("DB_NAME", "crosswalk_db"),
-            charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor,
-            autocommit=True
-        )
+        conn = _get_db_connection()
 
         with conn.cursor() as cursor:
             sql = """
@@ -331,10 +318,171 @@ def insert_event(payload):
         if conn:
             conn.close()
 
+
+RAW_EXPORT_FIELDS = [
+    "id",
+    "timestamp_iso",
+    "source",
+    "child_in_roi",
+    "roi_status",
+    "confidence",
+    "latency_ms",
+    "warning_logic_on",
+    "switch_enabled",
+    "warning_device_on",
+    "child_count",
+    "battery_percent",
+    "solar_status",
+    "scenario",
+    "camera_status",
+    "edge_status",
+    "led_driver_status",
+]
+
+
+def _parse_to_utc_sql(dt_input, is_end=False):
+    """
+    Parses datetime input into UTC MySQL format '%Y-%m-%d %H:%M:%S'.
+    Accepts:
+    - HTML datetime-local format: '2026-08-23T14:30' or '2026-08-23T14:30:00' (assumes Manila local UTC+8)
+    - ISO strings with timezone: '2026-08-23T06:30:00Z' or '2026-08-23T14:30:00+08:00'
+    - Date-only strings: '2026-08-23' (start of day 00:00:00 or end of day 23:59:59 Manila time)
+    """
+    if not dt_input:
+        return None
+    if isinstance(dt_input, datetime):
+        if dt_input.tzinfo is None:
+            manila_tz = timezone(timedelta(hours=8))
+            dt_input = dt_input.replace(tzinfo=manila_tz)
+        utc_dt = dt_input.astimezone(timezone.utc)
+        return utc_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    s = str(dt_input).strip()
+    if not s:
+        return None
+
+    try:
+        # ISO format with Z
+        if s.endswith("Z"):
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+        # ISO format with offset (+08:00, -05:00)
+        if "+" in s or ("-" in s and len(s) > 10 and s[10] != "-"):
+            try:
+                dt = datetime.fromisoformat(s)
+                if dt.tzinfo is not None:
+                    return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                pass
+
+        # Date only: YYYY-MM-DD
+        if len(s) == 10 and s.count("-") == 2:
+            time_part = "23:59:59" if is_end else "00:00:00"
+            s = f"{s} {time_part}"
+
+        # Normalize space vs T
+        if "T" in s:
+            s = s.replace("T", " ")
+        if len(s) == 16:  # YYYY-MM-DD HH:MM
+            s += ":59" if is_end else ":00"
+
+        # Local Manila time (UTC+8) -> convert to UTC
+        local_dt = datetime.strptime(s[:19], "%Y-%m-%d %H:%M:%S")
+        utc_dt = local_dt - timedelta(hours=8)
+        return utc_dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception as e:
+        print(f"[DB] _parse_to_utc_sql error parsing '{dt_input}': {e}")
+        return None
+
+
+def _build_events_where(
+    time_range="all",
+    start_date=None,
+    end_date=None,
+    warning_only=False,
+    in_roi_only=False,
+    min_conf=0.0,
+    scenario=None,
+    search=None
+):
+    # Dynamic time-based scenario label (same logic as analytics chart)
+    manila_t = "TIME(DATE_ADD(timestamp_iso, INTERVAL 8 HOUR))"
+    scenario_case = f"""CASE
+        WHEN {manila_t} >= '06:00:00' AND {manila_t} < '08:30:00' THEN 'Morning School Entry'
+        WHEN {manila_t} >= '11:00:00' AND {manila_t} < '13:30:00' THEN 'Mid-Day Shift'
+        WHEN {manila_t} >= '15:30:00' AND {manila_t} < '17:00:00' THEN 'Afternoon Dismissal'
+        ELSE 'Standard Daylight Ops'
+    END"""
+
+    conditions = []
+    params = []
+
+    # 1. Custom Date Range vs Preset Time Range
+    parsed_start = _parse_to_utc_sql(start_date, is_end=False)
+    parsed_end = _parse_to_utc_sql(end_date, is_end=True)
+
+    if parsed_start:
+        conditions.append("timestamp_iso >= %s")
+        params.append(parsed_start)
+    if parsed_end:
+        conditions.append("timestamp_iso <= %s")
+        params.append(parsed_end)
+
+    if not parsed_start and not parsed_end:
+        if time_range == "15m":
+            conditions.append("timestamp_iso >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 15 MINUTE)")
+        elif time_range == "1h":
+            conditions.append("timestamp_iso >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR)")
+        elif time_range == "today":
+            manila_tz = timezone(timedelta(hours=8))
+            manila_now = datetime.now(manila_tz)
+            manila_today_start = manila_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            today_utc = manila_today_start.astimezone(timezone.utc)
+            conditions.append("timestamp_iso >= %s")
+            params.append(today_utc.strftime("%Y-%m-%d %H:%M:%S"))
+
+    # 2. Boolean Flags
+    if warning_only:
+        conditions.append("warning_device_on = 1")
+
+    if in_roi_only:
+        conditions.append("child_in_roi = 1")
+
+    # 3. Minimum Confidence
+    if min_conf > 0:
+        conditions.append("confidence >= %s")
+        params.append(min_conf)
+
+    # 4. Scenario (Exact Match against computed time-based label)
+    if scenario and scenario != "All":
+        conditions.append(f"{scenario_case} = %s")
+        params.append(scenario)
+
+    # 5. Search (Flexible — includes computed scenario label + Manila timestamp)
+    if search:
+        manila_ts = "DATE_FORMAT(DATE_ADD(timestamp_iso, INTERVAL 8 HOUR), '%%Y-%%m-%%d %%h:%%i:%%s %%p')"
+        search_clause = (
+            f"(source LIKE %s OR {scenario_case} LIKE %s"
+            f" OR roi_status LIKE %s OR {manila_ts} LIKE %s)"
+        )
+        conditions.append(search_clause)
+        search_pattern = f"%{search}%"
+        params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
+
+    where_sql = ""
+    if conditions:
+        where_sql = "WHERE " + " AND ".join(conditions)
+
+    return where_sql, params, scenario_case
+
+
 def fetch_events(
     limit=50, 
     offset=0, 
     time_range="all", 
+    start_date=None,
+    end_date=None,
     warning_only=False, 
     in_roi_only=False, 
     min_conf=0.0, 
@@ -348,75 +496,18 @@ def fetch_events(
     """
     conn = None
     try:
-        # Connect to DB
-        conn = pymysql.connect(
-            host=os.getenv("DB_HOST", "localhost"),
-            user=os.getenv("DB_USER", "root"),
-            password=os.getenv("DB_PASS", ""),
-            database=os.getenv("DB_NAME", "crosswalk_db"),
-            charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor
+        conn = _get_db_connection()
+
+        where_sql, params, scenario_case = _build_events_where(
+            time_range=time_range,
+            start_date=start_date,
+            end_date=end_date,
+            warning_only=warning_only,
+            in_roi_only=in_roi_only,
+            min_conf=min_conf,
+            scenario=scenario,
+            search=search
         )
-
-        # Dynamic time-based scenario label (same logic as analytics chart)
-        manila_t = "TIME(DATE_ADD(timestamp_iso, INTERVAL 8 HOUR))"
-        scenario_case = f"""CASE
-            WHEN {manila_t} >= '06:00:00' AND {manila_t} < '08:30:00' THEN 'Morning School Entry'
-            WHEN {manila_t} >= '11:00:00' AND {manila_t} < '13:30:00' THEN 'Mid-Day Shift'
-            WHEN {manila_t} >= '15:30:00' AND {manila_t} < '17:00:00' THEN 'Afternoon Dismissal'
-            ELSE 'Standard Daylight Ops'
-        END"""
-
-        # Build WHERE clause
-        conditions = []
-        params = []
-
-        # 1. Time Range — use UTC_TIMESTAMP() to match UTC-stored timestamps
-        if time_range == "15m":
-            conditions.append("timestamp_iso >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 15 MINUTE)")
-        elif time_range == "1h":
-            conditions.append("timestamp_iso >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR)")
-        elif time_range == "today":
-            # "Today" = midnight Asia/Manila (UTC+8), converted to UTC for comparison
-            manila_tz = timezone(timedelta(hours=8))
-            manila_now = datetime.now(manila_tz)
-            manila_today_start = manila_now.replace(hour=0, minute=0, second=0, microsecond=0)
-            today_utc = manila_today_start.astimezone(timezone.utc)
-            conditions.append("timestamp_iso >= %s")
-            params.append(today_utc.strftime("%Y-%m-%d %H:%M:%S"))
-        # "all" adds no condition
-
-        # 2. Boolean Flags
-        if warning_only:
-            conditions.append("warning_device_on = 1")
-        
-        if in_roi_only:
-            conditions.append("child_in_roi = 1")
-
-        # 3. Minimum Confidence
-        if min_conf > 0:
-            conditions.append("confidence >= %s")
-            params.append(min_conf)
-
-        # 4. Scenario (Exact Match against computed time-based label)
-        if scenario:
-            conditions.append(f"{scenario_case} = %s")
-            params.append(scenario)
-
-        # 5. Search (Flexible — includes computed scenario label + Manila timestamp)
-        if search:
-            manila_ts = "DATE_FORMAT(DATE_ADD(timestamp_iso, INTERVAL 8 HOUR), '%%Y-%%m-%%d %%h:%%i:%%s %%p')"
-            search_clause = (
-                f"(source LIKE %s OR {scenario_case} LIKE %s"
-                f" OR roi_status LIKE %s OR {manila_ts} LIKE %s)"
-            )
-            conditions.append(search_clause)
-            search_pattern = f"%{search}%"
-            params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
-
-        where_sql = ""
-        if conditions:
-            where_sql = "WHERE " + " AND ".join(conditions)
 
         with conn.cursor() as cursor:
             # A. Get Total Count (for pagination)
@@ -425,17 +516,15 @@ def fetch_events(
             total_rows = cursor.fetchone()["total"]
 
             # B. Fetch Data
-            # Explicit columns — scenario is dynamically computed from timestamp
-            fields = [
-                "id", "timestamp_iso", "source", "child_in_roi", "roi_status", 
-                "confidence", "latency_ms", "warning_logic_on", "switch_enabled", 
-                "warning_device_on", "battery_percent", "solar_status", 
-                f"{scenario_case} AS scenario",
-                "camera_status", "edge_status", "led_driver_status"
-            ]
-            fields_str = ", ".join(fields)
-            
-            # Order by newest first
+            select_fields = []
+            for f in RAW_EXPORT_FIELDS:
+                if f == "scenario":
+                    select_fields.append(f"{scenario_case} AS scenario")
+                else:
+                    select_fields.append(f)
+            fields_str = ", ".join(select_fields)
+
+            # Order by newest first for UI display
             query_sql = f"""
                 SELECT {fields_str} 
                 FROM events 
@@ -443,34 +532,29 @@ def fetch_events(
                 ORDER BY id DESC 
                 LIMIT %s OFFSET %s
             """
-            # Add limit/offset to params
             query_params = params + [limit, offset]
-            
+
             cursor.execute(query_sql, query_params)
             rows = cursor.fetchall()
-            
+
             # Serialize for JSON
             serialized_rows = []
             for row in rows:
                 new_row = row.copy()
-                
+
                 # datetime -> ISO string
                 if isinstance(new_row["timestamp_iso"], datetime):
                     new_row["timestamp_iso"] = new_row["timestamp_iso"].strftime("%Y-%m-%dT%H:%M:%SZ")
                 elif isinstance(new_row["timestamp_iso"], str):
-                    # Ensure string format is also strict ISO with Z
-                    # Typical MySQL string: "2023-10-27 10:00:00"
                     if " " in new_row["timestamp_iso"] and "T" not in new_row["timestamp_iso"]:
                         new_row["timestamp_iso"] = new_row["timestamp_iso"].replace(" ", "T")
-                    
                     if not new_row["timestamp_iso"].endswith("Z"):
-                         new_row["timestamp_iso"] += "Z"
-                
-                # Decimal -> float (if using Decimal cursor, but here using standard float in table)
-                # Just in case pymysql returns Decimal for FLOAT columns sometimes
+                        new_row["timestamp_iso"] += "Z"
+
+                # Decimal -> float
                 for k, v in new_row.items():
-                    if hasattr(v, 'quantize'): # Check for Decimal-like
-                         new_row[k] = float(v)
+                    if hasattr(v, 'quantize'):
+                        new_row[k] = float(v)
 
                 serialized_rows.append(new_row)
 
@@ -478,10 +562,83 @@ def fetch_events(
                 "total": total_rows,
                 "rows": serialized_rows
             }
+    finally:
+        if conn:
+            conn.close()
 
-    except Exception as e:
-        print(f"DB FETCH ERROR: {e}")
-        raise e # Re-raise to let caller handle 503
+
+def stream_events(
+    time_range="all",
+    start_date=None,
+    end_date=None,
+    warning_only=False,
+    in_roi_only=False,
+    min_conf=0.0,
+    scenario=None,
+    search=None
+):
+    """
+    Generator that streams event rows matching all filters using a server-side cursor (SSDictCursor).
+    Yields normalized row dicts one-by-one without buffering the entire dataset in RAM.
+    """
+    target_db = os.getenv("DB_NAME", "crosswalk_db")
+    conn = pymysql.connect(
+        host=os.getenv("DB_HOST", "127.0.0.1"),
+        user=os.getenv("DB_USER", "root"),
+        password=os.getenv("DB_PASS", ""),
+        database=target_db,
+        charset='utf8mb4',
+        cursorclass=pymysql.cursors.SSDictCursor,
+        autocommit=True
+    )
+    try:
+        where_sql, params, scenario_case = _build_events_where(
+            time_range=time_range,
+            start_date=start_date,
+            end_date=end_date,
+            warning_only=warning_only,
+            in_roi_only=in_roi_only,
+            min_conf=min_conf,
+            scenario=scenario,
+            search=search
+        )
+
+        select_fields = []
+        for f in RAW_EXPORT_FIELDS:
+            if f == "scenario":
+                select_fields.append(f"{scenario_case} AS scenario")
+            else:
+                select_fields.append(f)
+        fields_str = ", ".join(select_fields)
+
+        query_sql = f"""
+            SELECT {fields_str} 
+            FROM events 
+            {where_sql} 
+            ORDER BY id ASC
+        """
+
+        with conn.cursor() as cursor:
+            cursor.execute(query_sql, params)
+            while True:
+                row = cursor.fetchone()
+                if row is None:
+                    break
+
+                # Format timestamp
+                if isinstance(row["timestamp_iso"], datetime):
+                    row["timestamp_iso"] = row["timestamp_iso"].strftime("%Y-%m-%dT%H:%M:%SZ")
+                elif isinstance(row["timestamp_iso"], str):
+                    if " " in row["timestamp_iso"] and "T" not in row["timestamp_iso"]:
+                        row["timestamp_iso"] = row["timestamp_iso"].replace(" ", "T")
+                    if not row["timestamp_iso"].endswith("Z"):
+                        row["timestamp_iso"] += "Z"
+
+                for k, v in row.items():
+                    if hasattr(v, 'quantize'):
+                        row[k] = float(v)
+
+                yield row
     finally:
         if conn:
             conn.close()
@@ -497,7 +654,7 @@ def fetch_analytics_aggregates(time_range="all"):
     conn = None
     try:
         conn = pymysql.connect(
-            host=os.getenv("DB_HOST", "localhost"),
+            host=os.getenv("DB_HOST", "127.0.0.1"),
             user=os.getenv("DB_USER", "root"),
             password=os.getenv("DB_PASS", ""),
             database=os.getenv("DB_NAME", "crosswalk_db"),
