@@ -246,7 +246,11 @@ def dashboard_it():
     return render_template("it_dashboard.html",
                            username=session.get("username"),
                            role=session.get("role"),
-                           full_name=session.get("full_name", "IT Specialist"))
+                           full_name=session.get("full_name", "IT Specialist"),
+                           model_name=MODEL_PATH.name,
+                           model_path=str(MODEL_PATH),
+                           child_conf=CHILD_CONF,
+                           yolo_imgsz=YOLO_IMGSZ)
 
 @app.route("/api/login", methods=["POST"])
 def api_login():

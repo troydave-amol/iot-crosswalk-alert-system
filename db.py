@@ -946,11 +946,16 @@ def fetch_analytics_aggregates(time_range="all"):
             ]
             top_scenario = scenario_distribution[0]["scenario"] if scenario_distribution else None
 
+            total_w = int(kpi["total_warnings"] or 0)
+            false_w = int(kpi["false_warnings"] or 0)
+            fwr = round((false_w / total_w * 100), 1) if total_w > 0 else 0.0
+
             return {
                 "total_events":           int(kpi["total_events"] or 0),
-                "total_warnings":         int(kpi["total_warnings"] or 0),
+                "total_warnings":         total_w,
                 "total_detections":       int(kpi["total_detections"] or 0),
-                "false_warnings":         int(kpi["false_warnings"] or 0),
+                "false_warnings":         false_w,
+                "false_warning_rate":     fwr,
                 "avg_latency":            float(kpi["avg_latency"] or 0),
                 "peak_hour":              peak_hour,
                 "time_series":            time_series,

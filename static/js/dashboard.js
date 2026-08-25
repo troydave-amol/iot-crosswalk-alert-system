@@ -1427,7 +1427,7 @@ const App = {
                     emptyMsg.style.display = 'block';
                 }
                 // Reset KPI cards to zero so stale values from the previous range don't persist
-                this.renderKPIs({ total_warnings: 0, total_detections: 0, false_warnings: 0, avg_latency: 0, peak_hour: '--' });
+                this.renderKPIs({ total_warnings: 0, total_detections: 0, false_warnings: 0, false_warning_rate: 0, avg_latency: 0, peak_hour: '--' });
                 return;
             } else {
                 chartGrid.style.display = 'grid';
@@ -1457,6 +1457,9 @@ const App = {
         const falseEl = document.getElementById('ana-kpi-false');
         if (falseEl) falseEl.textContent = agg.false_warnings;
 
+        const fwrEl = document.getElementById('ana-kpi-fwr');
+        if (fwrEl) fwrEl.textContent = (agg.false_warning_rate !== undefined ? agg.false_warning_rate.toFixed(1) : '0.0') + '%';
+
         const latEl = document.getElementById('ana-kpi-latency');
         if (latEl) latEl.textContent = (agg.avg_latency || 0) + 'ms';
 
@@ -1465,7 +1468,7 @@ const App = {
 
         console.debug(
             `[Analytics KPIs] warnings=${agg.total_warnings}, detections=${agg.total_detections},` +
-            ` false=${agg.false_warnings}, avg_lat=${agg.avg_latency}ms, peak=${agg.peak_hour}`
+            ` false=${agg.false_warnings}, fwr=${agg.false_warning_rate}%, avg_lat=${agg.avg_latency}ms, peak=${agg.peak_hour}`
         );
     },
 

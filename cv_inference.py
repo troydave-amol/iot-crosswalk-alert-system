@@ -115,9 +115,9 @@ class ChildLikeDetector:
     def __init__(
         self,
         model_path: str,
-        conf_child: float = 0.65,
+        conf_child: float = 0.75,
         device: Optional[str] = None,
-        min_child_bbox_ratio: float = 0.18,
+        min_child_bbox_ratio: float = 0.22,
         dominance_iou: float = 0.70,
         imgsz: int = 640,
         feet_height_ratio: float = 0.15,
