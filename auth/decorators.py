@@ -18,7 +18,7 @@ def login_required(f):
         if not session.get("logged_in"):
             if request.path.startswith("/api/"):
                 return jsonify({"ok": False, "error": "unauthorized"}), 401
-            return redirect(url_for("landing"))
+            return redirect(url_for("auth.landing"))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -33,7 +33,7 @@ def role_required(*allowed_roles):
             if not session.get("logged_in"):
                 if request.path.startswith("/api/"):
                     return jsonify({"ok": False, "error": "unauthorized"}), 401
-                return redirect(url_for("landing"))
+                return redirect(url_for("auth.landing"))
             user_role = session.get("role")
             if allowed_roles and user_role not in allowed_roles:
                 if request.path.startswith("/api/"):
