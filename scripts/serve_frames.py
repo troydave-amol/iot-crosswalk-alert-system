@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 PORT = 8095
-DIRECTORY = Path(r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\datasets\August 11, 2026 Frames\batch_001")
+DIRECTORY = Path(r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics\datasets\August 11, 2026 Frames")
 
 class SmartImageHandler(http.server.SimpleHTTPRequestHandler):
     """HTTP handler with CORS + Dynamic File Finding."""

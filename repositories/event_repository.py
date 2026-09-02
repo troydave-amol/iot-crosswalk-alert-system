@@ -41,6 +41,7 @@ RAW_EXPORT_FIELDS = [
     "camera_status",
     "edge_status",
     "led_driver_status",
+    "review_label",
 ]
 
 
@@ -578,7 +579,8 @@ class EventRepository:
                     {cte_base}
                     SELECT
                         COUNT(*)                    AS total_events,
-                        ROUND(AVG(latency_ms), 1)   AS avg_latency,
+                        ROUND(AVG(CASE WHEN latency_ms > 0 AND latency_ms <= 2000 THEN latency_ms END), 1) AS avg_latency,
+                        MAX(CASE WHEN latency_ms > 0 AND latency_ms <= 2000 THEN latency_ms END) AS peak_latency,
                         SUM(warn_start)             AS total_warnings,
                         SUM(CASE WHEN detect_start = 1 THEN session_max_children ELSE 0 END) AS total_detections,
                         SUM(false_warn_start)       AS false_warnings
@@ -762,6 +764,27 @@ class EventRepository:
                 false_w = int(kpi["false_warnings"] or 0)
                 fwr = round((false_w / total_w * 100), 1) if total_w > 0 else 0.0
 
+                # ── 6. CONFUSION MATRIX (from human-audited review_label) ────
+                cm_sql = f"""
+                    SELECT
+                        SUM(CASE WHEN review_label = 'TP' THEN 1 ELSE 0 END) AS tp_count,
+                        SUM(CASE WHEN review_label = 'FP' THEN 1 ELSE 0 END) AS fp_count,
+                        SUM(CASE WHEN review_label = 'FN' THEN 1 ELSE 0 END) AS fn_count,
+                        SUM(CASE WHEN review_label = 'TN' THEN 1 ELSE 0 END) AS tn_count,
+                        SUM(CASE WHEN review_label IS NOT NULL THEN 1 ELSE 0 END) AS total_reviewed
+                    FROM events
+                    {where_sql}
+                """
+                cursor.execute(cm_sql, params)
+                cm_row = cursor.fetchone()
+                confusion_matrix = {
+                    "tp": int(cm_row["tp_count"] or 0),
+                    "fp": int(cm_row["fp_count"] or 0),
+                    "fn": int(cm_row["fn_count"] or 0),
+                    "tn": int(cm_row["tn_count"] or 0),
+                    "total_reviewed": int(cm_row["total_reviewed"] or 0),
+                } if cm_row else {"tp": 0, "fp": 0, "fn": 0, "tn": 0, "total_reviewed": 0}
+
                 return {
                     "total_events":           int(kpi["total_events"] or 0),
                     "total_warnings":         total_w,
@@ -769,11 +792,13 @@ class EventRepository:
                     "false_warnings":         false_w,
                     "false_warning_rate":     fwr,
                     "avg_latency":            float(kpi["avg_latency"] or 0),
+                    "peak_latency":           int(kpi["peak_latency"] or 0),
                     "peak_hour":              peak_hour,
                     "time_series":            time_series,
                     "confidence_bins":        confidence_bins,
                     "scenario_distribution":  scenario_distribution,
                     "top_scenario":           top_scenario,
+                    "confusion_matrix":       confusion_matrix,
                     "range_start": range_start_utc.strftime("%Y-%m-%dT%H:%M:%SZ") if range_start_utc else None,
                     "range_end":   range_end_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "bin_unit":    bin_unit
@@ -785,3 +810,27 @@ class EventRepository:
         finally:
             if conn:
                 conn.close()
+
+    def update_event_review(self, event_id: int, review_label: str) -> bool:
+        """Set the human-audited review_label (TP/FP/FN/TN/null) on a single event."""
+        valid_labels = {"TP", "FP", "FN", "TN"}
+        if review_label is not None and review_label not in valid_labels:
+            raise ValueError(f"Invalid review_label '{review_label}'. Must be one of {valid_labels} or null.")
+
+        conn = None
+        try:
+            conn = _get_db_connection()
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE events SET review_label = %s WHERE id = %s",
+                    (review_label, event_id)
+                )
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception as e:
+            print(f"DB REVIEW UPDATE ERROR: {e}")
+            return False
+        finally:
+            if conn:
+                conn.close()
+

@@ -1014,6 +1014,13 @@ const App = {
                         ? '<span class="it-false-badge yes"><i class="fa-solid fa-flag"></i> YES</span>'
                         : '<span class="it-false-badge no">NO</span>';
 
+                    // Audit review tag for confusion matrix
+                    const currentLabel = log.review_label || '';
+                    const reviewBtns = ['TP', 'FP', 'FN', 'TN'].map(label => {
+                        const isActive = currentLabel === label;
+                        return `<button class="audit-tag-btn${isActive ? ' active' : ''}" data-event-id="${log.id}" data-label="${label}" title="${label === 'TP' ? 'True Positive — correctly warned' : label === 'FP' ? 'False Positive — false alarm' : label === 'FN' ? 'False Negative — child missed' : 'True Negative — correctly clear'}">${label}</button>`;
+                    }).join('');
+
                     return `
                     <tr class="${rowClass}">
                         <td><span class="it-log-time">${timeStr}</span></td>
@@ -1026,6 +1033,7 @@ const App = {
                         <td style="text-align: right;"><span class="it-mono-val">${log.latency_ms}ms</span></td>
                         <td><span class="it-scenario-tag">${log.scenario}</span></td>
                         <td style="text-align: center;">${falseHtml}</td>
+                        <td style="text-align: center;"><div class="audit-tag-group">${reviewBtns}</div></td>
                     </tr>`;
                 }
 
@@ -1058,6 +1066,48 @@ const App = {
         document.getElementById('pageIndicator').textContent = `Page ${f.currentPage} of ${f.totalPages}`;
         document.getElementById('pagePrev').disabled = (f.currentPage <= 1);
         document.getElementById('pageNext').disabled = (f.currentPage >= f.totalPages);
+
+        // One-time: wire audit tag delegation on the table body
+        this._initAuditDelegation();
+    },
+
+    _auditDelegationInit: false,
+    _initAuditDelegation() {
+        if (this._auditDelegationInit) return;
+        const tbody = document.querySelector('.it-logs-table tbody');
+        if (!tbody) return;
+        this._auditDelegationInit = true;
+
+        tbody.addEventListener('click', (e) => {
+            const btn = e.target.closest('.audit-tag-btn');
+            if (!btn) return;
+
+            const eventId = btn.dataset.eventId;
+            const label = btn.dataset.label;
+            const isActive = btn.classList.contains('active');
+
+            // If already active, clear the label (toggle off)
+            const newLabel = isActive ? null : label;
+
+            fetch(`/api/events/${eventId}/review`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ review_label: newLabel })
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.ok) {
+                    // Update button states in this row
+                    const group = btn.closest('.audit-tag-group');
+                    group.querySelectorAll('.audit-tag-btn').forEach(b => b.classList.remove('active'));
+                    if (newLabel) btn.classList.add('active');
+                    console.debug(`[Audit] Event #${eventId} tagged as ${newLabel || 'cleared'}`);
+                } else {
+                    console.error(`[Audit] Failed: ${res.error}`);
+                }
+            })
+            .catch(err => console.error('[Audit] Network error:', err));
+        });
     },
 
     exportCSV() {
@@ -1427,7 +1477,7 @@ const App = {
                     emptyMsg.style.display = 'block';
                 }
                 // Reset KPI cards to zero so stale values from the previous range don't persist
-                this.renderKPIs({ total_warnings: 0, total_detections: 0, false_warnings: 0, false_warning_rate: 0, avg_latency: 0, peak_hour: '--' });
+                this.renderKPIs({ total_warnings: 0, total_detections: 0, false_warnings: 0, false_warning_rate: 0, avg_latency: 0, peak_latency: 0, peak_hour: '--', confusion_matrix: { tp: 0, fp: 0, fn: 0, tn: 0, total_reviewed: 0 } });
                 return;
             } else {
                 chartGrid.style.display = 'grid';
@@ -1448,6 +1498,7 @@ const App = {
     },
 
     renderKPIs(agg) {
+        // TMC-side KPI bindings (these elements only exist on TMC dashboard)
         const warnEl = document.getElementById('ana-kpi-warnings');
         if (warnEl) warnEl.textContent = agg.total_warnings;
 
@@ -1457,19 +1508,76 @@ const App = {
         const falseEl = document.getElementById('ana-kpi-false');
         if (falseEl) falseEl.textContent = agg.false_warnings;
 
+        const peakEl = document.getElementById('ana-kpi-peak');
+        if (peakEl) peakEl.textContent = agg.peak_hour || '--';
+
+        // Shared KPI bindings (exist on both or IT-only)
         const fwrEl = document.getElementById('ana-kpi-fwr');
         if (fwrEl) fwrEl.textContent = (agg.false_warning_rate !== undefined ? agg.false_warning_rate.toFixed(1) : '0.0') + '%';
 
         const latEl = document.getElementById('ana-kpi-latency');
         if (latEl) latEl.textContent = (agg.avg_latency || 0) + 'ms';
 
-        const peakEl = document.getElementById('ana-kpi-peak');
-        if (peakEl) peakEl.textContent = agg.peak_hour || '--';
+        // IT-only KPI bindings
+        const peakLatEl = document.getElementById('ana-kpi-peak-latency');
+        if (peakLatEl) peakLatEl.textContent = (agg.peak_latency || 0) + 'ms';
+
+        const reviewedEl = document.getElementById('ana-kpi-reviewed');
+        const cm = agg.confusion_matrix || { tp: 0, fp: 0, fn: 0, tn: 0, total_reviewed: 0 };
+        if (reviewedEl) reviewedEl.textContent = cm.total_reviewed;
+
+        // Live Precision = TP / (TP + FP)
+        const livePrecEl = document.getElementById('ana-kpi-live-precision');
+        if (livePrecEl) {
+            const tpFp = cm.tp + cm.fp;
+            livePrecEl.textContent = tpFp > 0 ? (cm.tp / tpFp * 100).toFixed(1) + '%' : '—';
+        }
+
+        // Live Confusion Matrix cells
+        this.renderConfusionMatrix(cm);
 
         console.debug(
             `[Analytics KPIs] warnings=${agg.total_warnings}, detections=${agg.total_detections},` +
-            ` false=${agg.false_warnings}, fwr=${agg.false_warning_rate}%, avg_lat=${agg.avg_latency}ms, peak=${agg.peak_hour}`
+            ` false=${agg.false_warnings}, fwr=${agg.false_warning_rate}%, avg_lat=${agg.avg_latency}ms, peak_lat=${agg.peak_latency}ms, reviewed=${cm.total_reviewed}`
         );
+    },
+
+    renderConfusionMatrix(cm) {
+        const total = cm.total_reviewed || 0;
+        const pct = (val) => total > 0 ? (val / total * 100).toFixed(1) + '%' : '—';
+        const cnt = (val) => `${val.toLocaleString()} event${val !== 1 ? 's' : ''}`;
+
+        const tpVal = document.getElementById('cm-tp-val');
+        const tpCnt = document.getElementById('cm-tp-count');
+        if (tpVal) tpVal.textContent = pct(cm.tp);
+        if (tpCnt) tpCnt.textContent = cnt(cm.tp);
+
+        const fpVal = document.getElementById('cm-fp-val');
+        const fpCnt = document.getElementById('cm-fp-count');
+        if (fpVal) fpVal.textContent = pct(cm.fp);
+        if (fpCnt) fpCnt.textContent = cnt(cm.fp);
+
+        const fnVal = document.getElementById('cm-fn-val');
+        const fnCnt = document.getElementById('cm-fn-count');
+        if (fnVal) fnVal.textContent = pct(cm.fn);
+        if (fnCnt) fnCnt.textContent = cnt(cm.fn);
+
+        const tnVal = document.getElementById('cm-tn-val');
+        const tnCnt = document.getElementById('cm-tn-count');
+        if (tnVal) tnVal.textContent = pct(cm.tn);
+        if (tnCnt) tnCnt.textContent = cnt(cm.tn);
+
+        // Sample status badge
+        const statusEl = document.getElementById('cm-sample-status');
+        if (statusEl) {
+            if (total === 0) {
+                statusEl.textContent = 'No audited events — tag events in Data Logs';
+                statusEl.className = 'cm-sample-badge cm-sample-empty';
+            } else {
+                statusEl.textContent = `Based on ${total.toLocaleString()} reviewed event${total !== 1 ? 's' : ''}`;
+                statusEl.className = 'cm-sample-badge cm-sample-active';
+            }
+        }
     },
 
     // computeKPIs retained for backward compat but superseded by renderKPIs(agg).

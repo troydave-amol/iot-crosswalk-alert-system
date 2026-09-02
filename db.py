@@ -138,6 +138,20 @@ def init_db():
             except Exception:
                 pass  # Column already exists
 
+            # Migration: add review_label column for live confusion-matrix auditing
+            try:
+                cursor.execute(
+                    "ALTER TABLE events ADD COLUMN review_label VARCHAR(16) NULL DEFAULT NULL"
+                )
+                print(f"  → Added 'review_label' column to events table.")
+            except Exception:
+                pass  # Column already exists
+
+            try:
+                cursor.execute("CREATE INDEX idx_review ON events (review_label)")
+            except Exception:
+                pass
+
             print(f"Database '{target_db}' and table 'events' checked/initialized successfully.")
 
             # ── RBAC: Create users table ──────────────────────────────
