@@ -7,11 +7,8 @@ models/runs/
 .tmp/
 test_videos/
 
-# Safely ignore raw images inside datasets to prevent 2GB Git crash
-datasets/02_yolo_dataset/images/
-datasets/04_raw_frames_backup/
-datasets/visual_verify_output/
-datasets/August 11, 2026 Frames/
+# Ignore the entire datasets folder to prevent repo bloat
+datasets/
 
 # Globally ignore all other large random tensor files, but permit our specific models
 *.pt
