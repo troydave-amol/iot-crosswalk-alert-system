@@ -7,6 +7,7 @@ the same YOLO inference, tracking, warning, and overlay pipeline.
 """
 
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import cv2
@@ -152,9 +153,12 @@ class VideoTestSession(LiveSession):
             self._video_current_frame = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
 
             now_perf = time.perf_counter()
+            capture_ts_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") + \
+                             f"{datetime.now(timezone.utc).microsecond // 1000:03d}Z"
             with self.state_lock:
                 self.latest_frame_raw = frame
                 self.latest_frame_capture_perf = now_perf
+                self.latest_frame_capture_ts = capture_ts_str
             self.last_frame_time = time.time()
             self.capture_frames += 1
 
@@ -173,7 +177,8 @@ class VideoTestSession(LiveSession):
             if playback_fps > 0:
                 self.stop_event.wait(1.0 / playback_fps)
 
-    def _log_db(self, out: dict, warning_device_on: bool):
+    def _log_db(self, out: dict, warning_device_on: bool,
+                capture_ts: str = None, warning_ts: str = None):
         """Override to tag test events with 'Video Test' scenario."""
         now = time.time()
         should_log = False
@@ -190,6 +195,8 @@ class VideoTestSession(LiveSession):
 
         db_payload = {
             "timestamp_iso": out["timestamp_iso"],
+            "capture_ts": capture_ts,
+            "warning_ts": warning_ts,
             "source": "yolo",
             "child_in_roi": out["child_in_roi"],
             "roi_status": out["roi_status"],

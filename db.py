@@ -152,6 +152,24 @@ def init_db():
             except Exception:
                 pass
 
+            # Migration: add capture_ts for 3-point latency timestamp logging (Point 1)
+            try:
+                cursor.execute(
+                    "ALTER TABLE events ADD COLUMN capture_ts VARCHAR(32) NULL DEFAULT NULL"
+                )
+                print(f"  → Added 'capture_ts' column to events table.")
+            except Exception:
+                pass  # Column already exists
+
+            # Migration: add warning_ts for 3-point latency timestamp logging (Point 3)
+            try:
+                cursor.execute(
+                    "ALTER TABLE events ADD COLUMN warning_ts VARCHAR(32) NULL DEFAULT NULL"
+                )
+                print(f"  → Added 'warning_ts' column to events table.")
+            except Exception:
+                pass  # Column already exists
+
             print(f"Database '{target_db}' and table 'events' checked/initialized successfully.")
 
             # ── RBAC: Create users table ──────────────────────────────

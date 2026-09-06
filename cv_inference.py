@@ -149,7 +149,9 @@ class ChildLikeDetector:
         )
 
         latency_ms = int((time.perf_counter() - t0) * 1000)
-        ts_iso = datetime.now(timezone.utc).isoformat()
+        inference_perf = time.perf_counter()
+        ts_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") + \
+                 f"{datetime.now(timezone.utc).microsecond // 1000:03d}Z"
 
         # results is a list (1 item for 1 frame)
         r = results[0]
@@ -207,6 +209,7 @@ class ChildLikeDetector:
 
         return {
             "timestamp_iso": ts_iso,
+            "inference_perf": inference_perf,
             "latency_ms": latency_ms,
             "confidence_raw": round(confidence_raw, 3),
             "child_in_roi_raw": child_in_roi_raw,

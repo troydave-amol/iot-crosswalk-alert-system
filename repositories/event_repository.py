@@ -26,6 +26,8 @@ load_dotenv()
 RAW_EXPORT_FIELDS = [
     "id",
     "timestamp_iso",
+    "capture_ts",
+    "warning_ts",
     "source",
     "child_in_roi",
     "roi_status",
@@ -233,12 +235,14 @@ class EventRepository:
             with conn.cursor() as cursor:
                 sql = """
                 INSERT INTO events (
-                    timestamp_iso, source, child_in_roi, roi_status, confidence, latency_ms,
+                    timestamp_iso, capture_ts, warning_ts,
+                    source, child_in_roi, roi_status, confidence, latency_ms,
                     warning_logic_on, switch_enabled, warning_device_on, child_count,
                     battery_percent, solar_status,
                     scenario, camera_status, edge_status, led_driver_status
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s, %s, %s,
                     %s, %s, %s, %s,
                     %s, %s,
                     %s, %s, %s, %s
@@ -264,6 +268,8 @@ class EventRepository:
 
                 values = (
                     ts_val,
+                    payload.get("capture_ts"),
+                    payload.get("warning_ts"),
                     payload["source"],
                     int(payload["child_in_roi"]),
                     payload["roi_status"],

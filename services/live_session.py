@@ -132,6 +132,7 @@ class LiveSession:
         self.infer_fps = 0.0
         self.stream_latency_ms = 0
         self.latest_frame_capture_perf = 0.0
+        self.latest_frame_capture_ts = None
         self.last_perf_ts = time.time()
         self.last_perf_capture = 0
         self.last_perf_infer = 0
@@ -320,9 +321,12 @@ class LiveSession:
                 continue
 
             now_perf = time.perf_counter()
+            capture_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") + \
+                         f"{datetime.now(timezone.utc).microsecond // 1000:03d}Z"
             with self.state_lock:
                 self.latest_frame_raw = frame
                 self.latest_frame_capture_perf = now_perf
+                self.latest_frame_capture_ts = capture_ts
             self.last_frame_time = time.time()
             self.capture_frames += 1
 
@@ -349,7 +353,8 @@ class LiveSession:
         except Exception as e:
             print(f"[LIVE] ROI reload error ({self.source_key}): {e}")
 
-    def _log_db(self, out: dict, warning_device_on: bool):
+    def _log_db(self, out: dict, warning_device_on: bool,
+                capture_ts: str = None, warning_ts: str = None):
         now = time.time()
         should_log = False
 
@@ -365,6 +370,8 @@ class LiveSession:
 
         db_payload = {
             "timestamp_iso": out["timestamp_iso"],
+            "capture_ts": capture_ts,
+            "warning_ts": warning_ts,
             "source": "yolo",
             "child_in_roi": out["child_in_roi"],
             "roi_status": out["roi_status"],
@@ -416,6 +423,7 @@ class LiveSession:
             with self.state_lock:
                 raw = self.latest_frame_raw
                 capture_perf = self.latest_frame_capture_perf
+                capture_ts = self.latest_frame_capture_ts
             if raw is None:
                 continue
 
@@ -457,6 +465,7 @@ class LiveSession:
                 continue
 
             out_raw = self.detector.infer_frame(frame, roi)
+            inference_perf = out_raw.get("inference_perf", time.perf_counter())
 
             # --- 1. Apply Anti-Flicker Box Tracking ---
             raw_detections = out_raw.get("detections", [])
@@ -499,6 +508,25 @@ class LiveSession:
             # --- Send command to ESP32 relay ---
             esp32_relay.set_state(warning_device_on)
 
+            # --- Point 3: Warning decision timestamp ---
+            warning_perf = time.perf_counter()
+            warning_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.") + \
+                         f"{datetime.now(timezone.utc).microsecond // 1000:03d}Z"
+
+            # --- 3-Point Latency Breakdown (monotonic deltas) ---
+            infer_delta_ms = max(0, int(round((inference_perf - capture_perf) * 1000))) if capture_perf > 0 else 0
+            warning_delta_ms = max(0, int(round((warning_perf - inference_perf) * 1000)))
+            total_e2e_ms = infer_delta_ms + warning_delta_ms
+
+            latency_breakdown = {
+                "capture_ts": capture_ts,
+                "inference_ts": out["timestamp_iso"],
+                "warning_ts": warning_ts,
+                "infer_delta_ms": infer_delta_ms,
+                "warning_delta_ms": warning_delta_ms,
+                "total_e2e_ms": total_e2e_ms,
+            }
+
             relay_diag = esp32_relay.get_diagnostics()
             edge_metrics = get_edge_compute_metrics()
 
@@ -525,11 +553,13 @@ class LiveSession:
                 "roi_status": out["roi_status"],
                 "warning_device_on": warning_device_on,
                 "source": "yolo",
+                "latency_breakdown": latency_breakdown,
             }
             socketio.emit("status_update", payload)
 
             try:
-                self._log_db(out, warning_device_on)
+                self._log_db(out, warning_device_on,
+                             capture_ts=capture_ts, warning_ts=warning_ts)
             except Exception as e:
                 print(f"[LIVE] DB logging error ({self.source_key}): {e}")
 

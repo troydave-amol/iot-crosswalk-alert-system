@@ -187,7 +187,10 @@ const DataContract = {
             scenario: raw.scenario || 'Normal',
             camera_status: raw.camera_status || 'OK',
             edge_status: raw.edge_status || 'OK',
-            led_driver_status: raw.led_driver_status || 'Ready'
+            led_driver_status: raw.led_driver_status || 'Ready',
+
+            // 3-Point Latency Breakdown (IT Specialist only)
+            latency_breakdown: raw.latency_breakdown || null
         };
     },
 

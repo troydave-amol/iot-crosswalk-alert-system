@@ -330,6 +330,7 @@ const App = {
         status.frame_drop_rate = (typeof data.frame_drop_rate === 'number') ? data.frame_drop_rate : 0.0;
         if (data.edge_compute) status.edge_compute = data.edge_compute;
         if (data.relay_status) status.relay_status = data.relay_status;
+        if (data.latency_breakdown) status.latency_breakdown = data.latency_breakdown;
         status.last_update_str = new Date().toLocaleTimeString();
 
         if (data.source === "yolo") {
@@ -544,7 +545,69 @@ const App = {
         const battText = document.getElementById('power-battery-text');
         if (battText) battText.textContent = 'N/A';
 
+        // 3-Point Latency Breakdown (IT Specialist exclusive)
+        this.updateLatencyBreakdown(status);
+
         this.renderLiveFeed();
+    },
+
+    /**
+     * Updates the 3-point latency breakdown card with live data.
+     * Formats ISO timestamps to Manila local time (HH:MM:SS.mmm).
+     */
+    updateLatencyBreakdown(status) {
+        const card = document.getElementById('latencyBreakdownCard');
+        if (!card) return;  // Not on IT dashboard
+
+        const bd = status.latency_breakdown;
+        if (!bd) return;
+
+        const formatTs = (isoStr) => {
+            if (!isoStr || isoStr === '--') return '--:--:--.---';
+            try {
+                const d = new Date(isoStr);
+                if (isNaN(d.getTime())) return '--:--:--.---';
+                // Manila time (UTC+8) with ms precision
+                const manila = new Date(d.getTime() + (8 * 60 * 60 * 1000));
+                const hh = String(manila.getUTCHours()).padStart(2, '0');
+                const mm = String(manila.getUTCMinutes()).padStart(2, '0');
+                const ss = String(manila.getUTCSeconds()).padStart(2, '0');
+                const ms = String(manila.getUTCMilliseconds()).padStart(3, '0');
+                return `${hh}:${mm}:${ss}.${ms}`;
+            } catch (e) {
+                return '--:--:--.---';
+            }
+        };
+
+        const captureTs = document.getElementById('lt-capture-ts');
+        const inferenceTs = document.getElementById('lt-inference-ts');
+        const warningTs = document.getElementById('lt-warning-ts');
+        const inferDelta = document.getElementById('lt-infer-delta');
+        const warningDelta = document.getElementById('lt-warning-delta');
+        const totalE2e = document.getElementById('lt-total-e2e');
+
+        if (captureTs) captureTs.textContent = formatTs(bd.capture_ts);
+        if (inferenceTs) inferenceTs.textContent = formatTs(bd.inference_ts);
+        if (warningTs) warningTs.textContent = formatTs(bd.warning_ts);
+
+        if (inferDelta) {
+            const ms = (typeof bd.infer_delta_ms === 'number') ? bd.infer_delta_ms : '—';
+            inferDelta.innerHTML = `+${ms} ms <small>inference</small>`;
+        }
+        if (warningDelta) {
+            const ms = (typeof bd.warning_delta_ms === 'number') ? bd.warning_delta_ms : '—';
+            warningDelta.innerHTML = `+${ms} ms <small>relay / warning</small>`;
+        }
+        if (totalE2e) {
+            const ms = (typeof bd.total_e2e_ms === 'number') ? bd.total_e2e_ms : '—';
+            totalE2e.textContent = `${ms} ms`;
+            // Color-code based on SLA (<100ms green, 100-200 yellow, >200 red)
+            if (typeof bd.total_e2e_ms === 'number') {
+                if (bd.total_e2e_ms < 100) totalE2e.style.color = '#22c55e';
+                else if (bd.total_e2e_ms < 200) totalE2e.style.color = '#f59e0b';
+                else totalE2e.style.color = '#ef4444';
+            }
+        }
     },
 
     renderLiveFeed() {

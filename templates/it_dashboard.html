@@ -263,19 +263,52 @@
                             <!-- Feed items -->
                         </div>
                     </div>
-                    <div class="card">
-                        <h3>Power System</h3>
-                        <div class="row mt-4">
-                            <div class="flex-col">
-                                <small>Solar Status</small>
-                                <strong id="power-solar-status">N/A — Hardware pending</strong>
-                            </div>
-                            <div class="flex-col mt-4">
-                                <small>Battery Level</small>
-                                <div class="power-bar-track">
-                                    <div id="power-battery-bar" class="power-bar-fill" style="width:0%"></div>
+                    <!-- 3-Point Latency Breakdown (IT Specialist Exclusive — relocated to replace pending Power System) -->
+                    <div class="card latency-breakdown-card" id="latencyBreakdownCard">
+                        <div class="latency-card-header">
+                            <h3>
+                                <i class="fa-solid fa-stopwatch" style="margin-right: 6px; color: var(--primary-accent);"></i>
+                                Pipeline Latency Breakdown
+                            </h3>
+                            <i class="fa-solid fa-circle-info kpi-info-icon" title="End-to-end latency from frame capture through YOLO inference to warning relay command, computed using monotonic clocks for precision."></i>
+                        </div>
+                        <div class="latency-timeline" id="latencyTimeline">
+                            <!-- Point 1: Frame Capture -->
+                            <div class="lt-point">
+                                <div class="lt-dot lt-dot-capture"></div>
+                                <div class="lt-info">
+                                    <span class="lt-label">Frame Captured</span>
+                                    <span class="lt-ts" id="lt-capture-ts">--:--:--.---</span>
                                 </div>
-                                <small id="power-battery-text">N/A</small>
+                            </div>
+                            <div class="lt-segment">
+                                <div class="lt-connector"></div>
+                                <span class="lt-delta" id="lt-infer-delta">— ms <small>inference</small></span>
+                            </div>
+                            <!-- Point 2: Inference Output -->
+                            <div class="lt-point">
+                                <div class="lt-dot lt-dot-inference"></div>
+                                <div class="lt-info">
+                                    <span class="lt-label">Inference Done</span>
+                                    <span class="lt-ts" id="lt-inference-ts">--:--:--.---</span>
+                                </div>
+                            </div>
+                            <div class="lt-segment">
+                                <div class="lt-connector"></div>
+                                <span class="lt-delta" id="lt-warning-delta">— ms <small>relay / warning</small></span>
+                            </div>
+                            <!-- Point 3: Warning Decision -->
+                            <div class="lt-point">
+                                <div class="lt-dot lt-dot-warning"></div>
+                                <div class="lt-info">
+                                    <span class="lt-label">Warning Trigger</span>
+                                    <span class="lt-ts" id="lt-warning-ts">--:--:--.---</span>
+                                </div>
+                            </div>
+                            <!-- Total -->
+                            <div class="lt-total-bar">
+                                <span class="lt-total-label">Total End-to-End</span>
+                                <span class="lt-total-value" id="lt-total-e2e">— ms</span>
                             </div>
                         </div>
                     </div>

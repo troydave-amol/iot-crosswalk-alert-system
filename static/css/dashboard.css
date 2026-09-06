@@ -1247,6 +1247,10 @@ body.dark-mode .it-false-badge.no {
     .dashboard-grid {
         grid-template-columns: 1fr;
     }
+
+    .dashboard-grid > * {
+        grid-column: span 1 !important;
+    }
 }
 
 /* Logs Page Specifics */
@@ -4543,5 +4547,195 @@ body.dark-mode .audit-tag-btn.active {
     background: var(--primary-accent);
     border-color: var(--primary-accent);
     color: #fff;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3-Point Latency Breakdown Card (IT Specialist exclusive)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.latency-breakdown-card {
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.latency-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.latency-card-header h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-color, #1e293b);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: -0.2px;
+}
+
+.latency-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 2px 0 0 0;
+    flex: 1;
+}
+
+/* Each point (dot + info) */
+.lt-point {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 3px 0;
+    position: relative;
+}
+
+/* Color-coded dots */
+.lt-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+    z-index: 2;
+}
+
+.lt-dot-capture {
+    background: #06b6d4;
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.2);
+}
+
+.lt-dot-inference {
+    background: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+}
+
+.lt-dot-warning {
+    background: #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+.lt-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.lt-label {
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: var(--text-color);
+    line-height: 1.2;
+}
+
+.lt-ts {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+}
+
+/* Connector segment between points */
+.lt-segment {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 2px 0 2px 5px;
+}
+
+.lt-connector {
+    width: 2px;
+    height: 22px;
+    background: linear-gradient(to bottom, rgba(255,146,128,0.35), rgba(255,146,128,0.15));
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.lt-delta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--primary-accent);
+    background: rgba(255, 146, 128, 0.08);
+    border: 1px solid rgba(255, 146, 128, 0.18);
+    border-radius: 5px;
+    padding: 2px 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    line-height: 1.3;
+}
+
+.lt-delta small {
+    font-weight: 400;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    opacity: 0.85;
+}
+
+/* Total bar */
+.lt-total-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 7px;
+    background: rgba(255, 146, 128, 0.06);
+    border: 1px solid rgba(255, 146, 128, 0.15);
+    border-top: 2px solid rgba(255, 146, 128, 0.3);
+}
+
+.lt-total-label {
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--text-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.lt-total-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #22c55e;
+}
+
+/* Dark mode overrides */
+body.dark-mode .latency-card-header h3 {
+    color: var(--text-color);
+}
+
+body.dark-mode .lt-dot-capture {
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.3);
+}
+
+body.dark-mode .lt-dot-inference {
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3);
+}
+
+body.dark-mode .lt-dot-warning {
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3);
+}
+
+body.dark-mode .lt-connector {
+    background: linear-gradient(to bottom, rgba(255,146,128,0.45), rgba(255,146,128,0.2));
+}
+
+body.dark-mode .lt-delta {
+    background: rgba(255, 146, 128, 0.12);
+    border-color: rgba(255, 146, 128, 0.25);
+}
+
+body.dark-mode .lt-total-bar {
+    background: rgba(255, 146, 128, 0.08);
+    border-color: rgba(255, 146, 128, 0.2);
 }
 
