@@ -472,7 +472,7 @@
 
                 <!-- B) Compact System Config Badge Strip -->
                 <div class="config-strip">
-                    <span class="config-badge" title="Active YOLOv8 weight file"><i class="fa-solid fa-file-code"></i> {{ model_name or 'yolov8n_crosswalk_v2_1111_frames.pt' }}</span>
+                    <span class="config-badge" title="Active YOLOv8 weight file"><i class="fa-solid fa-file-code"></i> {{ model_name or 'yolov8n_1500_frames.pt' }}</span>
                     <span class="config-badge" title="Neural network architecture"><i class="fa-solid fa-microchip"></i> YOLOv8n</span>
                     <span class="config-badge" title="Input resolution for inference"><i class="fa-solid fa-vector-square"></i> {{ yolo_imgsz or 640 }}&times;{{ yolo_imgsz or 640 }}</span>
                     <span class="config-badge" title="Minimum child confidence for physical warning"><i class="fa-solid fa-sliders"></i> &ge;{{ child_conf or '0.65' }} Conf</span>

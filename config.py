@@ -25,7 +25,7 @@ load_dotenv()
 # ────────────────────────────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "manual_crosswalk_detector.pt"
+DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "yolov8n_1500_frames.pt"
 ROI_PATH = Path("roi_config.json")
 
 

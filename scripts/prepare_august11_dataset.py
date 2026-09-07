@@ -19,9 +19,9 @@ from pathlib import Path
 
 # ── Configuration ──────────────────────────────────────────────
 PROJECT_ROOT = Path(r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics")
-EXPORTS_DIR  = PROJECT_ROOT / "datasets" / "01_label_studio_exports" / "August 11, 2026"
+EXPORTS_DIR  = PROJECT_ROOT / "datasets" / "01_label_studio_exports" / "August_11_2026"
 FRAMES_DIR   = PROJECT_ROOT / "datasets" / "August 11, 2026 Frames"
-OUTPUT_DIR   = PROJECT_ROOT / "datasets" / "august11_15_Batch_Yolo"
+OUTPUT_DIR   = PROJECT_ROOT / "datasets" / "02_yolo_dataset" / "august11_15_batches"
 TMP_DIR      = OUTPUT_DIR / "tmp_extracted"
 
 SPLIT_RATIO  = 0.80  # 80% train, 20% validation
