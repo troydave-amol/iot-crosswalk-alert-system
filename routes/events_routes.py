@@ -223,7 +223,6 @@ def api_analytics_route():
             "top_scenario": agg.get("top_scenario"),
             "confidence_bins": agg.get("confidence_bins", [0, 0, 0, 0, 0]),
             "scenario_distribution": agg.get("scenario_distribution", []),
-            "confusion_matrix": agg.get("confusion_matrix", {"tp": 0, "fp": 0, "fn": 0, "tn": 0, "total_reviewed": 0}),
             "time_series": agg["time_series"]
         }
         return jsonify(response)
@@ -232,34 +231,4 @@ def api_analytics_route():
         print(f"API ANALYTICS ERROR: {e}")
         return jsonify({"ok": False, "error": "db_unavailable"}), 503
 
-
-@events_bp.route("/api/events/<int:event_id>/review", methods=["POST"])
-@login_required
-def api_event_review(event_id):
-    """
-    Tag an event with a human-audited review label for live confusion matrix.
-    Accepts: {"review_label": "TP" | "FP" | "FN" | "TN" | null}
-    """
-    from repositories.event_repository import EventRepository
-    data = request.get_json(silent=True) or {}
-    label = data.get("review_label")
-
-    # Normalize: accept null/None to clear a label
-    if label is not None:
-        label = str(label).upper().strip()
-        if label not in ("TP", "FP", "FN", "TN"):
-            return jsonify({"ok": False, "error": f"Invalid label '{label}'. Use TP, FP, FN, TN, or null."}), 400
-
-    try:
-        repo = EventRepository()
-        success = repo.update_event_review(event_id, label)
-        if success:
-            return jsonify({"ok": True, "event_id": event_id, "review_label": label})
-        else:
-            return jsonify({"ok": False, "error": "Event not found"}), 404
-    except ValueError as ve:
-        return jsonify({"ok": False, "error": str(ve)}), 400
-    except Exception as e:
-        print(f"API REVIEW ERROR: {e}")
-        return jsonify({"ok": False, "error": "server_error"}), 500
 

@@ -138,7 +138,7 @@ def init_db():
             except Exception:
                 pass  # Column already exists
 
-            # Migration: add review_label column for live confusion-matrix auditing
+            # Migration: review_label column (retained for backward compat; no longer actively used)
             try:
                 cursor.execute(
                     "ALTER TABLE events ADD COLUMN review_label VARCHAR(16) NULL DEFAULT NULL"
