@@ -47,7 +47,7 @@ class WarningController:
     - Prevent rapid ON/OFF chatter with min_toggle_interval_sec
     """
 
-    def __init__(self, hold_seconds: float = 2.0, min_toggle_interval_sec: float = 0.75):
+    def __init__(self, hold_seconds: float = 3.5, min_toggle_interval_sec: float = 0.75):
         self.hold_seconds = float(hold_seconds)
         self.min_toggle_interval_sec = float(min_toggle_interval_sec)
         self.state = WarningState(

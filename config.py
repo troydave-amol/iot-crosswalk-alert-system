@@ -81,7 +81,7 @@ def get_time_scenario() -> str:
 CHILD_CONF              = _env_float("LIVE_CHILD_CONF", 0.65)
 MIN_CHILD_BBOX_RATIO    = _env_float("LIVE_MIN_CHILD_BBOX_RATIO", 0.18)
 DOMINANCE_IOU           = _env_float("LIVE_DOMINANCE_IOU", 0.70)
-WARNING_HOLD_SECONDS    = _env_float("LIVE_WARNING_HOLD_SECONDS", 2.0)
+WARNING_HOLD_SECONDS    = _env_float("LIVE_WARNING_HOLD_SECONDS", 3.5)
 WARNING_MIN_TOGGLE_SEC  = _env_float("LIVE_WARNING_MIN_TOGGLE_SEC", 0.75)
 YOLO_IMGSZ              = _env_int("LIVE_YOLO_IMGSZ", 640)
 INFER_INTERVAL_SEC      = _env_float("LIVE_INFER_INTERVAL_SEC", 0.125)
