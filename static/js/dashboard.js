@@ -150,9 +150,11 @@ const App = {
         this.setupTick(); // 1s tick for UI refresh and polling (live data only)
         this.setupAnalytics();
 
-        // Init Logs Controls
-        this.setupLogEvents();
-        this.renderLogsTable(); // Initial render
+        // Init Logs Controls (IT Specialist only)
+        if (document.getElementById('logs-section')) {
+            this.setupLogEvents();
+            this.renderLogsTable(); // Initial render
+        }
 
         // Init Reports
         this.setupReports();
@@ -168,8 +170,8 @@ const App = {
         // Change Password Modal Init (Shared)
         this.setupPasswordModal();
 
-        // Initial Load for Logs if starting there
-        if (window.location.hash === '#logs') {
+        // Initial Load for Logs if starting there (IT Specialist only)
+        if (window.location.hash === '#logs' && document.getElementById('logs-section')) {
             this.loadLogsFromDB();
         }
 
@@ -190,8 +192,8 @@ const App = {
             // Always update UI on tick
             this.updateUI();
 
-            // Auto-refresh Logs if on logs page
-            if (window.location.hash === '#logs') {
+            // Auto-refresh Logs if on logs page (IT Specialist only)
+            if (window.location.hash === '#logs' && document.getElementById('logs-section')) {
                 this.renderLogsTable(true);
             }
 
@@ -648,7 +650,7 @@ const App = {
         // UI Loading State (optional but good)
         const tbody = document.getElementById('logsTableBody');
         if (tbody && f.currentPage === 1 && !this.state.logsPollingTimer) {
-            const colCount = document.querySelector('#logsTable.tmc-logs-table') ? 3 : (document.querySelector('#logsTable.it-logs-table') ? 6 : 8);
+            const colCount = document.querySelector('#logsTable.it-logs-table') ? 6 : 8;
             // Only show explicit loading on first load or manual filter change, not every poll
             tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding:20px; color:#888;"><i class="fa-solid fa-spinner fa-spin"></i> Loading DB logs...</td></tr>`;
         }
@@ -996,12 +998,11 @@ const App = {
         if (f.currentPage > f.totalPages) f.currentPage = f.totalPages;
         if (f.currentPage < 1) f.currentPage = 1;
 
-        const isTmcSimplified = document.querySelector('#logsTable.tmc-logs-table') !== null;
         const isItAudit = document.querySelector('#logsTable.it-logs-table') !== null;
 
         // Render Rows
         if (displayLogs.length === 0) {
-            const colCount = isTmcSimplified ? 3 : (isItAudit ? 6 : 8);
+            const colCount = isItAudit ? 6 : 8;
             tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center; padding:20px; color:#888;">No logs found.</td></tr>`;
         } else {
             tbody.innerHTML = displayLogs.map(log => {
@@ -1023,46 +1024,6 @@ const App = {
                 } else {
                     timeStr = log.timestamp_iso || log.timestamp || 'Unknown';
                     dateTimeStr = log.timestamp_iso || log.timestamp || 'Unknown';
-                }
-
-                if (isTmcSimplified) {
-                    // Consolidated status: warning triggered if child_in_roi OR warning device on
-                    const isWarning = log.child_in_roi || this.isOn(log.warning_device_on ?? log.warning_on);
-                    const rowClass = isWarning ? 'tmc-row-warning' : 'tmc-row-clear';
-
-                    // Status pill
-                    const pillClass = isWarning ? 'warning' : 'clear';
-                    const pillIcon = isWarning
-                        ? '<i class="fa-solid fa-triangle-exclamation"></i>'
-                        : '<i class="fa-solid fa-check"></i>';
-                    const pillLabel = isWarning ? 'Warning Triggered' : 'Clear';
-
-                    // Contextual description
-                    const statusDesc = isWarning
-                        ? 'Child detected in crosswalk ROI'
-                        : 'Crosswalk clear · Standby';
-
-                    // Warning device badge
-                    const deviceOn = this.isOn(log.warning_device_on ?? log.warning_on);
-                    const deviceClass = deviceOn ? 'active' : 'standby';
-                    const deviceLabel = deviceOn ? 'ACTIVE' : 'STANDBY';
-
-                    return `
-                    <tr class="${rowClass}">
-                        <td><span class="tmc-log-time">${timeStr}</span></td>
-                        <td>
-                            <div class="tmc-status-cell">
-                                <span class="tmc-status-pill ${pillClass}">${pillIcon} ${pillLabel}</span>
-                                <span class="tmc-status-desc">${statusDesc}</span>
-                            </div>
-                        </td>
-                        <td class="tmc-device-cell">
-                            <span class="tmc-device-badge ${deviceClass}">
-                                <span class="tmc-device-dot"></span>
-                                ${deviceLabel}
-                            </span>
-                        </td>
-                    </tr>`;
                 }
 
                 if (isItAudit) {
@@ -1131,10 +1092,15 @@ const App = {
             rangeText = `Showing ${startIdx + 1}–${startIdx + currentCount} of ${total} persistent events`;
         }
 
-        document.getElementById('resultCount').textContent = rangeText;
-        document.getElementById('pageIndicator').textContent = `Page ${f.currentPage} of ${f.totalPages}`;
-        document.getElementById('pagePrev').disabled = (f.currentPage <= 1);
-        document.getElementById('pageNext').disabled = (f.currentPage >= f.totalPages);
+        const resultCountEl = document.getElementById('resultCount');
+        const pageIndicatorEl = document.getElementById('pageIndicator');
+        const pagePrevBtn = document.getElementById('pagePrev');
+        const pageNextBtn = document.getElementById('pageNext');
+
+        if (resultCountEl) resultCountEl.textContent = rangeText;
+        if (pageIndicatorEl) pageIndicatorEl.textContent = `Page ${f.currentPage} of ${f.totalPages}`;
+        if (pagePrevBtn) pagePrevBtn.disabled = (f.currentPage <= 1);
+        if (pageNextBtn) pageNextBtn.disabled = (f.currentPage >= f.totalPages);
     },
 
     exportCSV() {
@@ -1250,7 +1216,17 @@ const App = {
 
     setupNavigation() {
         const handleHashChange = () => {
-            const hash = window.location.hash.slice(1) || 'live';
+            let hash = window.location.hash.slice(1) || 'live';
+
+            // Route guard: if hash points to a nonexistent section on this page
+            // (e.g. TMC Officer deep-linking to #logs), gracefully fallback to #live
+            if (!document.getElementById(`${hash}-section`)) {
+                hash = 'live';
+                if (window.location.hash && window.location.hash !== '#live') {
+                    window.location.replace('#live');
+                }
+            }
+
             this.state.currentSection = hash;
             document.querySelectorAll('.nav-item').forEach(el => {
                 el.classList.toggle('active', el.getAttribute('href') === `#${hash}`);
@@ -1259,8 +1235,8 @@ const App = {
                 el.classList.toggle('active', el.id === `${hash}-section`);
             });
 
-            // Logs Polling Logic — always fetch from DB
-            if (hash === 'logs') {
+            // Logs Polling Logic — only if logs-section exists (IT Specialist)
+            if (hash === 'logs' && document.getElementById('logs-section')) {
                 this.loadLogsFromDB();
                 // Start Polling (10s)
                 if (this.state.logsPollingTimer) clearInterval(this.state.logsPollingTimer);
@@ -1306,9 +1282,21 @@ const App = {
         handleHashChange();
     },
 
+    getConfidenceBarColors(bins) {
+        const isDark = (this.state && this.state.theme === 'dark') || document.body.classList.contains('dark-mode');
+        const validBins = Array.isArray(bins) ? bins : [0, 0, 0, 0, 0];
+        const maxVal = Math.max(...validBins);
+
+        // Emphasize the dominant/highest bar with solid fill; mute others with a soft translucent tint
+        return validBins.map(val => {
+            if (maxVal > 0 && val === maxVal) {
+                return isDark ? '#a855f7' : '#45315D';
+            }
+            return isDark ? 'rgba(168, 85, 247, 0.25)' : 'rgba(69, 49, 93, 0.22)';
+        });
+    },
+
     setupAnalytics() {
-        // 1. Chart Init
-        // Common Chart Options
         // 1. Chart Init
         const isDark = this.state.theme === 'dark';
         const gridColor = isDark ? '#333333' : '#f0f0f0';
@@ -1372,21 +1360,80 @@ const App = {
             });
         }
 
-        // C) Confidence (Histogram Bar)
+        // C) Confidence (Histogram Bar — rounded tops, dominant bar emphasis, overhead value labels)
         const ctxC = document.getElementById('chartConfidence')?.getContext('2d');
         if (ctxC) {
+            const initialBins = [0, 0, 0, 0, 0];
             this.state.charts.confidence = new Chart(ctxC, {
                 type: 'bar',
                 data: {
                     labels: ['0.0-0.2', '0.2-0.4', '0.4-0.6', '0.6-0.8', '0.8-1.0'],
                     datasets: [{
-                        label: 'Count',
-                        data: [0, 0, 0, 0, 0],
-                        backgroundColor: '#45315D',
-                        borderRadius: 4
+                        label: 'Detections',
+                        data: initialBins,
+                        backgroundColor: this.getConfidenceBarColors(initialBins),
+                        borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+                        borderSkipped: false
                     }]
                 },
-                options: commonOptions
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 600 },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ` ${ctx.parsed.y.toLocaleString()} detections`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                color: isDark ? '#94a3b8' : '#64748b',
+                                font: { family: 'Satoshi, sans-serif', weight: '600', size: 11 }
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grace: '18%', // Headroom so overhead labels are never clipped
+                            grid: {
+                                color: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+                                borderDash: [4, 4]
+                            },
+                            ticks: {
+                                color: isDark ? '#94a3b8' : '#64748b',
+                                precision: 0,
+                                font: { family: 'JetBrains Mono, monospace', size: 11 }
+                            }
+                        }
+                    }
+                },
+                plugins: [{
+                    id: 'confidenceBarLabels',
+                    afterDatasetsDraw(chart) {
+                        const { ctx, data } = chart;
+                        const meta = chart.getDatasetMeta(0);
+                        if (!meta || !meta.data) return;
+                        ctx.save();
+                        const dark = document.body.classList.contains('dark-mode');
+                        ctx.font = '600 11px Satoshi, -apple-system, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        meta.data.forEach((bar, index) => {
+                            const val = data.datasets[0].data[index];
+                            if (val !== undefined && val !== null) {
+                                ctx.fillStyle = val > 0
+                                    ? (dark ? '#f1f5f9' : '#1e293b')
+                                    : (dark ? 'rgba(148, 163, 184, 0.4)' : 'rgba(100, 116, 139, 0.45)');
+                                ctx.fillText(val.toLocaleString(), bar.x, bar.y - 4);
+                            }
+                        });
+                        ctx.restore();
+                    }
+                }]
             });
         }
 
@@ -1504,7 +1551,7 @@ const App = {
                     emptyMsg.style.display = 'block';
                 }
                 // Reset KPI cards to zero so stale values from the previous range don't persist
-                this.renderKPIs({ total_warnings: 0, total_detections: 0, false_warnings: 0, false_warning_rate: 0, avg_latency: 0, peak_latency: 0, peak_hour: '--', confusion_matrix: { tp: 0, fp: 0, fn: 0, tn: 0, total_reviewed: 0 } });
+                this.renderKPIs({ total_warnings: 0, total_detections: 0, false_warnings: 0, false_warning_rate: 0, avg_latency: 0, peak_latency: 0, peak_hour: '--' });
                 return;
             } else {
                 chartGrid.style.display = 'grid';
@@ -1587,7 +1634,9 @@ const App = {
         // C) Confidence histogram (server-computed per-bucket counts)
         if (this.state.charts.confidence) {
             const chart = this.state.charts.confidence;
-            chart.data.datasets[0].data = agg.confidence_bins || [0, 0, 0, 0, 0];
+            const bins = agg.confidence_bins || [0, 0, 0, 0, 0];
+            chart.data.datasets[0].data = bins;
+            chart.data.datasets[0].backgroundColor = this.getConfidenceBarColors(bins);
             chart.update('none');
         }
 
@@ -3136,6 +3185,9 @@ const App = {
             if (chart.options.scales.y) {
                 chart.options.scales.y.grid.color = gridColor;
                 chart.options.scales.y.ticks.color = textColor;
+            }
+            if (chart === this.state.charts.confidence && chart.data?.datasets?.[0]) {
+                chart.data.datasets[0].backgroundColor = this.getConfidenceBarColors(chart.data.datasets[0].data);
             }
             chart.update();
         });

@@ -459,8 +459,16 @@
                 </div>
 
                 <!-- A) Section Header + Range Filter -->
-                <div class="filter-bar" style="justify-content: space-between; align-items: center;">
-                    <div style="font-weight: 700; font-size: 1.15rem; color: var(--text-color);">Model Accuracy & Diagnostics</div>
+                <div class="ana-section-header">
+                    <div class="ana-header-lockup">
+                        <div class="ana-header-chip">
+                            <i class="fa-solid fa-chart-pie"></i>
+                        </div>
+                        <div class="ana-title-block">
+                            <h2 class="ana-main-title">Model Accuracy &amp; Diagnostics</h2>
+                            <p class="ana-main-desc">Real-time inference telemetry and offline model validation benchmarks</p>
+                        </div>
+                    </div>
                     <div class="btn-group">
                         <button class="btn btn-sm btn-preset" data-ana-range="15m">Last 15m</button>
                         <button class="btn btn-sm btn-preset" data-ana-range="1h">Last Hour</button>
@@ -469,111 +477,205 @@
                     </div>
                 </div>
 
+                <!-- B) Live Operational KPI Cards (Unified Anatomy) -->
+                <div class="ana-metrics-grid cols-3">
+                    <div class="metric-card">
+                        <div class="metric-card-top">
+                            <div class="metric-icon-chip chip-cyan">
+                                <i class="fa-solid fa-gauge-high"></i>
+                            </div>
+                            <div class="metric-meta">
+                                <div class="metric-label">
+                                    Avg Latency
+                                    <i class="fa-solid fa-circle-info kpi-info-icon" title="Mean YOLOv8 inference time per video frame, excluding outlier idle gaps"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="metric-value-wrap">
+                            <div class="metric-value" id="ana-kpi-latency" style="color: #0891b2;">0ms</div>
+                        </div>
+                        <div class="metric-sub">
+                            <i class="fa-solid fa-microchip"></i> Mean per-frame inference
+                        </div>
+                    </div>
 
-                <!-- C) Live Operational KPI Cards -->
-                <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 24px;">
-                    <div class="card">
-                        <div class="card-title">Avg Latency <i class="fa-solid fa-circle-info kpi-info-icon" title="Mean YOLOv8 inference time per video frame, excluding outlier idle gaps"></i></div>
-                        <div class="card-value" id="ana-kpi-latency" style="color: #06b6d4;">0ms</div>
+                    <div class="metric-card">
+                        <div class="metric-card-top">
+                            <div class="metric-icon-chip chip-purple">
+                                <i class="fa-solid fa-bolt-lightning"></i>
+                            </div>
+                            <div class="metric-meta">
+                                <div class="metric-label">
+                                    Peak Latency
+                                    <i class="fa-solid fa-circle-info kpi-info-icon" title="Highest single-frame inference time in this period"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="metric-value-wrap">
+                            <div class="metric-value" id="ana-kpi-peak-latency" style="color: #7c3aed;">0ms</div>
+                        </div>
+                        <div class="metric-sub">
+                            <i class="fa-solid fa-arrow-trend-up"></i> Max latency in window
+                        </div>
                     </div>
-                    <div class="card">
-                        <div class="card-title">Peak Latency <i class="fa-solid fa-circle-info kpi-info-icon" title="Highest single-frame inference time in this period"></i></div>
-                        <div class="card-value" id="ana-kpi-peak-latency" style="color: #8b5cf6;">0ms</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">False Warning Rate <i class="fa-solid fa-circle-info kpi-info-icon" title="Warnings triggered when no child was in the ROI — lower is better"></i></div>
-                        <div class="card-value" id="ana-kpi-fwr" style="color: #f59e0b;">0.0%</div>
+
+                    <div class="metric-card">
+                        <div class="metric-card-top">
+                            <div class="metric-icon-chip chip-amber">
+                                <i class="fa-solid fa-shield-halved"></i>
+                            </div>
+                            <div class="metric-meta">
+                                <div class="metric-label">
+                                    False Warning Rate
+                                    <i class="fa-solid fa-circle-info kpi-info-icon" title="Warnings triggered when no child was in the ROI — lower is better"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="metric-value-wrap">
+                            <div class="metric-value" id="ana-kpi-fwr" style="color: #d97706;">0.0%</div>
+                        </div>
+                        <div class="metric-sub positive">
+                            <i class="fa-solid fa-shield-check"></i> Benchmark target: &lt; 5.0%
+                        </div>
                     </div>
                 </div>
 
-                <!-- D) Visualizations: Confidence Histogram -->
-                <div class="charts-grid"
-                    style="display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 24px;">
+                <!-- C) Confidence Histogram -->
+                <div class="charts-grid" style="display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 22px;">
                     <div class="card chart-card">
-                        <div class="card-title"><i class="fa-solid fa-chart-column" style="margin-right:8px; color: var(--primary-accent);"></i>Confidence Distribution <i class="fa-solid fa-circle-info kpi-info-icon" title="How confident the model is when detecting children. Scores ≥0.65 trigger physical warnings."></i></div>
+                        <div class="card-header-bar">
+                            <div class="header-chip-lockup">
+                                <div class="header-chip-box chip-purple">
+                                    <i class="fa-solid fa-chart-simple"></i>
+                                </div>
+                                <div class="header-text-group">
+                                    <h3 class="header-title-text">
+                                        Confidence Score Distribution
+                                        <i class="fa-solid fa-circle-info kpi-info-icon" title="Distribution of child detection confidence scores across 5 bins. Scores ≥ 0.65 trigger physical crosswalk warnings."></i>
+                                    </h3>
+                                    <p class="header-subtitle-text">Live detection window &bull; Warning threshold &ge; 0.65</p>
+                                </div>
+                            </div>
+                        </div>
                         <div class="chart-container" style="position: relative; height: 260px;">
                             <canvas id="chartConfidence"></canvas>
                         </div>
                     </div>
                 </div>
 
-                <!-- E) Offline Evaluation Report — Test Dataset -->
+                <!-- D) Offline Evaluation Report — Test Dataset -->
                 <div class="card" style="margin-bottom: 24px;">
-                    <div class="card-title" style="margin-bottom: 4px;">
-                        <i class="fa-solid fa-flask" style="margin-right:8px; color: var(--primary-accent);"></i>Offline Evaluation — Test Dataset
-                    </div>
-                    <div class="eval-static-label">
-                        <i class="fa-solid fa-lock" style="margin-right: 4px;"></i>
-                        Static benchmark from training run evaluation &bull; Model: {{ model_name or 'yolov8n_1500_frames.pt' }} &bull; 1,500-frame dataset &bull; Evaluated Sep 2026
-                    </div>
-
-                    <!-- Evaluation Metric Cards -->
-                    <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin: 16px 0;">
-                        <div class="card eval-metric-card">
-                            <div class="card-title">Precision <i class="fa-solid fa-circle-info kpi-info-icon" title="Of all predicted child detections, what fraction were truly children"></i></div>
-                            <div class="card-value" style="color: #22c55e;">0.936</div>
+                    <div class="card-header-bar">
+                        <div class="header-chip-lockup">
+                            <div class="header-chip-box chip-coral">
+                                <i class="fa-solid fa-flask-vial"></i>
+                            </div>
+                            <div class="header-text-group">
+                                <h3 class="header-title-text">Offline Evaluation &bull; Test Dataset</h3>
+                                <p class="header-subtitle-text">Controlled benchmark metrics computed against human-labeled ground truth</p>
+                            </div>
                         </div>
-                        <div class="card eval-metric-card">
-                            <div class="card-title">Recall <i class="fa-solid fa-circle-info kpi-info-icon" title="Of all actual children in the test set, what fraction were successfully detected"></i></div>
-                            <div class="card-value" style="color: #3b82f6;">0.910</div>
-                        </div>
-                        <div class="card eval-metric-card">
-                            <div class="card-title">F1-Score <i class="fa-solid fa-circle-info kpi-info-icon" title="Harmonic mean of Precision and Recall — single balanced accuracy measure"></i></div>
-                            <div class="card-value" style="color: #a855f7;">0.923</div>
-                        </div>
-                        <div class="card eval-metric-card">
-                            <div class="card-title">mAP@50 <i class="fa-solid fa-circle-info kpi-info-icon" title="Mean Average Precision at 50% IoU threshold — standard YOLO detection accuracy metric"></i></div>
-                            <div class="card-value" style="color: #06b6d4;">0.962</div>
+                        <div class="benchmark-tag">
+                            <i class="fa-solid fa-lock" style="margin-right: 4px;"></i> {{ model_name or 'yolov8n_1500_frames.pt' }}
                         </div>
                     </div>
 
-                    <!-- Confusion Matrix (static image from training run) -->
-                    <div style="margin-top: 16px;">
-                        <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-color); margin-bottom: 8px;">
-                            <i class="fa-solid fa-table-cells-large" style="margin-right: 6px; color: var(--primary-accent);"></i>Confusion Matrix (Normalized)
+                    <!-- Benchmark metadata pill -->
+                    <div class="benchmark-badge-bar">
+                        <div class="benchmark-badge-left">
+                            <i class="fa-solid fa-database"></i>
+                            <span>Static benchmark from model evaluation &bull; 1,500-frame annotated test dataset &bull; Evaluated Sep 2026</span>
                         </div>
-                        <div class="cm-container" style="display: flex; flex-direction: column; align-items: center;">
-                            <table class="cm-table">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 25%;"></th>
-                                        <th class="cm-axis-header">Predicted: Adult</th>
-                                        <th class="cm-axis-header">Predicted: Child</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td class="cm-axis-header" style="text-align: right; padding-right: 10px;">Actual: Adult</td>
-                                        <td class="cm-cell tp">
-                                            <div class="cm-cell-value">96%</div>
-                                            <div class="cm-cell-count">847 samples</div>
-                                            <div class="cm-cell-desc">Correctly classified</div>
-                                        </td>
-                                        <td class="cm-cell fp">
-                                            <div class="cm-cell-value">2%</div>
-                                            <div class="cm-cell-count">18 samples</div>
-                                            <div class="cm-cell-desc">Adult misclassified as child</div>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td class="cm-axis-header" style="text-align: right; padding-right: 10px;">Actual: Child</td>
-                                        <td class="cm-cell fn">
-                                            <div class="cm-cell-value">3%</div>
-                                            <div class="cm-cell-count">23 samples</div>
-                                            <div class="cm-cell-desc">Child missed as adult</div>
-                                        </td>
-                                        <td class="cm-cell tn">
-                                            <div class="cm-cell-value">91%</div>
-                                            <div class="cm-cell-count">609 samples</div>
-                                            <div class="cm-cell-desc">Correctly classified</div>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                        <span class="benchmark-tag">N = 1,497 Samples</span>
+                    </div>
+
+                    <!-- 4 Evaluation Metric Cards (Unified Anatomy) -->
+                    <div class="ana-metrics-grid cols-4">
+                        <div class="metric-card">
+                            <div class="metric-card-top">
+                                <div class="metric-icon-chip chip-emerald">
+                                    <i class="fa-solid fa-bullseye"></i>
+                                </div>
+                                <div class="metric-meta">
+                                    <div class="metric-label">
+                                        Precision
+                                        <i class="fa-solid fa-circle-info kpi-info-icon" title="Of all predicted child detections, what fraction were truly children"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="metric-value-wrap">
+                                <div class="metric-value" style="color: #059669;">0.936</div>
+                            </div>
+                            <div class="metric-sub positive">
+                                <i class="fa-solid fa-check"></i> 93.6% alert accuracy
+                            </div>
                         </div>
-                        <div class="eval-note">
-                            <i class="fa-solid fa-circle-info" style="margin-right: 6px; color: var(--primary-accent);"></i>
-                            These metrics are from a one-time offline evaluation against a labeled test dataset — not from live production data. They are refreshed only when a new model is trained and re-evaluated.
+
+                        <div class="metric-card">
+                            <div class="metric-card-top">
+                                <div class="metric-icon-chip chip-blue">
+                                    <i class="fa-solid fa-crosshairs"></i>
+                                </div>
+                                <div class="metric-meta">
+                                    <div class="metric-label">
+                                        Recall
+                                        <i class="fa-solid fa-circle-info kpi-info-icon" title="Of all actual children in the test set, what fraction were successfully detected"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="metric-value-wrap">
+                                <div class="metric-value" style="color: #2563eb;">0.910</div>
+                            </div>
+                            <div class="metric-sub">
+                                <i class="fa-solid fa-person-walking"></i> 91.0% child capture rate
+                            </div>
+                        </div>
+
+                        <div class="metric-card">
+                            <div class="metric-card-top">
+                                <div class="metric-icon-chip chip-violet">
+                                    <i class="fa-solid fa-scale-balanced"></i>
+                                </div>
+                                <div class="metric-meta">
+                                    <div class="metric-label">
+                                        F1-Score
+                                        <i class="fa-solid fa-circle-info kpi-info-icon" title="Harmonic mean of Precision and Recall — single balanced accuracy measure"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="metric-value-wrap">
+                                <div class="metric-value" style="color: #9333ea;">0.923</div>
+                            </div>
+                            <div class="metric-sub">
+                                <i class="fa-solid fa-sliders"></i> Harmonic balance (P &amp; R)
+                            </div>
+                        </div>
+
+                        <div class="metric-card">
+                            <div class="metric-card-top">
+                                <div class="metric-icon-chip chip-cyan">
+                                    <i class="fa-solid fa-award"></i>
+                                </div>
+                                <div class="metric-meta">
+                                    <div class="metric-label">
+                                        mAP@50
+                                        <i class="fa-solid fa-circle-info kpi-info-icon" title="Mean Average Precision at 50% IoU threshold — standard YOLO detection accuracy metric"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="metric-value-wrap">
+                                <div class="metric-value" style="color: #0891b2;">0.962</div>
+                            </div>
+                            <div class="metric-sub">
+                                <i class="fa-solid fa-layer-group"></i> Detection score @ 0.5 IoU
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="eval-note-box">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <div>
+                            <strong>Offline Benchmark Context:</strong> These metrics reflect fixed offline evaluation on 1,497 labeled test samples from the 1,500-frame training evaluation run — not dynamic real-time traffic data. They are updated when a new model weights checkpoint is trained, validated, and deployed.
                         </div>
                     </div>
                 </div>

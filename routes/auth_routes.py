@@ -42,7 +42,7 @@ def dashboard():
 @auth_bp.route("/dashboard/tmc")
 @role_required("tmc_officer")
 def dashboard_tmc():
-    """TMC Officer dashboard — live view, ROI, logs, analytics, reports."""
+    """TMC Officer dashboard — live view, ROI, analytics, reports."""
     return render_template("tmc_dashboard.html",
                            username=session.get("username"),
                            role=session.get("role"),

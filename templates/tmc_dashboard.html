@@ -37,10 +37,6 @@
                 <span class="nav-icon"><i class="fa-solid fa-video"></i></span>
                 <span class="nav-label">Live View</span>
             </a>
-            <a href="#logs" class="nav-item">
-                <span class="nav-icon"><i class="fa-solid fa-clipboard-list"></i></span>
-                <span class="nav-label">Logs</span>
-            </a>
             <a href="#analytics" class="nav-item">
                 <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span>
                 <span class="nav-label">Analytics</span>
@@ -256,104 +252,6 @@
 
             </section>
 
-            <!-- LOGS SECTION -->
-            <section id="logs-section" class="page-section">
-                <div class="logs-header"
-                    style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                    <h2>System Logs</h2>
-                </div>
-
-                <div class="filter-wrapper">
-                    <!-- Top Row: Search & Date Presets -->
-                    <div class="filter-row">
-                        <div class="logs-search-wrapper">
-                            <i class="fa-solid fa-magnifying-glass logs-search-icon"></i>
-                            <input type="text" id="logsSearch" placeholder="Search by time, scenario, status..."
-                                class="logs-search-input">
-                        </div>
-                        <div class="preset-group">
-                            <label style="margin-right:8px; font-weight:600; font-size:0.9rem;">Range:</label>
-                            <div class="btn-group">
-                                <button class="btn btn-sm btn-preset" data-range="15m">Last 15m</button>
-                                <button class="btn btn-sm btn-preset" data-range="1h">Last Hour</button>
-                                <button class="btn btn-sm btn-preset active" data-range="today">Today</button>
-                                <button class="btn btn-sm btn-preset" data-range="all">All</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Middle Row: Toggles -->
-                    <div class="filter-row mt-3">
-                        <div class="filter-item">
-                            <label class="toggle-label" for="filterWarningOn">
-                                <div class="toggle-switch">
-                                    <input type="checkbox" id="filterWarningOn" checked>
-                                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                                </div>
-                                <span class="toggle-text">Warning ON</span>
-                            </label>
-                        </div>
-                        <div class="filter-item">
-                            <label class="toggle-label" for="filterInRoi">
-                                <div class="toggle-switch">
-                                    <input type="checkbox" id="filterInRoi">
-                                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                                </div>
-                                <span class="toggle-text">In ROI Only</span>
-                            </label>
-                        </div>
-                        <div class="filter-actions" style="margin-left:auto;">
-                            <button class="btn btn-primary btn-sm" id="btnApplyLogsFilters"><i class="fa-solid fa-check"
-                                    style="margin-right:5px;"></i>Apply</button>
-                            <button class="btn btn-outline btn-sm" id="btnResetLogsFilters"><i
-                                    class="fa-solid fa-rotate-left" style="margin-right:5px;"></i>Reset</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="table-container mt-4">
-                    <!-- DB Fallback Warning -->
-                    <div id="logsDbWarning" class="alert alert-warning"
-                        style="display:none; margin-bottom: 15px; padding: 10px; border-radius: 6px; background-color: #fff3cd; color: #856404; font-size: 0.9rem;">
-                        <i class="fa-solid fa-triangle-exclamation"></i> DB unavailable — no data available
-                    </div>
-
-                    <table id="logsTable" class="tmc-logs-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 160px;">Time</th>
-                                <th>Crosswalk Status</th>
-                                <th style="width: 160px; text-align: right;">Warning Device</th>
-                            </tr>
-                        </thead>
-                        <tbody id="logsTableBody">
-                            <!-- Logs injected here -->
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination -->
-                <div class="pagination-bar">
-                    <div class="page-size-group">
-                        <label>Rows:</label>
-                        <select id="pageSizeSelect" class="form-control" style="width:60px; padding:4px;">
-                            <option value="10">10</option>
-                            <option value="25" selected>25</option>
-                            <option value="50">50</option>
-                        </select>
-                        <span id="resultCount" class="text-muted ml-3"
-                            style="font-size:0.9rem; margin-left:15px;">Showing 0
-                            of 0 events</span>
-                    </div>
-                    <div class="page-nav">
-                        <button class="btn btn-outline btn-sm" id="pagePrev" disabled><i
-                                class="fa-solid fa-chevron-left"></i></button>
-                        <span id="pageIndicator" style="margin:0 10px; font-weight:600; font-size:0.9rem;">Page 1</span>
-                        <button class="btn btn-outline btn-sm" id="pageNext" disabled><i
-                                class="fa-solid fa-chevron-right"></i></button>
-                    </div>
-                </div>
-            </section>
 
             <!-- ANALYTICS SECTION -->
             <section id="analytics-section" class="page-section">
