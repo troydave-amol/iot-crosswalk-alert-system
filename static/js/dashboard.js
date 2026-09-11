@@ -1282,20 +1282,6 @@ const App = {
         handleHashChange();
     },
 
-    getConfidenceBarColors(bins) {
-        const isDark = (this.state && this.state.theme === 'dark') || document.body.classList.contains('dark-mode');
-        const validBins = Array.isArray(bins) ? bins : [0, 0, 0, 0, 0];
-        const maxVal = Math.max(...validBins);
-
-        // Emphasize the dominant/highest bar with solid fill; mute others with a soft translucent tint
-        return validBins.map(val => {
-            if (maxVal > 0 && val === maxVal) {
-                return isDark ? '#a855f7' : '#45315D';
-            }
-            return isDark ? 'rgba(168, 85, 247, 0.25)' : 'rgba(69, 49, 93, 0.22)';
-        });
-    },
-
     setupAnalytics() {
         // 1. Chart Init
         const isDark = this.state.theme === 'dark';
@@ -1360,7 +1346,7 @@ const App = {
             });
         }
 
-        // C) Confidence (Histogram Bar — rounded tops, dominant bar emphasis, overhead value labels)
+        // C) Confidence (Histogram Bar — matches system bar chart color #FF2400)
         const ctxC = document.getElementById('chartConfidence')?.getContext('2d');
         if (ctxC) {
             const initialBins = [0, 0, 0, 0, 0];
@@ -1371,9 +1357,8 @@ const App = {
                     datasets: [{
                         label: 'Detections',
                         data: initialBins,
-                        backgroundColor: this.getConfidenceBarColors(initialBins),
-                        borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
-                        borderSkipped: false
+                        backgroundColor: '#FF2400',
+                        borderRadius: 4
                     }]
                 },
                 options: {
@@ -1636,7 +1621,6 @@ const App = {
             const chart = this.state.charts.confidence;
             const bins = agg.confidence_bins || [0, 0, 0, 0, 0];
             chart.data.datasets[0].data = bins;
-            chart.data.datasets[0].backgroundColor = this.getConfidenceBarColors(bins);
             chart.update('none');
         }
 
@@ -3185,9 +3169,6 @@ const App = {
             if (chart.options.scales.y) {
                 chart.options.scales.y.grid.color = gridColor;
                 chart.options.scales.y.ticks.color = textColor;
-            }
-            if (chart === this.state.charts.confidence && chart.data?.datasets?.[0]) {
-                chart.data.datasets[0].backgroundColor = this.getConfidenceBarColors(chart.data.datasets[0].data);
             }
             chart.update();
         });

@@ -883,6 +883,12 @@ body.dark-mode .it-false-badge.no {
     align-items: center;
 }
 
+.filter-bar h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--deep-text);
+}
+
 .form-control {
     padding: 8px 12px;
     border: 1px solid var(--border-color);
@@ -4022,51 +4028,15 @@ body.dark-mode .telemetry-metric-val {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 22px;
+    margin-bottom: 15px;
     gap: 16px;
     flex-wrap: wrap;
 }
 
-.ana-header-lockup {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.ana-header-chip {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, rgba(255, 146, 128, 0.18), rgba(255, 146, 128, 0.08));
-    color: var(--primary-accent);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.15rem;
-    flex-shrink: 0;
-    border: 1px solid rgba(255, 146, 128, 0.25);
-}
-
-.ana-title-block {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.ana-main-title {
-    font-size: 1.2rem;
-    font-weight: 700;
+.ana-section-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
     color: var(--deep-text);
-    letter-spacing: -0.3px;
-    margin: 0;
-    line-height: 1.25;
-}
-
-.ana-main-desc {
-    font-size: 0.78rem;
-    color: #64748b;
-    font-weight: 500;
-    margin: 0;
 }
 
 /* ── Unified Metric Cards System ──────────────────────────────── */
@@ -4308,6 +4278,424 @@ body.dark-mode .telemetry-metric-val {
     font-weight: 600;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   REDESIGNED MODEL ACCURACY — Huthy-Inspired Components
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Operational KPI Cards Grid ─────────────────────────────── */
+.ana-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 18px;
+    margin-bottom: 22px;
+}
+
+.ana-kpi-card {
+    background: var(--white);
+    border-radius: 14px;
+    padding: 20px 22px 16px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 8px 20px -4px rgba(0, 0, 0, 0.03);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+
+.ana-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04), 0 12px 28px -4px rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+.ana-kpi-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+/* ── Icon Badge (Huthy Pastel Square) ───────────────────────── */
+.ana-icon-badge {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+    transition: transform 0.15s ease;
+}
+
+.ana-kpi-card:hover .ana-icon-badge,
+.ana-bench-card:hover .ana-icon-badge {
+    transform: scale(1.06);
+}
+
+.badge-cyan {
+    background: rgba(6, 182, 212, 0.1);
+    color: #0891b2;
+    border: 1px solid rgba(6, 182, 212, 0.18);
+}
+
+.badge-purple {
+    background: rgba(139, 92, 246, 0.1);
+    color: #7c3aed;
+    border: 1px solid rgba(139, 92, 246, 0.18);
+}
+
+.badge-amber {
+    background: rgba(245, 158, 11, 0.1);
+    color: #d97706;
+    border: 1px solid rgba(245, 158, 11, 0.18);
+}
+
+.badge-emerald {
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.18);
+}
+
+.badge-blue {
+    background: rgba(59, 130, 246, 0.1);
+    color: #2563eb;
+    border: 1px solid rgba(59, 130, 246, 0.18);
+}
+
+.badge-violet {
+    background: rgba(168, 85, 247, 0.1);
+    color: #9333ea;
+    border: 1px solid rgba(168, 85, 247, 0.18);
+}
+
+.badge-coral {
+    background: rgba(255, 146, 128, 0.1);
+    color: #e11d48;
+    border: 1px solid rgba(255, 146, 128, 0.2);
+}
+
+/* ── KPI Label & Value ──────────────────────────────────────── */
+.ana-kpi-label-group {
+    flex: 1;
+    min-width: 0;
+}
+
+.ana-kpi-label {
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    line-height: 1.2;
+}
+
+.ana-kpi-value-row {
+    margin-bottom: 6px;
+}
+
+.ana-kpi-value {
+    font-family: var(--font-mono);
+    font-size: 1.9rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1.15;
+}
+
+.color-cyan { color: #0891b2; }
+.color-purple { color: #7c3aed; }
+.color-amber { color: #d97706; }
+.color-emerald { color: #059669; }
+.color-blue { color: #2563eb; }
+.color-violet { color: #9333ea; }
+
+/* ── KPI Bottom Bar (context pill + micro-sparkline) ────────── */
+.ana-kpi-bottom {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.ana-kpi-context-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    line-height: 1.3;
+}
+
+.pill-cyan {
+    color: #0e7490;
+    background: rgba(6, 182, 212, 0.08);
+}
+
+.pill-purple {
+    color: #6d28d9;
+    background: rgba(139, 92, 246, 0.08);
+}
+
+.pill-amber {
+    color: #b45309;
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.pill-emerald {
+    color: #047857;
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.pill-blue {
+    color: #1d4ed8;
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.pill-violet {
+    color: #7e22ce;
+    background: rgba(168, 85, 247, 0.08);
+}
+
+/* ── Micro-Sparkline (CSS-only mini bar chart) ──────────────── */
+.ana-micro-sparkline {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.ana-micro-sparkline span {
+    width: 5px;
+    border-radius: 2px 2px 0 0;
+    transition: height 0.3s ease;
+}
+
+.sparkline-cyan span { background: rgba(6, 182, 212, 0.35); }
+.sparkline-purple span { background: rgba(139, 92, 246, 0.35); }
+.sparkline-amber span { background: rgba(245, 158, 11, 0.35); }
+
+/* ── Chart Card ─────────────────────────────────────────────── */
+.ana-chart-card {
+    background: var(--white);
+    border-radius: 14px;
+    padding: 22px 24px 18px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 8px 20px -4px rgba(0, 0, 0, 0.03);
+    margin-bottom: 22px;
+}
+
+.ana-chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.ana-chart-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ana-chart-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ana-chart-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--deep-text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+}
+
+.ana-chart-subtitle {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin: 0;
+    font-weight: 500;
+}
+
+/* ── Pill Badge (generic) ───────────────────────────────────── */
+.ana-pill-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    white-space: nowrap;
+}
+
+.pill-badge-accent {
+    color: var(--primary-accent);
+    background: rgba(255, 146, 128, 0.08);
+    border: 1px solid rgba(255, 146, 128, 0.2);
+}
+
+.pill-badge-muted {
+    color: #475569;
+    background: rgba(100, 116, 139, 0.06);
+    border: 1px solid rgba(100, 116, 139, 0.12);
+}
+
+/* ── Evaluation Card ────────────────────────────────────────── */
+.ana-eval-card {
+    background: var(--white);
+    border-radius: 14px;
+    padding: 22px 24px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 8px 20px -4px rgba(0, 0, 0, 0.03);
+    margin-bottom: 24px;
+}
+
+.ana-eval-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 14px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.ana-eval-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ana-eval-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ana-eval-context-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: rgba(100, 116, 139, 0.04);
+    border: 1px solid rgba(100, 116, 139, 0.1);
+    border-radius: 8px;
+    margin-bottom: 18px;
+    font-size: 0.76rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.ana-eval-context-bar i {
+    color: #94a3b8;
+    font-size: 0.78rem;
+    flex-shrink: 0;
+}
+
+/* ── Benchmark Metric Cards Grid ────────────────────────────── */
+.ana-bench-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.ana-bench-card {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 16px 18px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+
+.ana-bench-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04), 0 12px 28px -4px rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+.ana-bench-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 2px;
+}
+
+.ana-bench-top .ana-icon-badge {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+}
+
+.ana-bench-label {
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ana-bench-value {
+    font-family: var(--font-mono);
+    font-size: 1.7rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1.15;
+}
+
+/* ── Progress Track ─────────────────────────────────────────── */
+.ana-bench-progress {
+    margin: 2px 0 4px;
+}
+
+.ana-progress-track {
+    width: 100%;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.ana-progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fill-emerald { background: linear-gradient(90deg, #34d399, #059669); }
+.fill-blue { background: linear-gradient(90deg, #60a5fa, #2563eb); }
+.fill-violet { background: linear-gradient(90deg, #c084fc, #9333ea); }
+.fill-cyan { background: linear-gradient(90deg, #22d3ee, #0891b2); }
+
+.ana-bench-foot {
+    margin-top: auto;
+}
+
 /* ── KPI Info Icon (inline tooltip trigger) ──────────────────── */
 .kpi-info-icon {
     font-size: 0.72rem;
@@ -4348,63 +4736,100 @@ body.dark-mode .telemetry-metric-val {
    DARK MODE OVERRIDES FOR MODEL ACCURACY & DIAGNOSTICS
    ═══════════════════════════════════════════════════════════════ */
 body.dark-mode .ana-main-title {
-    color: #f1f5f9;
-}
-
-body.dark-mode .ana-main-desc {
-    color: #94a3b8;
-}
-
-body.dark-mode .metric-card {
-    background-color: #1e1e1e;
-    border-color: rgba(255, 255, 255, 0.08);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-}
-
-body.dark-mode .metric-card:hover {
-    border-color: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-}
-
-body.dark-mode .metric-label {
-    color: #94a3b8;
-}
-
-body.dark-mode .metric-value {
     color: #ffffff;
 }
 
-body.dark-mode .metric-sub {
-    color: #94a3b8;
+body.dark-mode .ana-main-desc {
+    color: var(--text-muted);
 }
 
-body.dark-mode .metric-sub.positive {
-    color: #34d399;
+/* KPI Cards & Benchmark Cards — Consistent #1e1e1e dark surface */
+body.dark-mode .ana-kpi-card,
+body.dark-mode .ana-bench-card,
+body.dark-mode .ana-chart-card,
+body.dark-mode .ana-eval-card {
+    background-color: var(--white);
+    border-color: var(--border-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-body.dark-mode .header-title-text {
-    color: #f1f5f9;
+body.dark-mode .ana-kpi-card:hover,
+body.dark-mode .ana-bench-card:hover,
+body.dark-mode .ana-chart-card:hover,
+body.dark-mode .ana-eval-card:hover {
+    border-color: #444444;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
-body.dark-mode .header-subtitle-text {
-    color: #94a3b8;
+body.dark-mode .ana-kpi-label,
+body.dark-mode .ana-bench-label {
+    color: var(--text-muted);
 }
 
-body.dark-mode .benchmark-badge-bar {
-    background: rgba(100, 116, 139, 0.12);
-    border-color: rgba(100, 116, 139, 0.25);
-    color: #cbd5e1;
+body.dark-mode .ana-kpi-bottom {
+    border-top-color: #2d2d2d;
 }
 
-body.dark-mode .benchmark-tag {
-    background: rgba(255, 255, 255, 0.08);
-    color: #f1f5f9;
+/* Dark sparklines */
+body.dark-mode .sparkline-cyan span { background: rgba(6, 182, 212, 0.5); }
+body.dark-mode .sparkline-purple span { background: rgba(139, 92, 246, 0.5); }
+body.dark-mode .sparkline-amber span { background: rgba(245, 158, 11, 0.5); }
+
+/* Dark pills */
+body.dark-mode .pill-cyan { color: #22d3ee; background: rgba(6, 182, 212, 0.12); }
+body.dark-mode .pill-purple { color: #a78bfa; background: rgba(139, 92, 246, 0.12); }
+body.dark-mode .pill-amber { color: #fbbf24; background: rgba(245, 158, 11, 0.12); }
+body.dark-mode .pill-emerald { color: #34d399; background: rgba(16, 185, 129, 0.12); }
+body.dark-mode .pill-blue { color: #60a5fa; background: rgba(59, 130, 246, 0.12); }
+body.dark-mode .pill-violet { color: #c084fc; background: rgba(168, 85, 247, 0.12); }
+
+body.dark-mode .ana-chart-title {
+    color: var(--deep-text);
 }
 
+body.dark-mode .ana-chart-subtitle {
+    color: var(--text-muted);
+}
+
+body.dark-mode .pill-badge-accent {
+    color: #fca5a5;
+    background: rgba(255, 146, 128, 0.12);
+    border-color: rgba(255, 146, 128, 0.25);
+}
+
+body.dark-mode .pill-badge-muted {
+    color: #ccc;
+    background: #2d2d2d;
+    border-color: #3d3d3d;
+}
+
+/* Eval context bar */
+body.dark-mode .ana-eval-context-bar {
+    background: #252525;
+    border-color: var(--border-color);
+    color: var(--text-muted);
+}
+
+/* Progress track */
+body.dark-mode .ana-progress-track {
+    background: #2d2d2d;
+}
+
+/* Note box */
 body.dark-mode .eval-note-box {
-    background: rgba(100, 116, 139, 0.1);
-    color: #cbd5e1;
+    background: #252525;
+    border-left-color: var(--primary-accent);
+    color: #ccc;
 }
+
+/* Badge dark mode — brighter pastel */
+body.dark-mode .badge-cyan { background: rgba(6, 182, 212, 0.15); border-color: rgba(6, 182, 212, 0.3); color: #22d3ee; }
+body.dark-mode .badge-purple { background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.3); color: #a78bfa; }
+body.dark-mode .badge-amber { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.3); color: #fbbf24; }
+body.dark-mode .badge-emerald { background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #34d399; }
+body.dark-mode .badge-blue { background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.3); color: #60a5fa; }
+body.dark-mode .badge-violet { background: rgba(168, 85, 247, 0.15); border-color: rgba(168, 85, 247, 0.3); color: #c084fc; }
+body.dark-mode .badge-coral { background: rgba(255, 146, 128, 0.15); border-color: rgba(255, 146, 128, 0.3); color: #fca5a5; }
 
 body.dark-mode .kpi-info-icon {
     color: #64748b;

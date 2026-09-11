@@ -58,7 +58,8 @@
                 <span class="nav-label" style="font-size: 0.8rem;">{{ full_name }}</span>
             </div>
             <!-- Change Password -->
-            <a href="#" class="nav-item" id="btn-change-password" onclick="document.getElementById('passwordModal').style.display='flex'; return false;">
+            <a href="#" class="nav-item" id="btn-change-password"
+                onclick="document.getElementById('passwordModal').style.display='flex'; return false;">
                 <span class="nav-icon"><i class="fa-solid fa-key"></i></span>
                 <span class="nav-label">Change Password</span>
             </a>
@@ -115,7 +116,7 @@
 
             <!-- LIVE VIEW SECTION -->
             <section id="live-section" class="page-section active">
-                <!-- Mode Toggle Bar (TMC Officer owns video test) -->
+                <!-- Mode Toggle Bar (TMC Officer owns video simulation) -->
                 <div class="mode-toggle-bar card">
                     <div class="mode-toggle-left">
                         <div class="mode-toggle" id="modeToggle">
@@ -123,7 +124,7 @@
                                 <i class="fa-solid fa-video"></i> Live Camera
                             </button>
                             <button class="mode-btn" data-mode="video_test" id="btnModeTest">
-                                <i class="fa-solid fa-flask"></i> Video Test
+                                <i class="fa-solid fa-flask"></i> Video Simulation
                             </button>
                         </div>
                         <span class="mode-badge" id="modeBadge">
@@ -133,12 +134,13 @@
                 </div>
 
 
-                <!-- Video Test Panel (hidden by default) -->
+                <!-- Video Simulation Panel (hidden by default) -->
                 <div class="video-test-panel card" id="videoTestPanel" style="display: none;">
                     <div class="video-test-header" id="videoTestHeader">
                         <div class="video-test-header-left">
-                            <h4><i class="fa-solid fa-flask"></i> Video Test Mode</h4>
-                            <small class="text-muted">Upload or select a pre-recorded .mp4 to run through the detection pipeline</small>
+                            <h4><i class="fa-solid fa-flask"></i> Video Simulation Mode</h4>
+                            <small class="text-muted">Upload or select a pre-recorded .mp4 to run through the detection
+                                pipeline</small>
                         </div>
                         <i class="fa-solid fa-chevron-up video-test-collapse-icon" id="videoTestCollapseIcon"></i>
                     </div>
@@ -263,7 +265,7 @@
 
                 <!-- A) Filter Bar -->
                 <div class="filter-bar" style="justify-content: space-between;">
-                    <div style="font-weight: 700; font-size: 1.1rem;">Analytics Dashboard</div>
+                    <h2><i class="fa-solid fa-chart-line" style="margin-right: 8px;"></i>Analytics Dashboard</h2>
                     <div class="btn-group">
                         <button class="btn btn-sm btn-preset" data-ana-range="15m">Last 15m</button>
                         <button class="btn btn-sm btn-preset" data-ana-range="1h">Last Hour</button>
@@ -326,7 +328,7 @@
 
                 <!-- 1) Toolbar -->
                 <div class="filter-bar" style="justify-content: space-between; align-items: center;">
-                    <div style="font-weight: 700; font-size: 1.1rem;">Generate Report</div>
+                    <h2><i class="fa-solid fa-file-contract" style="margin-right: 8px;"></i>Generate Report</h2>
                     <div class="btn-group">
                         <button class="btn btn-sm btn-preset" data-rep-range="15m">Last 15m</button>
                         <button class="btn btn-sm btn-preset" data-rep-range="1h">Last Hour</button>
@@ -563,7 +565,9 @@
         <div class="modal-card">
             <div class="modal-header">
                 <h3><i class="fa-solid fa-key modal-header-icon"></i>Change Password</h3>
-                <button class="modal-close-btn" onclick="document.getElementById('passwordModal').style.display='none';"><i class="fa-solid fa-xmark"></i></button>
+                <button class="modal-close-btn"
+                    onclick="document.getElementById('passwordModal').style.display='none';"><i
+                        class="fa-solid fa-xmark"></i></button>
             </div>
             <div id="pwdMsg" class="modal-msg" style="display:none;"></div>
             <form id="changePasswordForm" autocomplete="off">

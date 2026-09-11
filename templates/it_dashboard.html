@@ -267,10 +267,12 @@
                     <div class="card latency-breakdown-card" id="latencyBreakdownCard">
                         <div class="latency-card-header">
                             <h3>
-                                <i class="fa-solid fa-stopwatch" style="margin-right: 6px; color: var(--primary-accent);"></i>
+                                <i class="fa-solid fa-stopwatch"
+                                    style="margin-right: 6px; color: var(--primary-accent);"></i>
                                 Pipeline Latency Breakdown
                             </h3>
-                            <i class="fa-solid fa-circle-info kpi-info-icon" title="End-to-end latency from frame capture through YOLO inference to warning relay command, computed using monotonic clocks for precision."></i>
+                            <i class="fa-solid fa-circle-info kpi-info-icon"
+                                title="End-to-end latency from frame capture through YOLO inference to warning relay command, computed using monotonic clocks for precision."></i>
                         </div>
                         <div class="latency-timeline" id="latencyTimeline">
                             <!-- Point 1: Frame Capture -->
@@ -347,11 +349,16 @@
                             </div>
                         </div>
                         <div class="custom-range-group">
-                            <span class="custom-range-label"><i class="fa-regular fa-calendar-days" style="margin-right:4px;"></i>Custom:</span>
-                            <input type="datetime-local" id="logsStartDate" class="datetime-input" title="Start Date & Time (Manila Local Time)">
+                            <span class="custom-range-label"><i class="fa-regular fa-calendar-days"
+                                    style="margin-right:4px;"></i>Custom:</span>
+                            <input type="datetime-local" id="logsStartDate" class="datetime-input"
+                                title="Start Date & Time (Manila Local Time)">
                             <span class="custom-range-sep">to</span>
-                            <input type="datetime-local" id="logsEndDate" class="datetime-input" title="End Date & Time (Manila Local Time)">
-                            <button type="button" id="btnClearCustomRange" class="btn btn-outline btn-sm custom-range-clear-btn" title="Clear custom date range" style="display:none;">
+                            <input type="datetime-local" id="logsEndDate" class="datetime-input"
+                                title="End Date & Time (Manila Local Time)">
+                            <button type="button" id="btnClearCustomRange"
+                                class="btn btn-outline btn-sm custom-range-clear-btn" title="Clear custom date range"
+                                style="display:none;">
                                 <i class="fa-solid fa-xmark"></i>
                             </button>
                         </div>
@@ -459,16 +466,9 @@
                 </div>
 
                 <!-- A) Section Header + Range Filter -->
-                <div class="ana-section-header">
-                    <div class="ana-header-lockup">
-                        <div class="ana-header-chip">
-                            <i class="fa-solid fa-chart-pie"></i>
-                        </div>
-                        <div class="ana-title-block">
-                            <h2 class="ana-main-title">Model Accuracy &amp; Diagnostics</h2>
-                            <p class="ana-main-desc">Real-time inference telemetry and offline model validation benchmarks</p>
-                        </div>
-                    </div>
+                <div class="ana-section-header"
+                    style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <h2><i class="fa-solid fa-chart-line" style="margin-right: 8px;"></i>Model Accuracy &amp; Diagnostics</h2>
                     <div class="btn-group">
                         <button class="btn btn-sm btn-preset" data-ana-range="15m">Last 15m</button>
                         <button class="btn btn-sm btn-preset" data-ana-range="1h">Last Hour</button>
@@ -477,205 +477,275 @@
                     </div>
                 </div>
 
-                <!-- B) Live Operational KPI Cards (Unified Anatomy) -->
-                <div class="ana-metrics-grid cols-3">
-                    <div class="metric-card">
-                        <div class="metric-card-top">
-                            <div class="metric-icon-chip chip-cyan">
+                <!-- B) Live Operational KPI Cards -->
+                <div class="ana-kpi-grid">
+                    <!-- Avg Latency -->
+                    <div class="ana-kpi-card">
+                        <div class="ana-kpi-top">
+                            <div class="ana-icon-badge badge-cyan">
                                 <i class="fa-solid fa-gauge-high"></i>
                             </div>
-                            <div class="metric-meta">
-                                <div class="metric-label">
+                            <div class="ana-kpi-label-group">
+                                <span class="ana-kpi-label">
                                     Avg Latency
-                                    <i class="fa-solid fa-circle-info kpi-info-icon" title="Mean YOLOv8 inference time per video frame, excluding outlier idle gaps"></i>
-                                </div>
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Mean YOLOv8 inference time per video frame, excluding outlier idle gaps"></i>
+                                </span>
                             </div>
                         </div>
-                        <div class="metric-value-wrap">
-                            <div class="metric-value" id="ana-kpi-latency" style="color: #0891b2;">0ms</div>
+                        <div class="ana-kpi-value-row">
+                            <span class="ana-kpi-value color-cyan" id="ana-kpi-latency">0ms</span>
                         </div>
-                        <div class="metric-sub">
-                            <i class="fa-solid fa-microchip"></i> Mean per-frame inference
+                        <div class="ana-kpi-bottom">
+                            <span class="ana-kpi-context-pill pill-cyan">
+                                <i class="fa-solid fa-circle" style="font-size: 5px; vertical-align: middle;"></i>
+                                Real-Time &bull; Target &lt; 30ms
+                            </span>
+                            <div class="ana-micro-sparkline sparkline-cyan">
+                                <span style="height: 40%;"></span>
+                                <span style="height: 65%;"></span>
+                                <span style="height: 50%;"></span>
+                                <span style="height: 85%;"></span>
+                                <span style="height: 70%;"></span>
+                                <span style="height: 55%;"></span>
+                                <span style="height: 45%;"></span>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="metric-card">
-                        <div class="metric-card-top">
-                            <div class="metric-icon-chip chip-purple">
+                    <!-- Peak Latency -->
+                    <div class="ana-kpi-card">
+                        <div class="ana-kpi-top">
+                            <div class="ana-icon-badge badge-purple">
                                 <i class="fa-solid fa-bolt-lightning"></i>
                             </div>
-                            <div class="metric-meta">
-                                <div class="metric-label">
+                            <div class="ana-kpi-label-group">
+                                <span class="ana-kpi-label">
                                     Peak Latency
-                                    <i class="fa-solid fa-circle-info kpi-info-icon" title="Highest single-frame inference time in this period"></i>
-                                </div>
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Highest single-frame inference time in this period"></i>
+                                </span>
                             </div>
                         </div>
-                        <div class="metric-value-wrap">
-                            <div class="metric-value" id="ana-kpi-peak-latency" style="color: #7c3aed;">0ms</div>
+                        <div class="ana-kpi-value-row">
+                            <span class="ana-kpi-value color-purple" id="ana-kpi-peak-latency">0ms</span>
                         </div>
-                        <div class="metric-sub">
-                            <i class="fa-solid fa-arrow-trend-up"></i> Max latency in window
+                        <div class="ana-kpi-bottom">
+                            <span class="ana-kpi-context-pill pill-purple">
+                                <i class="fa-solid fa-arrow-trend-up" style="font-size: 9px;"></i>
+                                Max latency in window
+                            </span>
+                            <div class="ana-micro-sparkline sparkline-purple">
+                                <span style="height: 30%;"></span>
+                                <span style="height: 50%;"></span>
+                                <span style="height: 75%;"></span>
+                                <span style="height: 60%;"></span>
+                                <span style="height: 90%;"></span>
+                                <span style="height: 45%;"></span>
+                                <span style="height: 35%;"></span>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="metric-card">
-                        <div class="metric-card-top">
-                            <div class="metric-icon-chip chip-amber">
+                    <!-- False Warning Rate -->
+                    <div class="ana-kpi-card">
+                        <div class="ana-kpi-top">
+                            <div class="ana-icon-badge badge-amber">
                                 <i class="fa-solid fa-shield-halved"></i>
                             </div>
-                            <div class="metric-meta">
-                                <div class="metric-label">
+                            <div class="ana-kpi-label-group">
+                                <span class="ana-kpi-label">
                                     False Warning Rate
-                                    <i class="fa-solid fa-circle-info kpi-info-icon" title="Warnings triggered when no child was in the ROI — lower is better"></i>
-                                </div>
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Warnings triggered when no child was in the ROI — lower is better"></i>
+                                </span>
                             </div>
                         </div>
-                        <div class="metric-value-wrap">
-                            <div class="metric-value" id="ana-kpi-fwr" style="color: #d97706;">0.0%</div>
+                        <div class="ana-kpi-value-row">
+                            <span class="ana-kpi-value color-amber" id="ana-kpi-fwr">0.0%</span>
                         </div>
-                        <div class="metric-sub positive">
-                            <i class="fa-solid fa-shield-check"></i> Benchmark target: &lt; 5.0%
+                        <div class="ana-kpi-bottom">
+                            <span class="ana-kpi-context-pill pill-emerald">
+                                <i class="fa-solid fa-shield-check" style="font-size: 9px;"></i>
+                                Target &lt; 5.0%
+                            </span>
+                            <div class="ana-micro-sparkline sparkline-amber">
+                                <span style="height: 20%;"></span>
+                                <span style="height: 15%;"></span>
+                                <span style="height: 25%;"></span>
+                                <span style="height: 18%;"></span>
+                                <span style="height: 22%;"></span>
+                                <span style="height: 12%;"></span>
+                                <span style="height: 16%;"></span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- C) Confidence Histogram -->
-                <div class="charts-grid" style="display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 22px;">
-                    <div class="card chart-card">
-                        <div class="card-header-bar">
-                            <div class="header-chip-lockup">
-                                <div class="header-chip-box chip-purple">
-                                    <i class="fa-solid fa-chart-simple"></i>
-                                </div>
-                                <div class="header-text-group">
-                                    <h3 class="header-title-text">
-                                        Confidence Score Distribution
-                                        <i class="fa-solid fa-circle-info kpi-info-icon" title="Distribution of child detection confidence scores across 5 bins. Scores ≥ 0.65 trigger physical crosswalk warnings."></i>
-                                    </h3>
-                                    <p class="header-subtitle-text">Live detection window &bull; Warning threshold &ge; 0.65</p>
-                                </div>
+                <!-- C) Confidence Score Distribution Chart -->
+                <div class="ana-chart-card">
+                    <div class="ana-chart-header">
+                        <div class="ana-chart-header-left">
+                            <div class="ana-icon-badge badge-coral"
+                                style="width: 34px; height: 34px; font-size: 0.82rem;">
+                                <i class="fa-solid fa-chart-simple"></i>
+                            </div>
+                            <div class="ana-chart-title-group">
+                                <h3 class="ana-chart-title">
+                                    Confidence Score Distribution
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Distribution of child detection confidence scores across 5 bins. Scores ≥ 0.65 trigger physical crosswalk warnings."></i>
+                                </h3>
+                                <p class="ana-chart-subtitle">5-Bin Detection Profile &bull; Active Window Telemetry</p>
                             </div>
                         </div>
-                        <div class="chart-container" style="position: relative; height: 260px;">
-                            <canvas id="chartConfidence"></canvas>
+                        <div class="ana-pill-badge pill-badge-accent">
+                            <i class="fa-solid fa-bell" style="font-size: 9px;"></i>
+                            Warning Threshold &ge; 0.65
                         </div>
+                    </div>
+                    <div class="chart-container" style="position: relative; height: 270px; padding: 0 4px;">
+                        <canvas id="chartConfidence"></canvas>
                     </div>
                 </div>
 
                 <!-- D) Offline Evaluation Report — Test Dataset -->
-                <div class="card" style="margin-bottom: 24px;">
-                    <div class="card-header-bar">
-                        <div class="header-chip-lockup">
-                            <div class="header-chip-box chip-coral">
+                <div class="ana-eval-card">
+                    <div class="ana-eval-header">
+                        <div class="ana-eval-header-left">
+                            <div class="ana-icon-badge badge-coral"
+                                style="width: 34px; height: 34px; font-size: 0.82rem;">
                                 <i class="fa-solid fa-flask-vial"></i>
                             </div>
-                            <div class="header-text-group">
-                                <h3 class="header-title-text">Offline Evaluation &bull; Test Dataset</h3>
-                                <p class="header-subtitle-text">Controlled benchmark metrics computed against human-labeled ground truth</p>
+                            <div class="ana-chart-title-group">
+                                <h3 class="ana-chart-title">Model Accuracy Check</h3>
+                                <p class="ana-chart-subtitle">These numbers are from AI training results during
+                                    development</p>
                             </div>
                         </div>
-                        <div class="benchmark-tag">
-                            <i class="fa-solid fa-lock" style="margin-right: 4px;"></i> {{ model_name or 'yolov8n_1500_frames.pt' }}
+                        <div class="ana-eval-badges">
+                            <span class="ana-pill-badge pill-badge-muted">
+                                <i class="fa-solid fa-lock" style="font-size: 8px;"></i>
+                                {{ model_name or 'yolov8n_1500_frames.pt' }}
+                            </span>
                         </div>
                     </div>
 
-                    <!-- Benchmark metadata pill -->
-                    <div class="benchmark-badge-bar">
-                        <div class="benchmark-badge-left">
-                            <i class="fa-solid fa-database"></i>
-                            <span>Static benchmark from model evaluation &bull; 1,500-frame annotated test dataset &bull; Evaluated Sep 2026</span>
-                        </div>
-                        <span class="benchmark-tag">N = 1,497 Samples</span>
-                    </div>
-
-                    <!-- 4 Evaluation Metric Cards (Unified Anatomy) -->
-                    <div class="ana-metrics-grid cols-4">
-                        <div class="metric-card">
-                            <div class="metric-card-top">
-                                <div class="metric-icon-chip chip-emerald">
+                    <!-- 4 Benchmark Metric Cards -->
+                    <div class="ana-bench-grid">
+                        <!-- Precision -->
+                        <div class="ana-bench-card">
+                            <div class="ana-bench-top">
+                                <div class="ana-icon-badge badge-emerald">
                                     <i class="fa-solid fa-bullseye"></i>
                                 </div>
-                                <div class="metric-meta">
-                                    <div class="metric-label">
-                                        Precision
-                                        <i class="fa-solid fa-circle-info kpi-info-icon" title="Of all predicted child detections, what fraction were truly children"></i>
-                                    </div>
+                                <span class="ana-bench-label">
+                                    Precision
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Of all predicted child detections, what fraction were truly children"></i>
+                                </span>
+                            </div>
+                            <div class="ana-bench-value color-emerald">0.936</div>
+                            <div class="ana-bench-progress">
+                                <div class="ana-progress-track">
+                                    <div class="ana-progress-fill fill-emerald" style="width: 93.6%;"></div>
                                 </div>
                             </div>
-                            <div class="metric-value-wrap">
-                                <div class="metric-value" style="color: #059669;">0.936</div>
-                            </div>
-                            <div class="metric-sub positive">
-                                <i class="fa-solid fa-check"></i> 93.6% alert accuracy
+                            <div class="ana-bench-foot">
+                                <span class="ana-kpi-context-pill pill-emerald">
+                                    <i class="fa-solid fa-check" style="font-size: 8px;"></i>
+                                    93.6% alert accuracy
+                                </span>
                             </div>
                         </div>
 
-                        <div class="metric-card">
-                            <div class="metric-card-top">
-                                <div class="metric-icon-chip chip-blue">
+                        <!-- Recall -->
+                        <div class="ana-bench-card">
+                            <div class="ana-bench-top">
+                                <div class="ana-icon-badge badge-blue">
                                     <i class="fa-solid fa-crosshairs"></i>
                                 </div>
-                                <div class="metric-meta">
-                                    <div class="metric-label">
-                                        Recall
-                                        <i class="fa-solid fa-circle-info kpi-info-icon" title="Of all actual children in the test set, what fraction were successfully detected"></i>
-                                    </div>
+                                <span class="ana-bench-label">
+                                    Recall
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Of all actual children in the test set, what fraction were successfully detected"></i>
+                                </span>
+                            </div>
+                            <div class="ana-bench-value color-blue">0.910</div>
+                            <div class="ana-bench-progress">
+                                <div class="ana-progress-track">
+                                    <div class="ana-progress-fill fill-blue" style="width: 91.0%;"></div>
                                 </div>
                             </div>
-                            <div class="metric-value-wrap">
-                                <div class="metric-value" style="color: #2563eb;">0.910</div>
-                            </div>
-                            <div class="metric-sub">
-                                <i class="fa-solid fa-person-walking"></i> 91.0% child capture rate
+                            <div class="ana-bench-foot">
+                                <span class="ana-kpi-context-pill pill-blue">
+                                    <i class="fa-solid fa-person-walking" style="font-size: 8px;"></i>
+                                    91.0% child capture rate
+                                </span>
                             </div>
                         </div>
 
-                        <div class="metric-card">
-                            <div class="metric-card-top">
-                                <div class="metric-icon-chip chip-violet">
+                        <!-- F1-Score -->
+                        <div class="ana-bench-card">
+                            <div class="ana-bench-top">
+                                <div class="ana-icon-badge badge-violet">
                                     <i class="fa-solid fa-scale-balanced"></i>
                                 </div>
-                                <div class="metric-meta">
-                                    <div class="metric-label">
-                                        F1-Score
-                                        <i class="fa-solid fa-circle-info kpi-info-icon" title="Harmonic mean of Precision and Recall — single balanced accuracy measure"></i>
-                                    </div>
+                                <span class="ana-bench-label">
+                                    F1-Score
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Harmonic mean of Precision and Recall — single balanced accuracy measure"></i>
+                                </span>
+                            </div>
+                            <div class="ana-bench-value color-violet">0.923</div>
+                            <div class="ana-bench-progress">
+                                <div class="ana-progress-track">
+                                    <div class="ana-progress-fill fill-violet" style="width: 92.3%;"></div>
                                 </div>
                             </div>
-                            <div class="metric-value-wrap">
-                                <div class="metric-value" style="color: #9333ea;">0.923</div>
-                            </div>
-                            <div class="metric-sub">
-                                <i class="fa-solid fa-sliders"></i> Harmonic balance (P &amp; R)
+                            <div class="ana-bench-foot">
+                                <span class="ana-kpi-context-pill pill-violet">
+                                    <i class="fa-solid fa-sliders" style="font-size: 8px;"></i>
+                                    Harmonic balance (P &amp; R)
+                                </span>
                             </div>
                         </div>
 
-                        <div class="metric-card">
-                            <div class="metric-card-top">
-                                <div class="metric-icon-chip chip-cyan">
+                        <!-- mAP@50 -->
+                        <div class="ana-bench-card">
+                            <div class="ana-bench-top">
+                                <div class="ana-icon-badge badge-cyan">
                                     <i class="fa-solid fa-award"></i>
                                 </div>
-                                <div class="metric-meta">
-                                    <div class="metric-label">
-                                        mAP@50
-                                        <i class="fa-solid fa-circle-info kpi-info-icon" title="Mean Average Precision at 50% IoU threshold — standard YOLO detection accuracy metric"></i>
-                                    </div>
+                                <span class="ana-bench-label">
+                                    mAP@50
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Mean Average Precision at 50% IoU threshold — standard YOLO detection accuracy metric"></i>
+                                </span>
+                            </div>
+                            <div class="ana-bench-value color-cyan">0.962</div>
+                            <div class="ana-bench-progress">
+                                <div class="ana-progress-track">
+                                    <div class="ana-progress-fill fill-cyan" style="width: 96.2%;"></div>
                                 </div>
                             </div>
-                            <div class="metric-value-wrap">
-                                <div class="metric-value" style="color: #0891b2;">0.962</div>
-                            </div>
-                            <div class="metric-sub">
-                                <i class="fa-solid fa-layer-group"></i> Detection score @ 0.5 IoU
+                            <div class="ana-bench-foot">
+                                <span class="ana-kpi-context-pill pill-cyan">
+                                    <i class="fa-solid fa-layer-group" style="font-size: 8px;"></i>
+                                    Detection score @ 0.5 IoU
+                                </span>
                             </div>
                         </div>
                     </div>
 
+                    <!-- Eval Note -->
                     <div class="eval-note-box">
                         <i class="fa-solid fa-circle-info"></i>
                         <div>
-                            <strong>Offline Benchmark Context:</strong> These metrics reflect fixed offline evaluation on 1,497 labeled test samples from the 1,500-frame training evaluation run — not dynamic real-time traffic data. They are updated when a new model weights checkpoint is trained, validated, and deployed.
+                            <strong>Offline Benchmark Context:</strong> These metrics reflect fixed offline evaluation
+                            on 1,497 labeled test samples from the 1,500-frame training evaluation run — not dynamic
+                            real-time traffic data. They are updated when a new model weights checkpoint is trained,
+                            validated, and deployed.
                         </div>
                     </div>
                 </div>
