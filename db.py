@@ -253,5 +253,9 @@ def fetch_events(**kwargs):
 def stream_events(**kwargs):
     return event_repo.stream(**kwargs)
 
-def fetch_analytics_aggregates(time_range="all"):
-    return event_repo.fetch_analytics(time_range)
+def fetch_analytics_aggregates(time_range="all", start_date=None, end_date=None, year=None, months=None):
+    return event_repo.fetch_analytics(time_range, start_date=start_date, end_date=end_date, year=year, months=months)
+
+def fetch_available_dates():
+    return event_repo.fetch_available_dates()
+

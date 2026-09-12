@@ -274,45 +274,133 @@
                     </div>
                 </div>
 
-                <!-- B) KPI Cards -->
-                <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
-                    <div class="card">
-                        <div class="card-title">Total Warnings</div>
-                        <div class="card-value" id="ana-kpi-warnings">0</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">Child Detections</div>
-                        <div class="card-value" id="ana-kpi-detections">0</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">False Warnings</div>
-                        <div class="card-value" id="ana-kpi-false">0</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">Peak Hour</div>
-                        <div class="card-value" id="ana-kpi-peak">--</div>
-                    </div>
-                </div>
+                <!-- Main Content (Left) + Historical Filter Panel (Right) Layout Container -->
+                <div class="analytics-layout-container">
+                    <!-- Left Main Content: KPI Cards + Charts Grid -->
+                    <div class="analytics-main-content">
+                        <!-- B) KPI Cards -->
+                        <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                            <div class="card">
+                                <div class="card-title">Total Warnings</div>
+                                <div class="card-value" id="ana-kpi-warnings">0</div>
+                                <div class="card-footer" id="ana-kpi-warnings-sub" style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
+                            </div>
+                            <div class="card">
+                                <div class="card-title">Child Detections</div>
+                                <div class="card-value" id="ana-kpi-detections">0</div>
+                                <div class="card-footer" id="ana-kpi-detections-sub" style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
+                            </div>
+                            <div class="card">
+                                <div class="card-title">False Warnings</div>
+                                <div class="card-value" id="ana-kpi-false">0</div>
+                                <div class="card-footer" id="ana-kpi-false-sub" style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
+                            </div>
+                            <div class="card">
+                                <div class="card-title">Peak Hour</div>
+                                <div class="card-value" id="ana-kpi-peak">--</div>
+                                <div class="card-footer" id="ana-kpi-peak-sub" style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
+                            </div>
+                        </div>
 
-                <!-- C) Charts Grid -->
-                <div class="charts-grid"
-                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-bottom: 24px;">
-                    <div class="card chart-card">
-                        <div class="card-title">Warnings Over Time</div>
-                        <div class="chart-container" style="position: relative; height: 250px;">
-                            <canvas id="chartWarnings"></canvas>
+                        <!-- C) Charts Grid (2×2) -->
+                        <div class="charts-grid"
+                            style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 24px;">
+                            <div class="card chart-card">
+                                <div class="card-title">Warnings Over Time</div>
+                                <div class="chart-container" style="position: relative; height: 260px;">
+                                    <canvas id="chartWarnings"></canvas>
+                                </div>
+                            </div>
+                            <div class="card chart-card">
+                                <div class="card-title">Detections Over Time</div>
+                                <div class="chart-container" style="position: relative; height: 260px;">
+                                    <canvas id="chartDetections"></canvas>
+                                </div>
+                            </div>
+                            <div class="card chart-card">
+                                <div class="card-title">Alert Activation Reliability</div>
+                                <div class="chart-container" style="position: relative; height: 260px;">
+                                    <canvas id="chartReliability" role="img" aria-label="Donut chart showing the ratio of verified child warnings to false warnings"></canvas>
+                                </div>
+                            </div>
+                            <div class="card chart-card">
+                                <div class="card-title">School-Zone Operational Windows</div>
+                                <div class="chart-container" style="position: relative; height: 260px;">
+                                    <canvas id="chartScenario"></canvas>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="card chart-card">
-                        <div class="card-title">Detections Over Time</div>
-                        <div class="chart-container" style="position: relative; height: 250px;">
-                            <canvas id="chartDetections"></canvas>
-                        </div>
-                    </div>
-                    <div class="card chart-card">
-                        <div class="card-title">Scenario Comparison</div>
-                        <div class="chart-container" style="position: relative; height: 250px;">
-                            <canvas id="chartScenario"></canvas>
+
+                    <!-- Right Side Column: Historical Filter Panel + Selection Summary Card -->
+                    <div class="analytics-side-column">
+                        <aside class="analytics-side-panel card" id="anaCustomRange">
+                            <div class="side-panel-header">
+                                <div class="side-panel-title">
+                                    <span class="period-icon-wrap"><i class="fa-solid fa-calendar-days"></i></span>
+                                    <span class="period-heading">Historical Filter</span>
+                                </div>
+                                <span class="period-selection-badge" id="anaPeriodBadge">All Time</span>
+                            </div>
+
+                            <div class="side-panel-body">
+                                <!-- Year Selector (Vertical Stack) -->
+                                <div class="side-filter-group">
+                                    <span class="side-filter-label">YEAR</span>
+                                    <div class="side-year-list" id="anaYearChips">
+                                        <!-- Populated dynamically: vertical list -->
+                                    </div>
+                                </div>
+
+                                <!-- Month Selector (2-column compact grid) -->
+                                <div class="side-filter-group">
+                                    <span class="side-filter-label">MONTHS <span class="side-filter-hint">(Multi-select)</span></span>
+                                    <div class="side-month-grid" id="anaMonthChips">
+                                        <!-- Populated dynamically: Jan-Dec + All -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="side-panel-actions">
+                                <button class="btn-period-action btn-period-apply" id="anaApplyRange" title="Apply selected period">
+                                    <i class="fa-solid fa-check"></i> Apply Filter
+                                </button>
+                                <button class="btn-period-action btn-period-reset" id="anaClearRange" title="Reset to preset" style="display: none;">
+                                    <i class="fa-solid fa-rotate-left"></i> Reset
+                                </button>
+                            </div>
+                        </aside>
+
+                        <!-- Selection Summary Card -->
+                        <div class="card analytics-summary-card" id="anaSelectionSummary">
+                            <div class="summary-card-header">
+                                <div class="summary-card-title">
+                                    <span class="summary-icon-wrap"><i class="fa-solid fa-list-check"></i></span>
+                                    <span class="summary-heading">Selection summary</span>
+                                </div>
+                            </div>
+                            <div class="summary-card-body">
+                                <div class="summary-row" id="anaSumRowPeriod">
+                                    <span class="summary-label">Period</span>
+                                    <span class="summary-value" id="anaSumPeriod">--</span>
+                                </div>
+                                <div class="summary-row" id="anaSumRowWarnings">
+                                    <span class="summary-label">Warnings shown</span>
+                                    <span class="summary-value" id="anaSumWarnings">--</span>
+                                </div>
+                                <div class="summary-row" id="anaSumRowBusiest">
+                                    <span class="summary-label">Busiest month</span>
+                                    <span class="summary-value" id="anaSumBusiest">--</span>
+                                </div>
+                                <div class="summary-row" id="anaSumRowDataAvail">
+                                    <span class="summary-label">Data available</span>
+                                    <span class="summary-value" id="anaSumDataAvail">--</span>
+                                </div>
+                            </div>
+                            <div class="summary-chips-divider" id="anaSumChipsDivider" style="display: none;"></div>
+                            <div class="summary-chips-wrap" id="anaSumChips" style="display: none;">
+                                <!-- Removable month chips dynamically rendered here -->
+                            </div>
                         </div>
                     </div>
                 </div>
