@@ -1,826 +1,990 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IT Specialist Dashboard — Smart Crosswalk Alert System</title>
-    <!-- Fonts: Satoshi (primary UI) + JetBrains Mono (data/KPIs) -->
-    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700,900&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-        rel="stylesheet">
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- CSS -->
-    <link rel="stylesheet" href="/static/css/dashboard.css">
-    <!-- Scripts -->
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-
-<body>
-
-    <!-- Sidebar -->
-    <nav class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <div class="sidebar-brand">
-                <img src="/static/img/TMC_Logo.png" alt="TMC Logo" class="sidebar-logo">
-                <span>IT Dashboard</span>
-            </div>
-            <button class="sidebar-toggle" id="btnHamburger" aria-label="Toggle sidebar" aria-expanded="false"
-                aria-controls="sidebar">
-                <i class="fa-solid fa-bars"></i>
-            </button>
-        </div>
-        <div class="sidebar-nav">
-            <a href="#live" class="nav-item active">
-                <span class="nav-icon"><i class="fa-solid fa-server"></i></span>
-                <span class="nav-label">System Status</span>
-            </a>
-
-            <a href="#logs" class="nav-item">
-                <span class="nav-icon"><i class="fa-solid fa-database"></i></span>
-                <span class="nav-label">Data Logs</span>
-            </a>
-            <a href="#analytics" class="nav-item">
-                <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span>
-                <span class="nav-label">Model Accuracy</span>
-            </a>
-        </div>
-        <div class="sidebar-footer">
-            <div class="sidebar-divider"></div>
-            <!-- User Info -->
-            <div class="nav-item nav-item-user" style="cursor: default; padding: 10px 16px; opacity: 0.7;">
-                <span class="nav-icon"><i class="fa-solid fa-user-gear"></i></span>
-                <span class="nav-label" style="font-size: 0.8rem;">{{ full_name }}</span>
-            </div>
-            <!-- Change Password -->
-            <a href="#" class="nav-item" id="btn-change-password"
-                onclick="document.getElementById('passwordModal').style.display='flex'; return false;">
-                <span class="nav-icon"><i class="fa-solid fa-key"></i></span>
-                <span class="nav-label">Change Password</span>
-            </a>
-            <a href="/api/logout" class="nav-item nav-item-logout" id="btn-logout">
-                <span class="nav-icon"><i class="fa-solid fa-right-from-bracket"></i></span>
-                <span class="nav-label">Logout</span>
-            </a>
-        </div>
-    </nav>
-
-    <!-- Main Content -->
-    <main class="main-content">
-        <!-- Topbar -->
-        <header class="topbar">
-            <div class="topbar-left brand-lockup">
-                <div class="brand-icon">
-                    <i class="fa-solid fa-microchip"></i>
-                </div>
-                <div class="brand-titles">
-                    <h1 class="brand-title">
-                        <span class="title-prefix">IT Systems</span>
-                        Smart Crosswalk — Administration
-                    </h1>
-                </div>
-            </div>
-            <div class="topbar-right">
-                <!-- System Time Display -->
-                <div class="system-time" title="Last Sync Time">
-                    <i class="fa-regular fa-clock"></i>
-                    <span class="time-label">Sync:</span>
-                    <span id="last-update" class="time-value">--:--:--</span>
-                </div>
-
-                <!-- Divider -->
-                <div class="topbar-divider"></div>
-
-                <!-- Theme Toggle -->
-                <button class="topbar-action-btn" id="theme-toggle" title="Toggle Dark/Light Mode">
-                    <i class="fa-solid fa-moon"></i>
-                </button>
-
-                <!-- Status Pill -->
-                <div class="status-chip disconnected" id="connection-chip">
-                    <div class="status-indicator"></div>
-                    <span class="status-text">Connecting...</span>
-                </div>
-            </div>
-        </header>
-
-        <!-- Content Area -->
-        <div class="content-area">
-
-            <!-- ═══════════ SYSTEM STATUS SECTION ═══════════ -->
-            <section id="live-section" class="page-section active">
-                <div class="live-metrics-grid">
-                    <div class="card">
-                        <div class="card-title">Child-class in ROI</div>
-                        <div class="card-value" id="live-child">NO</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">Warning Device</div>
-                        <div class="card-value" id="live-warning">OFF</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">Confidence</div>
-                        <div class="card-value" id="live-conf">0.00</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">ROI Status</div>
-                        <div class="card-value" id="live-roi">OUTSIDE</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">AI Latency</div>
-                        <div class="card-value" id="live-latency">24ms</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">Stream Latency</div>
-                        <div class="card-value" id="live-stream-latency">--ms</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">FPS</div>
-                        <div class="card-value" id="live-fps">--</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">Frame Drop Rate</div>
-                        <div class="card-value" id="live-drop-rate">0.0%</div>
-                    </div>
-                </div>
-
-
-                <!-- Camera Feed -->
-                <div class="camera-grid">
-                    <div class="card">
-                        <div class="card-title" id="cameraCardTitle">Live Camera View</div>
-                        <div id="liveRoiBadge" class="status-chip"
-                            style="display: none; background-color: rgba(76, 175, 80, 0.1); color: #2e7d32; width: fit-content; margin-bottom: 12px;">
-                            <i class="fa-solid fa-crosshairs"></i> ROI Active
-                        </div>
-                        <div class="video-wrapper">
-                            <img id="liveCam" src="" alt="Live Camera Feed"
-                                style="display:none; width: 100%; height: auto; object-fit: cover;">
-                            <div id="camPlaceholder" class="cam-placeholder">
-                                <div style="font-size: 2rem; margin-bottom: 10px; color: #ccc;">
-                                    <i class="fa-solid fa-spinner fa-spin"></i>
-                                </div>
-                                <p><strong>Connecting to CCTV...</strong><br>Waiting for Hikvision stream.</p>
-                                <p style="font-size: 0.8rem; margin-top: 10px; color: #888;">Auto-connect on startup.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card lv-status-card">
-                        <div class="card-title"><i class="fa-solid fa-tower-broadcast"
-                                style="margin-right: 6px;"></i>System Diagnostics</div>
-                        <div class="cam-controls">
-                            <div class="control-group">
-                                <div class="control-label">Camera Stream</div>
-                                <div class="status-chip disconnected" id="sysStatusCamera">
-                                    <div class="status-indicator"></div> Checking...
-                                </div>
-                            </div>
-
-                            <div class="control-group">
-                                <div class="control-label">Relay Controller</div>
-                                <div class="status-chip disconnected" id="sysStatusRelay" title="ESP32 Serial Bridge">
-                                    <div class="status-indicator"></div>
-                                    <span id="sysStatusRelayText">Checking...</span>
-                                    <small id="sysRelayPort" class="telemetry-subdetail">(COM5)</small>
-                                </div>
-                            </div>
-
-                            <div class="control-group">
-                                <div class="control-label">Hardware Pulse</div>
-                                <div class="status-chip disconnected" id="sysStatusHeartbeat"
-                                    title="ESP32 Telemetry Heartbeat">
-                                    <div class="status-indicator"></div>
-                                    <span id="sysStatusHeartbeatText">Checking...</span>
-                                </div>
-                            </div>
-
-                            <div class="control-group">
-                                <div class="control-label">AI Inference Engine</div>
-                                <div class="status-chip disconnected" id="sysStatusAI">
-                                    <div class="status-indicator"></div> Checking...
-                                </div>
-                            </div>
-
-                            <div class="control-group">
-                                <div class="control-label">Warning Output</div>
-                                <div class="status-chip disconnected" id="sysStatusWarning">
-                                    <div class="status-indicator"></div> Standby
-                                </div>
-                            </div>
-
-                            <div class="control-group">
-                                <div class="control-label">Last Frame</div>
-                                <small id="sysLastFrame" class="lv-last-frame">---</small>
-                            </div>
-
-                            <!-- Edge Compute Utilization -->
-                            <div class="edge-compute-box" id="edgeComputeSection">
-                                <div class="edge-compute-title">
-                                    <i class="fa-solid fa-microchip"></i> Edge Compute Load
-                                </div>
-                                <div class="telemetry-metric-row">
-                                    <span class="telemetry-metric-label">CPU</span>
-                                    <div class="telemetry-bar-track">
-                                        <div id="cpu-load-bar" class="telemetry-bar-fill" style="width: 0%;"></div>
-                                    </div>
-                                    <span id="cpu-load-val" class="telemetry-metric-val">0%</span>
-                                </div>
-                                <div class="telemetry-metric-row">
-                                    <span class="telemetry-metric-label">RAM</span>
-                                    <div class="telemetry-bar-track">
-                                        <div id="ram-load-bar" class="telemetry-bar-fill ram" style="width: 0%;"></div>
-                                    </div>
-                                    <span id="ram-load-val" class="telemetry-metric-val">0%</span>
-                                </div>
-                            </div>
-
-                            <div class="lv-options-divider"></div>
-
-                            <div class="control-group">
-                                <div class="control-label">Options</div>
-                                <label class="toggle-label" for="debugOverlayToggle">
-                                    <div class="toggle-switch">
-                                        <input type="checkbox" id="debugOverlayToggle" checked>
-                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                                    </div>
-                                    <span class="toggle-text">AI Overlay (ROI + Boxes)</span>
-                                </label>
-                                <button id="btnReconnect" class="lv-reconnect-btn">
-                                    <i class="fa-solid fa-rotate-right"></i> Reconnect Camera
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="dashboard-grid">
-                    <div class="card" style="grid-column: span 2;">
-                        <h3>Live Event Feed</h3>
-                        <div id="event-feed" style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
-                            <!-- Feed items -->
-                        </div>
-                    </div>
-                    <!-- 3-Point Latency Breakdown (IT Specialist Exclusive — relocated to replace pending Power System) -->
-                    <div class="card latency-breakdown-card" id="latencyBreakdownCard">
-                        <div class="latency-card-header">
-                            <h3>
-                                <i class="fa-solid fa-stopwatch"
-                                    style="margin-right: 6px; color: var(--primary-accent);"></i>
-                                Pipeline Latency Breakdown
-                            </h3>
-                            <i class="fa-solid fa-circle-info kpi-info-icon"
-                                title="End-to-end latency from frame capture through YOLO inference to warning relay command, computed using monotonic clocks for precision."></i>
-                        </div>
-                        <div class="latency-timeline" id="latencyTimeline">
-                            <!-- Point 1: Frame Capture -->
-                            <div class="lt-point">
-                                <div class="lt-dot lt-dot-capture"></div>
-                                <div class="lt-info">
-                                    <span class="lt-label">Frame Captured</span>
-                                    <span class="lt-ts" id="lt-capture-ts">--:--:--.---</span>
-                                </div>
-                            </div>
-                            <div class="lt-segment">
-                                <div class="lt-connector"></div>
-                                <span class="lt-delta" id="lt-infer-delta">— ms <small>inference</small></span>
-                            </div>
-                            <!-- Point 2: Inference Output -->
-                            <div class="lt-point">
-                                <div class="lt-dot lt-dot-inference"></div>
-                                <div class="lt-info">
-                                    <span class="lt-label">Inference Done</span>
-                                    <span class="lt-ts" id="lt-inference-ts">--:--:--.---</span>
-                                </div>
-                            </div>
-                            <div class="lt-segment">
-                                <div class="lt-connector"></div>
-                                <span class="lt-delta" id="lt-warning-delta">— ms <small>relay / warning</small></span>
-                            </div>
-                            <!-- Point 3: Warning Decision -->
-                            <div class="lt-point">
-                                <div class="lt-dot lt-dot-warning"></div>
-                                <div class="lt-info">
-                                    <span class="lt-label">Warning Trigger</span>
-                                    <span class="lt-ts" id="lt-warning-ts">--:--:--.---</span>
-                                </div>
-                            </div>
-                            <!-- Total -->
-                            <div class="lt-total-bar">
-                                <span class="lt-total-label">Total End-to-End</span>
-                                <span class="lt-total-value" id="lt-total-e2e">— ms</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-
-            <!-- ═══════════ DATA EXPORT & AUDIT SECTION ═══════════ -->
-            <section id="logs-section" class="page-section">
-                <div class="logs-header"
-                    style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                    <h2><i class="fa-solid fa-database" style="margin-right: 8px;"></i>Data Export & Audit</h2>
-                    <div class="export-actions">
-                        <button class="btn btn-outline" id="btnExportCSV"><i class="fa-solid fa-file-csv"></i>
-                            CSV</button>
-                        <button class="btn btn-outline" id="btnExportJSON"><i class="fa-solid fa-file-code"></i>
-                            JSON</button>
-                    </div>
-                </div>
-
-                <div class="filter-wrapper">
-                    <!-- Top Row: Search & Date Presets / Custom Range -->
-                    <div class="filter-row filter-row-top">
-                        <div class="logs-search-wrapper">
-                            <i class="fa-solid fa-magnifying-glass logs-search-icon"></i>
-                            <input type="text" id="logsSearch" placeholder="Search by time, scenario, status..."
-                                class="logs-search-input">
-                        </div>
-                        <div class="preset-group">
-                            <label style="margin-right:8px; font-weight:600; font-size:0.9rem;">Range:</label>
-                            <div class="btn-group">
-                                <button class="btn btn-sm btn-preset" data-range="15m">Last 15m</button>
-                                <button class="btn btn-sm btn-preset" data-range="1h">Last Hour</button>
-                                <button class="btn btn-sm btn-preset active" data-range="today">Today</button>
-                                <button class="btn btn-sm btn-preset" data-range="all">All</button>
-                            </div>
-                        </div>
-                        <!-- Compact Year/Month Historical Filter Popover Control -->
-                        <div class="logs-historical-wrapper" id="logsHistoricalWrapper">
-                            <button type="button" class="btn btn-sm btn-historical-trigger" id="btnLogsHistoricalTrigger" title="Filter logs by Year and Month">
-                                <i class="fa-solid fa-calendar-days" style="color: var(--primary-accent); margin-right: 6px;"></i>
-                                <span id="logsHistoricalTriggerLabel">Historical: All time</span>
-                                <i class="fa-solid fa-chevron-down trigger-chevron" style="margin-left: 6px; font-size: 0.72rem; opacity: 0.7;"></i>
-                            </button>
-
-                            <!-- Popover Dropdown -->
-                            <div class="logs-historical-popover" id="logsHistoricalPopover" style="display: none;">
-                                <div class="popover-header">
-                                    <div class="popover-title">
-                                        <span class="period-icon-wrap"><i class="fa-solid fa-calendar-days"></i></span>
-                                        <span class="period-heading">Historical Filter</span>
-                                    </div>
-                                    <button type="button" class="popover-close-btn" id="btnLogsHistoricalClose" title="Close">
-                                        <i class="fa-solid fa-xmark"></i>
-                                    </button>
-                                </div>
-
-                                <div class="popover-body">
-                                    <!-- Year Row -->
-                                    <div class="popover-filter-group">
-                                        <span class="side-filter-label">YEAR</span>
-                                        <div class="popover-year-list" id="logsYearChips">
-                                            <!-- Dynamically populated year chips -->
-                                        </div>
-                                    </div>
-
-                                    <!-- Month Multi-Select Grid -->
-                                    <div class="popover-filter-group">
-                                        <span class="side-filter-label">MONTHS <span class="side-filter-hint">(Multi-select)</span></span>
-                                        <div class="popover-month-grid" id="logsMonthChips">
-                                            <!-- Dynamically populated Jan-Dec + All Months -->
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="popover-footer">
-                                    <button type="button" class="btn btn-sm btn-primary" id="btnLogsHistoricalApply">
-                                        <i class="fa-solid fa-check" style="margin-right: 4px;"></i> Apply Filter
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-outline" id="btnLogsHistoricalReset">
-                                        <i class="fa-solid fa-rotate-left" style="margin-right: 4px;"></i> Reset
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Middle Row: Toggles, Slider, Scenario -->
-                    <div class="filter-row mt-3">
-                        <div class="filter-item">
-                            <label class="toggle-label" for="filterWarningOn">
-                                <div class="toggle-switch">
-                                    <input type="checkbox" id="filterWarningOn" checked>
-                                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                                </div>
-                                <span class="toggle-text">Warning ON</span>
-                            </label>
-                        </div>
-                        <div class="filter-item">
-                            <label class="toggle-label" for="filterInRoi">
-                                <div class="toggle-switch">
-                                    <input type="checkbox" id="filterInRoi">
-                                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                                </div>
-                                <span class="toggle-text">In ROI Only</span>
-                            </label>
-                        </div>
-                        <div class="filter-divider"></div>
-                        <div class="filter-item" style="display:flex; align-items:center; gap:8px;">
-                            <label for="filterMinConf" class="filter-label">Min Conf:</label>
-                            <input type="range" id="filterMinConf" min="0" max="1" step="0.01" value="0.00"
-                                class="logs-range-slider">
-                            <span id="filterMinConfLabel" class="conf-value-badge">0.00</span>
-                        </div>
-                        <div class="filter-divider"></div>
-                        <div class="filter-item" style="display:flex; align-items:center; gap:8px;">
-                            <label for="filterScenario" class="filter-label">Scenario:</label>
-                            <select id="filterScenario" class="scenario-select">
-                                <option value="All">All</option>
-                                <option value="Morning School Entry">Morning School Entry</option>
-                                <option value="Mid-Day Shift">Mid-Day Shift</option>
-                                <option value="Afternoon Dismissal">Afternoon Dismissal</option>
-                                <option value="Standard Daylight Ops">Standard Daylight Ops</option>
-                            </select>
-                        </div>
-                        <div class="filter-actions" style="margin-left:auto;">
-                            <button class="btn btn-primary btn-sm" id="btnApplyLogsFilters"><i class="fa-solid fa-check"
-                                    style="margin-right:5px;"></i>Apply</button>
-                            <button class="btn btn-outline btn-sm" id="btnResetLogsFilters"><i
-                                    class="fa-solid fa-rotate-left" style="margin-right:5px;"></i>Reset</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="table-container mt-4">
-                    <div id="logsDbWarning" class="alert alert-warning"
-                        style="display:none; margin-bottom: 15px; padding: 10px; border-radius: 6px; background-color: #fff3cd; color: #856404; font-size: 0.9rem;">
-                        <i class="fa-solid fa-triangle-exclamation"></i> DB unavailable — no data available
-                    </div>
-
-                    <table id="logsTable" class="it-logs-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 200px;">Timestamp</th>
-                                <th>Detection & Status</th>
-                                <th style="width: 110px; text-align: right;">Confidence</th>
-                                <th style="width: 110px; text-align: right;">Latency</th>
-                                <th style="width: 200px;">Scenario</th>
-                                <th style="width: 130px; text-align: center;">False Warning</th>
-                            </tr>
-                        </thead>
-                        <tbody id="logsTableBody">
-                            <!-- Logs injected here -->
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination -->
-                <div class="pagination-bar">
-                    <div class="page-size-group">
-                        <label>Rows:</label>
-                        <select id="pageSizeSelect" class="form-control" style="width:60px; padding:4px;">
-                            <option value="10">10</option>
-                            <option value="25" selected>25</option>
-                            <option value="50">50</option>
-                        </select>
-                        <span id="resultCount" class="text-muted ml-3"
-                            style="font-size:0.9rem; margin-left:15px;">Showing 0
-                            of 0 events</span>
-                    </div>
-                    <div class="page-nav">
-                        <button class="btn btn-outline btn-sm" id="pagePrev" disabled><i
-                                class="fa-solid fa-chevron-left"></i></button>
-                        <span id="pageIndicator" style="margin:0 10px; font-weight:600; font-size:0.9rem;">Page 1</span>
-                        <button class="btn btn-outline btn-sm" id="pageNext" disabled><i
-                                class="fa-solid fa-chevron-right"></i></button>
-                    </div>
-                </div>
-            </section>
-
-            <!-- ═══════════ MODEL ACCURACY & DIAGNOSTICS SECTION ═══════════ -->
-            <section id="analytics-section" class="page-section">
-                <!-- DB Fetch Warning -->
-                <div id="anaDbWarning"
-                    style="display:none; margin-bottom: 15px; padding: 10px; border-radius: 6px; background-color: #fff3cd; color: #856404; font-size: 0.9rem;">
-                    <i class="fa-solid fa-triangle-exclamation"></i> DB unavailable — no data available
-                </div>
-
-                <!-- A) Section Header + Range Filter -->
-                <div class="ana-section-header"
-                    style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                    <h2><i class="fa-solid fa-chart-line" style="margin-right: 8px;"></i>Model Accuracy &amp; Diagnostics</h2>
-                    <div class="btn-group">
-                        <button class="btn btn-sm btn-preset" data-ana-range="15m">Last 15m</button>
-                        <button class="btn btn-sm btn-preset" data-ana-range="1h">Last Hour</button>
-                        <button class="btn btn-sm btn-preset active" data-ana-range="today">Today</button>
-                        <button class="btn btn-sm btn-preset" data-ana-range="all">All</button>
-                    </div>
-                </div>
-
-                <!-- B) Live Operational KPI Cards -->
-                <div class="ana-kpi-grid">
-                    <!-- Avg Latency -->
-                    <div class="ana-kpi-card">
-                        <div class="ana-kpi-top">
-                            <div class="ana-icon-badge badge-cyan">
-                                <i class="fa-solid fa-gauge-high"></i>
-                            </div>
-                            <div class="ana-kpi-label-group">
-                                <span class="ana-kpi-label">
-                                    Avg Latency
-                                    <i class="fa-solid fa-circle-info kpi-info-icon"
-                                        title="Mean YOLOv8 inference time per video frame, excluding outlier idle gaps"></i>
-                                </span>
-                            </div>
-                        </div>
-                        <div class="ana-kpi-value-row">
-                            <span class="ana-kpi-value color-cyan" id="ana-kpi-latency">0ms</span>
-                        </div>
-                        <div class="ana-kpi-bottom">
-                            <span class="ana-kpi-context-pill pill-cyan">
-                                <i class="fa-solid fa-circle" style="font-size: 5px; vertical-align: middle;"></i>
-                                Real-Time &bull; Target &lt; 30ms
-                            </span>
-                            <div class="ana-micro-sparkline sparkline-cyan">
-                                <span style="height: 40%;"></span>
-                                <span style="height: 65%;"></span>
-                                <span style="height: 50%;"></span>
-                                <span style="height: 85%;"></span>
-                                <span style="height: 70%;"></span>
-                                <span style="height: 55%;"></span>
-                                <span style="height: 45%;"></span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Peak Latency -->
-                    <div class="ana-kpi-card">
-                        <div class="ana-kpi-top">
-                            <div class="ana-icon-badge badge-purple">
-                                <i class="fa-solid fa-bolt-lightning"></i>
-                            </div>
-                            <div class="ana-kpi-label-group">
-                                <span class="ana-kpi-label">
-                                    Peak Latency
-                                    <i class="fa-solid fa-circle-info kpi-info-icon"
-                                        title="Highest single-frame inference time in this period"></i>
-                                </span>
-                            </div>
-                        </div>
-                        <div class="ana-kpi-value-row">
-                            <span class="ana-kpi-value color-purple" id="ana-kpi-peak-latency">0ms</span>
-                        </div>
-                        <div class="ana-kpi-bottom">
-                            <span class="ana-kpi-context-pill pill-purple">
-                                <i class="fa-solid fa-arrow-trend-up" style="font-size: 9px;"></i>
-                                Max latency in window
-                            </span>
-                            <div class="ana-micro-sparkline sparkline-purple">
-                                <span style="height: 30%;"></span>
-                                <span style="height: 50%;"></span>
-                                <span style="height: 75%;"></span>
-                                <span style="height: 60%;"></span>
-                                <span style="height: 90%;"></span>
-                                <span style="height: 45%;"></span>
-                                <span style="height: 35%;"></span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- False Warning Rate -->
-                    <div class="ana-kpi-card">
-                        <div class="ana-kpi-top">
-                            <div class="ana-icon-badge badge-amber">
-                                <i class="fa-solid fa-shield-halved"></i>
-                            </div>
-                            <div class="ana-kpi-label-group">
-                                <span class="ana-kpi-label">
-                                    False Warning Rate
-                                    <i class="fa-solid fa-circle-info kpi-info-icon"
-                                        title="Warnings triggered when no child was in the ROI — lower is better"></i>
-                                </span>
-                            </div>
-                        </div>
-                        <div class="ana-kpi-value-row">
-                            <span class="ana-kpi-value color-amber" id="ana-kpi-fwr">0.0%</span>
-                        </div>
-                        <div class="ana-kpi-bottom">
-                            <span class="ana-kpi-context-pill pill-emerald">
-                                <i class="fa-solid fa-shield-check" style="font-size: 9px;"></i>
-                                Target &lt; 5.0%
-                            </span>
-                            <div class="ana-micro-sparkline sparkline-amber">
-                                <span style="height: 20%;"></span>
-                                <span style="height: 15%;"></span>
-                                <span style="height: 25%;"></span>
-                                <span style="height: 18%;"></span>
-                                <span style="height: 22%;"></span>
-                                <span style="height: 12%;"></span>
-                                <span style="height: 16%;"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- C) Confidence Score Distribution Chart -->
-                <div class="ana-chart-card">
-                    <div class="ana-chart-header">
-                        <div class="ana-chart-header-left">
-                            <div class="ana-icon-badge badge-coral"
-                                style="width: 34px; height: 34px; font-size: 0.82rem;">
-                                <i class="fa-solid fa-chart-simple"></i>
-                            </div>
-                            <div class="ana-chart-title-group">
-                                <h3 class="ana-chart-title">
-                                    Confidence Score Distribution
-                                    <i class="fa-solid fa-circle-info kpi-info-icon"
-                                        title="Distribution of child detection confidence scores across 5 bins. Scores ≥ 0.65 trigger physical crosswalk warnings."></i>
-                                </h3>
-                                <p class="ana-chart-subtitle">5-Bin Detection Profile &bull; Active Window Telemetry</p>
-                            </div>
-                        </div>
-                        <div class="ana-pill-badge pill-badge-accent">
-                            <i class="fa-solid fa-bell" style="font-size: 9px;"></i>
-                            Warning Threshold &ge; 0.65
-                        </div>
-                    </div>
-                    <div class="chart-container" style="position: relative; height: 270px; padding: 0 4px;">
-                        <canvas id="chartConfidence"></canvas>
-                    </div>
-                </div>
-
-                <!-- D) Offline Evaluation Report — Test Dataset -->
-                <div class="ana-eval-card">
-                    <div class="ana-eval-header">
-                        <div class="ana-eval-header-left">
-                            <div class="ana-icon-badge badge-coral"
-                                style="width: 34px; height: 34px; font-size: 0.82rem;">
-                                <i class="fa-solid fa-flask-vial"></i>
-                            </div>
-                            <div class="ana-chart-title-group">
-                                <h3 class="ana-chart-title">Model Accuracy Check</h3>
-                                <p class="ana-chart-subtitle">These numbers are from AI training results during
-                                    development</p>
-                            </div>
-                        </div>
-                        <div class="ana-eval-badges">
-                            <span class="ana-pill-badge pill-badge-muted">
-                                <i class="fa-solid fa-lock" style="font-size: 8px;"></i>
-                                {{ model_name or 'yolov8n_1500_frames.pt' }}
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- 4 Benchmark Metric Cards -->
-                    <div class="ana-bench-grid">
-                        <!-- Precision -->
-                        <div class="ana-bench-card">
-                            <div class="ana-bench-top">
-                                <div class="ana-icon-badge badge-emerald">
-                                    <i class="fa-solid fa-bullseye"></i>
-                                </div>
-                                <span class="ana-bench-label">
-                                    Precision
-                                    <i class="fa-solid fa-circle-info kpi-info-icon"
-                                        title="Of all predicted child detections, what fraction were truly children"></i>
-                                </span>
-                            </div>
-                            <div class="ana-bench-value color-emerald">0.936</div>
-                            <div class="ana-bench-progress">
-                                <div class="ana-progress-track">
-                                    <div class="ana-progress-fill fill-emerald" style="width: 93.6%;"></div>
-                                </div>
-                            </div>
-                            <div class="ana-bench-foot">
-                                <span class="ana-kpi-context-pill pill-emerald">
-                                    <i class="fa-solid fa-check" style="font-size: 8px;"></i>
-                                    93.6% alert accuracy
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- Recall -->
-                        <div class="ana-bench-card">
-                            <div class="ana-bench-top">
-                                <div class="ana-icon-badge badge-blue">
-                                    <i class="fa-solid fa-crosshairs"></i>
-                                </div>
-                                <span class="ana-bench-label">
-                                    Recall
-                                    <i class="fa-solid fa-circle-info kpi-info-icon"
-                                        title="Of all actual children in the test set, what fraction were successfully detected"></i>
-                                </span>
-                            </div>
-                            <div class="ana-bench-value color-blue">0.910</div>
-                            <div class="ana-bench-progress">
-                                <div class="ana-progress-track">
-                                    <div class="ana-progress-fill fill-blue" style="width: 91.0%;"></div>
-                                </div>
-                            </div>
-                            <div class="ana-bench-foot">
-                                <span class="ana-kpi-context-pill pill-blue">
-                                    <i class="fa-solid fa-person-walking" style="font-size: 8px;"></i>
-                                    91.0% child capture rate
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- F1-Score -->
-                        <div class="ana-bench-card">
-                            <div class="ana-bench-top">
-                                <div class="ana-icon-badge badge-violet">
-                                    <i class="fa-solid fa-scale-balanced"></i>
-                                </div>
-                                <span class="ana-bench-label">
-                                    F1-Score
-                                    <i class="fa-solid fa-circle-info kpi-info-icon"
-                                        title="Harmonic mean of Precision and Recall — single balanced accuracy measure"></i>
-                                </span>
-                            </div>
-                            <div class="ana-bench-value color-violet">0.923</div>
-                            <div class="ana-bench-progress">
-                                <div class="ana-progress-track">
-                                    <div class="ana-progress-fill fill-violet" style="width: 92.3%;"></div>
-                                </div>
-                            </div>
-                            <div class="ana-bench-foot">
-                                <span class="ana-kpi-context-pill pill-violet">
-                                    <i class="fa-solid fa-sliders" style="font-size: 8px;"></i>
-                                    Harmonic balance (P &amp; R)
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- mAP@50 -->
-                        <div class="ana-bench-card">
-                            <div class="ana-bench-top">
-                                <div class="ana-icon-badge badge-cyan">
-                                    <i class="fa-solid fa-award"></i>
-                                </div>
-                                <span class="ana-bench-label">
-                                    mAP@50
-                                    <i class="fa-solid fa-circle-info kpi-info-icon"
-                                        title="Mean Average Precision at 50% IoU threshold — standard YOLO detection accuracy metric"></i>
-                                </span>
-                            </div>
-                            <div class="ana-bench-value color-cyan">0.962</div>
-                            <div class="ana-bench-progress">
-                                <div class="ana-progress-track">
-                                    <div class="ana-progress-fill fill-cyan" style="width: 96.2%;"></div>
-                                </div>
-                            </div>
-                            <div class="ana-bench-foot">
-                                <span class="ana-kpi-context-pill pill-cyan">
-                                    <i class="fa-solid fa-layer-group" style="font-size: 8px;"></i>
-                                    Detection score @ 0.5 IoU
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Eval Note -->
-                    <div class="eval-note-box">
-                        <i class="fa-solid fa-circle-info"></i>
-                        <div>
-                            <strong>Offline Benchmark Context:</strong> These metrics reflect fixed offline evaluation
-                            on 1,497 labeled test samples from the 1,500-frame training evaluation run — not dynamic
-                            real-time traffic data. They are updated when a new model weights checkpoint is trained,
-                            validated, and deployed.
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-        </div>
-    </main>
-
-    <!-- Change Password Modal -->
-    <div id="passwordModal" class="modal-overlay" style="display:none;">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h3><i class="fa-solid fa-key modal-header-icon"></i>Change Password</h3>
-                <button class="modal-close-btn"
-                    onclick="document.getElementById('passwordModal').style.display='none';"><i
-                        class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div id="pwdMsg" class="modal-msg" style="display:none;"></div>
-            <form id="changePasswordForm" autocomplete="off">
-                <div class="form-group">
-                    <label for="pwdCurrent">Current Password</label>
-                    <input type="password" id="pwdCurrent" class="modal-input" required>
-                </div>
-                <div class="form-group">
-                    <label for="pwdNew">New Password <small class="text-muted">(min. 6 chars)</small></label>
-                    <input type="password" id="pwdNew" class="modal-input" required minlength="6">
-                </div>
-                <div class="form-group">
-                    <label for="pwdConfirm">Confirm New Password</label>
-                    <input type="password" id="pwdConfirm" class="modal-input" required minlength="6">
-                </div>
-                <button type="submit" class="btn btn-primary modal-submit-btn">
-                    <i class="fa-solid fa-check" style="margin-right:6px;"></i>Update Password
-                </button>
-            </form>
-        </div>
-    </div>
-
-    <div id="sidebarBackdrop" class="backdrop"></div>
-    <script src="/static/js/contract.js"></script>
-    <script src="/static/js/dashboard.js"></script>
-</body>
-
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Specialist Dashboard — Smart Crosswalk Alert System</title>
+    <!-- Fonts: Satoshi (primary UI) + JetBrains Mono (data/KPIs) -->
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700,900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- CSS -->
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <!-- Scripts -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-brand">
+                <img src="/static/img/TMC_Logo.png" alt="TMC Logo" class="sidebar-logo">
+                <span>IT Dashboard</span>
+            </div>
+            <button class="sidebar-toggle" id="btnHamburger" aria-label="Toggle sidebar" aria-expanded="false"
+                aria-controls="sidebar">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+        </div>
+        <div class="sidebar-nav">
+            <a href="#live" class="nav-item active">
+                <span class="nav-icon"><i class="fa-solid fa-server"></i></span>
+                <span class="nav-label">System Status</span>
+            </a>
+
+            <a href="#logs" class="nav-item">
+                <span class="nav-icon"><i class="fa-solid fa-database"></i></span>
+                <span class="nav-label">Data Logs</span>
+            </a>
+            <a href="#analytics" class="nav-item">
+                <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span>
+                <span class="nav-label">Model Accuracy</span>
+            </a>
+        </div>
+        <div class="sidebar-footer">
+            <div class="sidebar-divider"></div>
+            <!-- User Info -->
+            <div class="nav-item nav-item-user" style="cursor: default; padding: 10px 16px; opacity: 0.7;">
+                <span class="nav-icon"><i class="fa-solid fa-user-gear"></i></span>
+                <span class="nav-label" style="font-size: 0.8rem;">{{ full_name }}</span>
+            </div>
+            <!-- Change Password -->
+            <a href="#" class="nav-item" id="btn-change-password"
+                onclick="document.getElementById('passwordModal').style.display='flex'; return false;">
+                <span class="nav-icon"><i class="fa-solid fa-key"></i></span>
+                <span class="nav-label">Change Password</span>
+            </a>
+            <a href="/api/logout" class="nav-item nav-item-logout" id="btn-logout">
+                <span class="nav-icon"><i class="fa-solid fa-right-from-bracket"></i></span>
+                <span class="nav-label">Logout</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Topbar -->
+        <header class="topbar">
+            <div class="topbar-left brand-lockup">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-microchip"></i>
+                </div>
+                <div class="brand-titles">
+                    <h1 class="brand-title">
+                        <span class="title-prefix">IT Systems</span>
+                        Smart Crosswalk — Administration
+                    </h1>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <!-- System Time Display -->
+                <div class="system-time" title="Last Sync Time">
+                    <i class="fa-regular fa-clock"></i>
+                    <span class="time-label">Sync:</span>
+                    <span id="last-update" class="time-value">--:--:--</span>
+                </div>
+
+                <!-- Divider -->
+                <div class="topbar-divider"></div>
+
+                <!-- Theme Toggle -->
+                <button class="topbar-action-btn" id="theme-toggle" title="Toggle Dark/Light Mode">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+
+                <!-- Status Pill -->
+                <div class="status-chip disconnected" id="connection-chip">
+                    <div class="status-indicator"></div>
+                    <span class="status-text">Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <div class="content-area">
+
+            <!-- ═══════════ SYSTEM STATUS SECTION ═══════════ -->
+            <section id="live-section" class="page-section active">
+                <div class="live-metrics-grid">
+                    <div class="card">
+                        <div class="card-title">Child-class in ROI</div>
+                        <div class="card-value" id="live-child">NO</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Warning Device</div>
+                        <div class="card-value" id="live-warning">OFF</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Confidence</div>
+                        <div class="card-value" id="live-conf">0.00</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">ROI Status</div>
+                        <div class="card-value" id="live-roi">OUTSIDE</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">AI Latency</div>
+                        <div class="card-value" id="live-latency">24ms</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Stream Latency</div>
+                        <div class="card-value" id="live-stream-latency">--ms</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">FPS</div>
+                        <div class="card-value" id="live-fps">--</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Frame Drop Rate</div>
+                        <div class="card-value" id="live-drop-rate">0.0%</div>
+                    </div>
+                </div>
+
+                <!-- Camera Feed -->
+                <div class="camera-grid">
+                    <div class="card">
+                        <div class="card-title" id="cameraCardTitle">Live Camera View</div>
+                        <div id="liveRoiBadge" class="status-chip"
+                            style="display: none; background-color: rgba(76, 175, 80, 0.1); color: #2e7d32; width: fit-content; margin-bottom: 12px;">
+                            <i class="fa-solid fa-crosshairs"></i> ROI Active
+                        </div>
+                        <div class="video-wrapper">
+                            <img id="liveCam" src="" alt="Live Camera Feed"
+                                style="display:none; width: 100%; height: auto; object-fit: cover;">
+                            <div id="camPlaceholder" class="cam-placeholder">
+                                <div style="font-size: 2rem; margin-bottom: 10px; color: #ccc;">
+                                    <i class="fa-solid fa-spinner fa-spin"></i>
+                                </div>
+                                <p><strong>Connecting to CCTV...</strong><br>Waiting for Hikvision stream.</p>
+                                <p style="font-size: 0.8rem; margin-top: 10px; color: #888;">Auto-connect on startup.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card lv-status-card">
+                        <div class="card-title"><i class="fa-solid fa-tower-broadcast"
+                                style="margin-right: 6px;"></i>System Diagnostics</div>
+                        <div class="cam-controls">
+                            <div class="control-group">
+                                <div class="control-label">Camera Stream</div>
+                                <div class="status-chip disconnected" id="sysStatusCamera">
+                                    <div class="status-indicator"></div> Checking...
+                                </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">Relay Controller</div>
+                                <div class="status-chip disconnected" id="sysStatusRelay" title="ESP32 Serial Bridge">
+                                    <div class="status-indicator"></div>
+                                    <span id="sysStatusRelayText">Checking...</span>
+                                    <small id="sysRelayPort" class="telemetry-subdetail">(COM5)</small>
+                                </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">Hardware Pulse</div>
+                                <div class="status-chip disconnected" id="sysStatusHeartbeat"
+                                    title="ESP32 Telemetry Heartbeat">
+                                    <div class="status-indicator"></div>
+                                    <span id="sysStatusHeartbeatText">Checking...</span>
+                                </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">AI Inference Engine</div>
+                                <div class="status-chip disconnected" id="sysStatusAI">
+                                    <div class="status-indicator"></div> Checking...
+                                </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">Warning Output</div>
+                                <div class="status-chip disconnected" id="sysStatusWarning">
+                                    <div class="status-indicator"></div> Standby
+                                </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">Last Frame</div>
+                                <small id="sysLastFrame" class="lv-last-frame">---</small>
+                            </div>
+
+                            <!-- Edge Compute Utilization -->
+                            <div class="edge-compute-box" id="edgeComputeSection">
+                                <div class="edge-compute-title">
+                                    <i class="fa-solid fa-microchip"></i> Edge Compute Load
+                                </div>
+                                <div class="telemetry-metric-row">
+                                    <span class="telemetry-metric-label">CPU</span>
+                                    <div class="telemetry-bar-track">
+                                        <div id="cpu-load-bar" class="telemetry-bar-fill" style="width: 0%;"></div>
+                                    </div>
+                                    <span id="cpu-load-val" class="telemetry-metric-val">0%</span>
+                                </div>
+                                <div class="telemetry-metric-row">
+                                    <span class="telemetry-metric-label">RAM</span>
+                                    <div class="telemetry-bar-track">
+                                        <div id="ram-load-bar" class="telemetry-bar-fill ram" style="width: 0%;"></div>
+                                    </div>
+                                    <span id="ram-load-val" class="telemetry-metric-val">0%</span>
+                                </div>
+                            </div>
+
+                            <div class="lv-options-divider"></div>
+
+                            <div class="control-group">
+                                <div class="control-label">Options</div>
+                                <label class="toggle-label" for="debugOverlayToggle">
+                                    <div class="toggle-switch">
+                                        <input type="checkbox" id="debugOverlayToggle" checked>
+                                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                    </div>
+                                    <span class="toggle-text">AI Overlay (ROI + Boxes)</span>
+                                </label>
+                                <button id="btnReconnect" class="lv-reconnect-btn">
+                                    <i class="fa-solid fa-rotate-right"></i> Reconnect Camera
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3-Point Pipeline Latency Breakdown (Full-Width Collapsible Stepper) -->
+                <div class="card latency-breakdown-card" id="latencyBreakdownCard">
+                    <div class="latency-card-header" id="latencyCardHeader" role="button" tabindex="0"
+                        aria-expanded="false" aria-controls="latencyCardBody" title="Click to expand/collapse pipeline latency breakdown">
+                        <div class="latency-header-left">
+                            <div class="latency-header-icon-wrap">
+                                <i class="fa-solid fa-stopwatch"></i>
+                            </div>
+                            <div class="latency-header-titles">
+                                <h3 class="latency-header-title">
+                                    Pipeline Latency Breakdown
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="End-to-end latency from frame capture through YOLO inference to warning relay command, computed using monotonic clocks for precision."></i>
+                                </h3>
+                                <span class="latency-header-subtitle">3-point monotonic timestamp execution chain</span>
+                            </div>
+                        </div>
+                        <div class="latency-header-right">
+                            <div class="latency-header-total-pill">
+                                <span class="latency-header-total-label">Total E2E:</span>
+                                <strong id="lt-header-total-e2e" class="latency-header-total-val">— ms</strong>
+                            </div>
+                            <button type="button" class="latency-toggle-btn" id="btnToggleLatencyBreakdown"
+                                aria-label="Toggle pipeline latency breakdown">
+                                <i class="fa-solid fa-chevron-down latency-chevron"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="latency-card-body" id="latencyCardBody" style="display: none;">
+                        <div class="lt-stepper-container">
+                            <div class="lt-stepper" id="latencyTimeline">
+                                <!-- Step 1: Frame Capture -->
+                                <div class="lt-step lt-step-capture">
+                                    <div class="lt-step-badge">
+                                        <i class="fa-solid fa-camera"></i>
+                                    </div>
+                                    <div class="lt-step-content">
+                                        <span class="lt-step-num">Step 01</span>
+                                        <h4 class="lt-step-title">Frame Captured</h4>
+                                        <span class="lt-ts" id="lt-capture-ts">--:--:--.---</span>
+                                        <span class="lt-step-sub">RTSP camera ingest</span>
+                                    </div>
+                                </div>
+
+                                <!-- Connector 1 -> 2 with Inference Delta -->
+                                <div class="lt-connector-wrap">
+                                    <div class="lt-connector-line"></div>
+                                    <div class="lt-delta-badge" id="lt-infer-delta">
+                                        <i class="fa-solid fa-bolt"></i>
+                                        <span>+— ms</span>
+                                        <small>inference</small>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2: Inference Done -->
+                                <div class="lt-step lt-step-inference">
+                                    <div class="lt-step-badge">
+                                        <i class="fa-solid fa-brain"></i>
+                                    </div>
+                                    <div class="lt-step-content">
+                                        <span class="lt-step-num">Step 02</span>
+                                        <h4 class="lt-step-title">Inference Done</h4>
+                                        <span class="lt-ts" id="lt-inference-ts">--:--:--.---</span>
+                                        <span class="lt-step-sub">YOLOv8 CNN bounding box</span>
+                                    </div>
+                                </div>
+
+                                <!-- Connector 2 -> 3 with Warning Delta -->
+                                <div class="lt-connector-wrap">
+                                    <div class="lt-connector-line"></div>
+                                    <div class="lt-delta-badge" id="lt-warning-delta">
+                                        <i class="fa-solid fa-tower-broadcast"></i>
+                                        <span>+— ms</span>
+                                        <small>relay command</small>
+                                    </div>
+                                </div>
+
+                                <!-- Step 3: Warning Trigger -->
+                                <div class="lt-step lt-step-warning">
+                                    <div class="lt-step-badge">
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                    </div>
+                                    <div class="lt-step-content">
+                                        <span class="lt-step-num">Step 03</span>
+                                        <h4 class="lt-step-title">Warning Trigger</h4>
+                                        <span class="lt-ts" id="lt-warning-ts">--:--:--.---</span>
+                                        <span class="lt-step-sub">ESP32 relay command</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Summary Takeaway Banner -->
+                            <div class="lt-summary-banner">
+                                <div class="lt-summary-left">
+                                    <span class="lt-summary-pill">
+                                        <i class="fa-solid fa-circle-check"></i> Monotonic Time Delta
+                                    </span>
+                                    <span class="lt-summary-hint">End-to-end hardware &amp; AI response cycle</span>
+                                </div>
+                                <div class="lt-summary-right">
+                                    <span class="lt-total-label">Total Pipeline Latency</span>
+                                    <span class="lt-total-value" id="lt-total-e2e">— ms</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════ DATA EXPORT & AUDIT SECTION ═══════════ -->
+            <section id="logs-section" class="page-section">
+                <div class="logs-header"
+                    style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <h2><i class="fa-solid fa-database" style="margin-right: 8px;"></i>Data Export & Audit</h2>
+                    <div class="export-actions">
+                        <button class="btn btn-outline" id="btnExportCSV"><i class="fa-solid fa-file-csv"></i>
+                            CSV</button>
+                        <button class="btn btn-outline" id="btnExportJSON"><i class="fa-solid fa-file-code"></i>
+                            JSON</button>
+                    </div>
+                </div>
+
+                <div class="filter-wrapper">
+                    <!-- Top Row: Search & Date Presets / Custom Range -->
+                    <div class="filter-row filter-row-top">
+                        <div class="logs-search-wrapper">
+                            <i class="fa-solid fa-magnifying-glass logs-search-icon"></i>
+                            <input type="text" id="logsSearch" placeholder="Search by time, scenario, status..."
+                                class="logs-search-input">
+                        </div>
+                        <div class="preset-group">
+                            <label style="margin-right:8px; font-weight:600; font-size:0.9rem;">Range:</label>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-preset" data-range="15m">Last 15m</button>
+                                <button class="btn btn-sm btn-preset" data-range="1h">Last Hour</button>
+                                <button class="btn btn-sm btn-preset active" data-range="today">Today</button>
+                                <button class="btn btn-sm btn-preset" data-range="all">All</button>
+                            </div>
+                        </div>
+                        <!-- Compact Year/Month Historical Filter Popover Control -->
+                        <div class="logs-historical-wrapper" id="logsHistoricalWrapper">
+                            <button type="button" class="btn btn-sm btn-historical-trigger"
+                                id="btnLogsHistoricalTrigger" title="Filter logs by Year and Month">
+                                <i class="fa-solid fa-calendar-days"
+                                    style="color: var(--primary-accent); margin-right: 6px;"></i>
+                                <span id="logsHistoricalTriggerLabel">Historical: All time</span>
+                                <i class="fa-solid fa-chevron-down trigger-chevron"
+                                    style="margin-left: 6px; font-size: 0.72rem; opacity: 0.7;"></i>
+                            </button>
+
+                            <!-- Popover Dropdown -->
+                            <div class="logs-historical-popover" id="logsHistoricalPopover" style="display: none;">
+                                <div class="popover-header">
+                                    <div class="popover-title">
+                                        <span class="period-icon-wrap"><i class="fa-solid fa-calendar-days"></i></span>
+                                        <span class="period-heading">Historical Filter</span>
+                                    </div>
+                                    <button type="button" class="popover-close-btn" id="btnLogsHistoricalClose"
+                                        title="Close">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+
+                                <div class="popover-body">
+                                    <!-- Year Row -->
+                                    <div class="popover-filter-group">
+                                        <span class="side-filter-label">YEAR</span>
+                                        <div class="popover-year-list" id="logsYearChips">
+                                            <!-- Dynamically populated year chips -->
+                                        </div>
+                                    </div>
+
+                                    <!-- Month Multi-Select Grid -->
+                                    <div class="popover-filter-group">
+                                        <span class="side-filter-label">MONTHS <span
+                                                class="side-filter-hint">(Multi-select)</span></span>
+                                        <div class="popover-month-grid" id="logsMonthChips">
+                                            <!-- Dynamically populated Jan-Dec + All Months -->
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="popover-footer">
+                                    <button type="button" class="btn btn-sm btn-primary" id="btnLogsHistoricalApply">
+                                        <i class="fa-solid fa-check" style="margin-right: 4px;"></i> Apply Filter
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline" id="btnLogsHistoricalReset">
+                                        <i class="fa-solid fa-rotate-left" style="margin-right: 4px;"></i> Reset
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Middle Row: Toggles, Slider, Scenario -->
+                    <div class="filter-row mt-3">
+                        <div class="filter-item">
+                            <label class="toggle-label" for="filterWarningOn">
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="filterWarningOn" checked>
+                                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                </div>
+                                <span class="toggle-text">Warning ON</span>
+                            </label>
+                        </div>
+                        <div class="filter-item">
+                            <label class="toggle-label" for="filterInRoi">
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="filterInRoi">
+                                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                </div>
+                                <span class="toggle-text">In ROI Only</span>
+                            </label>
+                        </div>
+                        <div class="filter-divider"></div>
+                        <div class="filter-item" style="display:flex; align-items:center; gap:8px;">
+                            <label for="filterMinConf" class="filter-label">Min Conf:</label>
+                            <input type="range" id="filterMinConf" min="0" max="1" step="0.01" value="0.00"
+                                class="logs-range-slider">
+                            <span id="filterMinConfLabel" class="conf-value-badge">0.00</span>
+                        </div>
+                        <div class="filter-divider"></div>
+                        <div class="filter-item" style="display:flex; align-items:center; gap:8px;">
+                            <label for="filterScenario" class="filter-label">Scenario:</label>
+                            <select id="filterScenario" class="scenario-select">
+                                <option value="All">All</option>
+                                <option value="Morning School Entry">Morning School Entry</option>
+                                <option value="Mid-Day Shift">Mid-Day Shift</option>
+                                <option value="Afternoon Dismissal">Afternoon Dismissal</option>
+                                <option value="Standard Daylight Ops">Standard Daylight Ops</option>
+                            </select>
+                        </div>
+                        <div class="filter-actions" style="margin-left:auto;">
+                            <button class="btn btn-primary btn-sm" id="btnApplyLogsFilters"><i class="fa-solid fa-check"
+                                    style="margin-right:5px;"></i>Apply</button>
+                            <button class="btn btn-outline btn-sm" id="btnResetLogsFilters"><i
+                                    class="fa-solid fa-rotate-left" style="margin-right:5px;"></i>Reset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-container mt-4">
+                    <div id="logsDbWarning" class="alert alert-warning"
+                        style="display:none; margin-bottom: 15px; padding: 10px; border-radius: 6px; background-color: #fff3cd; color: #856404; font-size: 0.9rem;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> DB unavailable — no data available
+                    </div>
+
+                    <table id="logsTable" class="it-logs-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 200px;">Timestamp</th>
+                                <th>Detection & Status</th>
+                                <th style="width: 110px; text-align: right;">Confidence</th>
+                                <th style="width: 110px; text-align: right;">Latency</th>
+                                <th style="width: 200px;">Scenario</th>
+                                <th style="width: 130px; text-align: center;">False Warning</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                            <!-- Logs injected here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination-bar">
+                    <div class="page-size-group">
+                        <label>Rows:</label>
+                        <select id="pageSizeSelect" class="form-control" style="width:60px; padding:4px;">
+                            <option value="10">10</option>
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                        </select>
+                        <span id="resultCount" class="text-muted ml-3"
+                            style="font-size:0.9rem; margin-left:15px;">Showing 0
+                            of 0 events</span>
+                    </div>
+                    <div class="page-nav">
+                        <button class="btn btn-outline btn-sm" id="pagePrev" disabled><i
+                                class="fa-solid fa-chevron-left"></i></button>
+                        <span id="pageIndicator" style="margin:0 10px; font-weight:600; font-size:0.9rem;">Page 1</span>
+                        <button class="btn btn-outline btn-sm" id="pageNext" disabled><i
+                                class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════ MODEL ACCURACY & DIAGNOSTICS SECTION ═══════════ -->
+            <section id="analytics-section" class="page-section">
+                <!-- DB Fetch Warning -->
+                <div id="anaDbWarning"
+                    style="display:none; margin-bottom: 15px; padding: 10px; border-radius: 6px; background-color: #fff3cd; color: #856404; font-size: 0.9rem;">
+                    <i class="fa-solid fa-triangle-exclamation"></i> DB unavailable — no data available
+                </div>
+
+                <!-- A) Section Header + Range & Historical Filter -->
+                <div class="ana-section-header"
+                    style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:12px;">
+                    <h2><i class="fa-solid fa-chart-line" style="margin-right: 8px;"></i>Model Accuracy &amp;
+                        Diagnostics</h2>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-preset" data-ana-range="15m">Last 15m</button>
+                            <button class="btn btn-sm btn-preset" data-ana-range="1h">Last Hour</button>
+                            <button class="btn btn-sm btn-preset active" data-ana-range="today">Today</button>
+                            <button class="btn btn-sm btn-preset" data-ana-range="all">All</button>
+                        </div>
+                        <!-- Compact Year/Month Historical Filter Popover Control -->
+                        <div class="logs-historical-wrapper" id="itAccuracyHistoricalWrapper">
+                            <button type="button" class="btn btn-sm btn-historical-trigger"
+                                id="btnItAccuracyHistoricalTrigger" title="Filter analytics by Year and Month">
+                                <i class="fa-solid fa-calendar-days"
+                                    style="color: var(--primary-accent); margin-right: 6px;"></i>
+                                <span id="itAccuracyHistoricalTriggerLabel">Historical: All time</span>
+                                <i class="fa-solid fa-chevron-down trigger-chevron"
+                                    style="margin-left: 6px; font-size: 0.72rem; opacity: 0.7;"></i>
+                            </button>
+
+                            <!-- Popover Dropdown -->
+                            <div class="logs-historical-popover" id="itAccuracyHistoricalPopover"
+                                style="display: none;">
+                                <div class="popover-header">
+                                    <div class="popover-title">
+                                        <span class="period-icon-wrap"><i class="fa-solid fa-calendar-days"></i></span>
+                                        <span class="period-heading">Historical Filter</span>
+                                    </div>
+                                    <button type="button" class="popover-close-btn" id="btnItAccuracyHistoricalClose"
+                                        title="Close">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+
+                                <div class="popover-body">
+                                    <!-- Year Row -->
+                                    <div class="popover-filter-group">
+                                        <span class="side-filter-label">YEAR</span>
+                                        <div class="popover-year-list" id="itAccuracyYearChips">
+                                            <!-- Dynamically populated year chips -->
+                                        </div>
+                                    </div>
+
+                                    <!-- Month Multi-Select Grid -->
+                                    <div class="popover-filter-group">
+                                        <span class="side-filter-label">MONTHS <span
+                                                class="side-filter-hint">(Multi-select)</span></span>
+                                        <div class="popover-month-grid" id="itAccuracyMonthChips">
+                                            <!-- Dynamically populated Jan-Dec + All Months -->
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="popover-footer">
+                                    <button type="button" class="btn btn-sm btn-primary"
+                                        id="btnItAccuracyHistoricalApply">
+                                        <i class="fa-solid fa-check" style="margin-right: 4px;"></i> Apply Filter
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline"
+                                        id="btnItAccuracyHistoricalReset">
+                                        <i class="fa-solid fa-rotate-left" style="margin-right: 4px;"></i> Reset
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- B) Live Operational KPI Cards -->
+                <div class="ana-kpi-grid">
+                    <!-- Avg Latency -->
+                    <div class="ana-kpi-card">
+                        <div class="ana-kpi-top">
+                            <div class="ana-icon-badge badge-cyan">
+                                <i class="fa-solid fa-gauge-high"></i>
+                            </div>
+                            <div class="ana-kpi-label-group">
+                                <span class="ana-kpi-label">
+                                    Avg Latency
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Mean YOLOv8 inference time per video frame, excluding outlier idle gaps"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="ana-kpi-value-row">
+                            <span class="ana-kpi-value color-cyan" id="ana-kpi-latency">0ms</span>
+                        </div>
+                        <div class="ana-kpi-bottom">
+                            <span class="ana-kpi-context-pill pill-cyan">
+                                <i class="fa-solid fa-circle" style="font-size: 5px; vertical-align: middle;"></i>
+                                Real-Time &bull; Target &lt; 30ms
+                            </span>
+                            <div class="ana-micro-sparkline sparkline-cyan">
+                                <span style="height: 40%;"></span>
+                                <span style="height: 65%;"></span>
+                                <span style="height: 50%;"></span>
+                                <span style="height: 85%;"></span>
+                                <span style="height: 70%;"></span>
+                                <span style="height: 55%;"></span>
+                                <span style="height: 45%;"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Peak Latency -->
+                    <div class="ana-kpi-card">
+                        <div class="ana-kpi-top">
+                            <div class="ana-icon-badge badge-purple">
+                                <i class="fa-solid fa-bolt-lightning"></i>
+                            </div>
+                            <div class="ana-kpi-label-group">
+                                <span class="ana-kpi-label">
+                                    Peak Latency
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Highest single-frame inference time in this period"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="ana-kpi-value-row">
+                            <span class="ana-kpi-value color-purple" id="ana-kpi-peak-latency">0ms</span>
+                        </div>
+                        <div class="ana-kpi-bottom">
+                            <span class="ana-kpi-context-pill pill-purple">
+                                <i class="fa-solid fa-arrow-trend-up" style="font-size: 9px;"></i>
+                                Max latency in window
+                            </span>
+                            <div class="ana-micro-sparkline sparkline-purple">
+                                <span style="height: 30%;"></span>
+                                <span style="height: 50%;"></span>
+                                <span style="height: 75%;"></span>
+                                <span style="height: 60%;"></span>
+                                <span style="height: 90%;"></span>
+                                <span style="height: 45%;"></span>
+                                <span style="height: 35%;"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- False Warning Rate -->
+                    <div class="ana-kpi-card">
+                        <div class="ana-kpi-top">
+                            <div class="ana-icon-badge badge-amber">
+                                <i class="fa-solid fa-shield-halved"></i>
+                            </div>
+                            <div class="ana-kpi-label-group">
+                                <span class="ana-kpi-label">
+                                    False Warning Rate
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Warnings triggered when no child was in the ROI — lower is better"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="ana-kpi-value-row">
+                            <span class="ana-kpi-value color-amber" id="ana-kpi-fwr">0.0%</span>
+                        </div>
+                        <div class="ana-kpi-bottom">
+                            <span class="ana-kpi-context-pill pill-emerald">
+                                <i class="fa-solid fa-shield-check" style="font-size: 9px;"></i>
+                                Target &lt; 5.0%
+                            </span>
+                            <div class="ana-micro-sparkline sparkline-amber">
+                                <span style="height: 20%;"></span>
+                                <span style="height: 15%;"></span>
+                                <span style="height: 25%;"></span>
+                                <span style="height: 18%;"></span>
+                                <span style="height: 22%;"></span>
+                                <span style="height: 12%;"></span>
+                                <span style="height: 16%;"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- C) Confidence Score Distribution Chart -->
+                <div class="ana-chart-card confidence-score-card">
+                    <div class="ana-chart-header" style="align-items: flex-start;">
+                        <div class="ana-chart-header-left">
+                            <div class="ana-icon-badge badge-coral"
+                                style="width: 34px; height: 34px; font-size: 0.82rem;">
+                                <i class="fa-solid fa-chart-simple"></i>
+                            </div>
+                            <div class="ana-chart-title-group">
+                                <h3 class="ana-chart-title">
+                                    Confidence Score Distribution
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Distribution of child detection confidence scores across 10 bins (0.0 to 1.0). Detections at or above the 0.65 threshold trigger physical warning devices."></i>
+                                </h3>
+                                <p class="ana-chart-subtitle">Real-time model prediction confidence for detections in
+                                    the ROI</p>
+                            </div>
+                        </div>
+                        <div class="confidence-header-legend">
+                            <span class="legend-item">
+                                <span class="legend-dot dot-below-thresh"></span> &lt; 0.65 Below
+                            </span>
+                            <span class="legend-item">
+                                <span class="legend-dot dot-above-thresh"></span> &ge; 0.65 Warning Zone
+                            </span>
+                            <span class="legend-item">
+                                <span class="legend-line line-thresh"></span> 0.65 Threshold
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Summary Stats Banner (Hero Stat + Supporting Stats) -->
+                    <div class="confidence-summary-banner">
+                        <div class="confidence-stat-item hero-stat-item">
+                            <div class="stat-top">
+                                <span class="stat-value hero-value" id="confidenceClearedPct">--%</span>
+                                <span class="ana-pill-badge pill-badge-accent stat-badge" id="confidenceStatusBadge">
+                                    <i class="fa-solid fa-shield-halved" style="font-size: 9px;"></i> Warning Efficacy
+                                </span>
+                            </div>
+                            <span class="stat-label" id="confidenceClearedLabel">Cleared Warning Threshold</span>
+                            <span class="stat-subtext" id="confidenceClearedSub">&ge; 0.65 child confidence</span>
+                        </div>
+                        <div class="confidence-stat-divider"></div>
+                        <div class="confidence-stat-item">
+                            <div class="stat-top">
+                                <span class="stat-value" id="confidenceMeanScore">--</span>
+                            </div>
+                            <span class="stat-label">Average Confidence</span>
+                            <span class="stat-subtext">Avg detection score</span>
+                        </div>
+                        <div class="confidence-stat-divider"></div>
+                        <div class="confidence-stat-item">
+                            <div class="stat-top">
+                                <span class="stat-value" id="confidenceRoiDetections">--</span>
+                            </div>
+                            <span class="stat-label">ROI Detections</span>
+                            <span class="stat-subtext" id="confidenceDetectionsSub">-- met threshold</span>
+                        </div>
+                    </div>
+
+                    <!-- Compact Fixed-Height Chart Canvas Container -->
+                    <div class="chart-container"
+                        style="position: relative; height: 250px; max-height: 250px; padding: 0 4px;">
+                        <canvas id="chartConfidence"></canvas>
+                    </div>
+
+                    <!-- Restrained Hover Readout Footer -->
+                    <div class="confidence-hover-footer">
+                        <div id="confidenceHoverReadout" class="confidence-hover-readout">
+                            <span class="hover-idle-prompt"><i class="fa-solid fa-arrow-pointer"
+                                    style="font-size: 0.75rem; margin-right: 4px; opacity: 0.7;"></i> Hover over bins
+                                for exact count and percentage</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- D) Offline Evaluation Report — Test Dataset -->
+                <div class="ana-eval-card">
+                    <div class="ana-eval-header">
+                        <div class="ana-eval-header-left">
+                            <div class="ana-icon-badge badge-coral"
+                                style="width: 34px; height: 34px; font-size: 0.82rem;">
+                                <i class="fa-solid fa-flask-vial"></i>
+                            </div>
+                            <div class="ana-chart-title-group">
+                                <h3 class="ana-chart-title">Model Accuracy Check</h3>
+                                <p class="ana-chart-subtitle">These numbers are from AI training results during
+                                    development</p>
+                            </div>
+                        </div>
+                        <div class="ana-eval-badges">
+                            <span class="ana-pill-badge pill-badge-muted" style="margin-right: 6px;">
+                                <i class="fa-solid fa-lock" style="font-size: 8px;"></i>
+                                Fixed Benchmark (Static)
+                            </span>
+                            <span class="ana-pill-badge pill-badge-muted">
+                                {{ model_name or 'yolov8n_1500_frames.pt' }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- 4 Benchmark Metric Cards -->
+                    <div class="ana-bench-grid">
+                        <!-- Precision -->
+                        <div class="ana-bench-card">
+                            <div class="ana-bench-top">
+                                <div class="ana-icon-badge badge-emerald">
+                                    <i class="fa-solid fa-bullseye"></i>
+                                </div>
+                                <span class="ana-bench-label">
+                                    Precision
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Of all predicted child detections, what fraction were truly children"></i>
+                                </span>
+                            </div>
+                            <div class="ana-bench-value color-emerald">0.936</div>
+                            <div class="ana-bench-progress">
+                                <div class="ana-progress-track">
+                                    <div class="ana-progress-fill fill-emerald" style="width: 93.6%;"></div>
+                                </div>
+                            </div>
+                            <div class="ana-bench-foot">
+                                <span class="ana-kpi-context-pill pill-emerald">
+                                    <i class="fa-solid fa-check" style="font-size: 8px;"></i>
+                                    93.6% alert accuracy
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Recall -->
+                        <div class="ana-bench-card">
+                            <div class="ana-bench-top">
+                                <div class="ana-icon-badge badge-blue">
+                                    <i class="fa-solid fa-crosshairs"></i>
+                                </div>
+                                <span class="ana-bench-label">
+                                    Recall
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Of all actual children in the test set, what fraction were successfully detected"></i>
+                                </span>
+                            </div>
+                            <div class="ana-bench-value color-blue">0.910</div>
+                            <div class="ana-bench-progress">
+                                <div class="ana-progress-track">
+                                    <div class="ana-progress-fill fill-blue" style="width: 91.0%;"></div>
+                                </div>
+                            </div>
+                            <div class="ana-bench-foot">
+                                <span class="ana-kpi-context-pill pill-blue">
+                                    <i class="fa-solid fa-person-walking" style="font-size: 8px;"></i>
+                                    91.0% child capture rate
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- F1-Score -->
+                        <div class="ana-bench-card">
+                            <div class="ana-bench-top">
+                                <div class="ana-icon-badge badge-violet">
+                                    <i class="fa-solid fa-scale-balanced"></i>
+                                </div>
+                                <span class="ana-bench-label">
+                                    F1-Score
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Harmonic mean of Precision and Recall — single balanced accuracy measure"></i>
+                                </span>
+                            </div>
+                            <div class="ana-bench-value color-violet">0.923</div>
+                            <div class="ana-bench-progress">
+                                <div class="ana-progress-track">
+                                    <div class="ana-progress-fill fill-violet" style="width: 92.3%;"></div>
+                                </div>
+                            </div>
+                            <div class="ana-bench-foot">
+                                <span class="ana-kpi-context-pill pill-violet">
+                                    <i class="fa-solid fa-sliders" style="font-size: 8px;"></i>
+                                    Harmonic balance (P &amp; R)
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- mAP@50 -->
+                        <div class="ana-bench-card">
+                            <div class="ana-bench-top">
+                                <div class="ana-icon-badge badge-cyan">
+                                    <i class="fa-solid fa-award"></i>
+                                </div>
+                                <span class="ana-bench-label">
+                                    mAP@50
+                                    <i class="fa-solid fa-circle-info kpi-info-icon"
+                                        title="Mean Average Precision at 50% IoU threshold — standard YOLO detection accuracy metric"></i>
+                                </span>
+                            </div>
+                            <div class="ana-bench-value color-cyan">0.962</div>
+                            <div class="ana-bench-progress">
+                                <div class="ana-progress-track">
+                                    <div class="ana-progress-fill fill-cyan" style="width: 96.2%;"></div>
+                                </div>
+                            </div>
+                            <div class="ana-bench-foot">
+                                <span class="ana-kpi-context-pill pill-cyan">
+                                    <i class="fa-solid fa-layer-group" style="font-size: 8px;"></i>
+                                    Detection score @ 0.5 IoU
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Eval Note -->
+                    <div class="eval-note-box">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <div>
+                            <strong>Offline Benchmark Context:</strong> These metrics reflect fixed offline evaluation
+                            on 1,497 labeled test samples from the 1,500-frame training evaluation run — not dynamic
+                            real-time traffic data. They are updated when a new model weights checkpoint is trained,
+                            validated, and deployed.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Change Password Modal -->
+    <div id="passwordModal" class="modal-overlay" style="display:none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-key modal-header-icon"></i>Change Password</h3>
+                <button class="modal-close-btn"
+                    onclick="document.getElementById('passwordModal').style.display='none';"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="pwdMsg" class="modal-msg" style="display:none;"></div>
+            <form id="changePasswordForm" autocomplete="off">
+                <div class="form-group">
+                    <label for="pwdCurrent">Current Password</label>
+                    <input type="password" id="pwdCurrent" class="modal-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="pwdNew">New Password <small class="text-muted">(min. 6 chars)</small></label>
+                    <input type="password" id="pwdNew" class="modal-input" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="pwdConfirm">Confirm New Password</label>
+                    <input type="password" id="pwdConfirm" class="modal-input" required minlength="6">
+                </div>
+                <button type="submit" class="btn btn-primary modal-submit-btn">
+                    <i class="fa-solid fa-check" style="margin-right:6px;"></i>Update Password
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="sidebarBackdrop" class="backdrop"></div>
+    <script src="/static/js/contract.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+</body>
+
 </html>

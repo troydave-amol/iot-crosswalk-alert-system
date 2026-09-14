@@ -279,26 +279,31 @@
                     <!-- Left Main Content: KPI Cards + Charts Grid -->
                     <div class="analytics-main-content">
                         <!-- B) KPI Cards -->
-                        <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                        <div class="dashboard-grid"
+                            style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
                             <div class="card">
                                 <div class="card-title">Total Warnings</div>
                                 <div class="card-value" id="ana-kpi-warnings">0</div>
-                                <div class="card-footer" id="ana-kpi-warnings-sub" style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
+                                <div class="card-footer" id="ana-kpi-warnings-sub"
+                                    style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
                             </div>
                             <div class="card">
                                 <div class="card-title">Child Detections</div>
                                 <div class="card-value" id="ana-kpi-detections">0</div>
-                                <div class="card-footer" id="ana-kpi-detections-sub" style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
+                                <div class="card-footer" id="ana-kpi-detections-sub"
+                                    style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
                             </div>
                             <div class="card">
                                 <div class="card-title">False Warnings</div>
                                 <div class="card-value" id="ana-kpi-false">0</div>
-                                <div class="card-footer" id="ana-kpi-false-sub" style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
+                                <div class="card-footer" id="ana-kpi-false-sub"
+                                    style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
                             </div>
                             <div class="card">
                                 <div class="card-title">Peak Hour</div>
                                 <div class="card-value" id="ana-kpi-peak">--</div>
-                                <div class="card-footer" id="ana-kpi-peak-sub" style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
+                                <div class="card-footer" id="ana-kpi-peak-sub"
+                                    style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
                             </div>
                         </div>
 
@@ -320,7 +325,8 @@
                             <div class="card chart-card">
                                 <div class="card-title">Alert Activation Reliability</div>
                                 <div class="chart-container" style="position: relative; height: 260px;">
-                                    <canvas id="chartReliability" role="img" aria-label="Donut chart showing the ratio of verified child warnings to false warnings"></canvas>
+                                    <canvas id="chartReliability" role="img"
+                                        aria-label="Donut chart showing the ratio of verified child warnings to false warnings"></canvas>
                                 </div>
                             </div>
                             <div class="card chart-card">
@@ -354,7 +360,8 @@
 
                                 <!-- Month Selector (2-column compact grid) -->
                                 <div class="side-filter-group">
-                                    <span class="side-filter-label">MONTHS <span class="side-filter-hint">(Multi-select)</span></span>
+                                    <span class="side-filter-label">MONTHS <span
+                                            class="side-filter-hint">(Multi-select)</span></span>
                                     <div class="side-month-grid" id="anaMonthChips">
                                         <!-- Populated dynamically: Jan-Dec + All -->
                                     </div>
@@ -362,10 +369,12 @@
                             </div>
 
                             <div class="side-panel-actions">
-                                <button class="btn-period-action btn-period-apply" id="anaApplyRange" title="Apply selected period">
+                                <button class="btn-period-action btn-period-apply" id="anaApplyRange"
+                                    title="Apply selected period">
                                     <i class="fa-solid fa-check"></i> Apply Filter
                                 </button>
-                                <button class="btn-period-action btn-period-reset" id="anaClearRange" title="Reset to preset" style="display: none;">
+                                <button class="btn-period-action btn-period-reset" id="anaClearRange"
+                                    title="Reset to preset" style="display: none;">
                                     <i class="fa-solid fa-rotate-left"></i> Reset
                                 </button>
                             </div>
@@ -415,13 +424,71 @@
                 </div>
 
                 <!-- 1) Toolbar -->
-                <div class="filter-bar" style="justify-content: space-between; align-items: center;">
+                <div class="filter-bar" style="justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                     <h2><i class="fa-solid fa-file-contract" style="margin-right: 8px;"></i>Generate Report</h2>
-                    <div class="btn-group">
-                        <button class="btn btn-sm btn-preset" data-rep-range="15m">Last 15m</button>
-                        <button class="btn btn-sm btn-preset" data-rep-range="1h">Last Hour</button>
-                        <button class="btn btn-sm btn-preset active" data-rep-range="today">Today</button>
-                        <button class="btn btn-sm btn-preset" data-rep-range="all">All</button>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-preset" data-rep-range="15m">Last 15m</button>
+                            <button class="btn btn-sm btn-preset" data-rep-range="1h">Last Hour</button>
+                            <button class="btn btn-sm btn-preset active" data-rep-range="today">Today</button>
+                            <button class="btn btn-sm btn-preset" data-rep-range="all">All</button>
+                        </div>
+                        <!-- Compact Year/Month Historical Filter Popover Control -->
+                        <div class="logs-historical-wrapper" id="repHistoricalWrapper">
+                            <button type="button" class="btn btn-sm btn-historical-trigger"
+                                id="btnRepHistoricalTrigger" title="Filter report by Year and Month">
+                                <i class="fa-solid fa-calendar-days"
+                                    style="color: var(--primary-accent); margin-right: 6px;"></i>
+                                <span id="repHistoricalTriggerLabel">Historical: All time</span>
+                                <i class="fa-solid fa-chevron-down trigger-chevron"
+                                    style="margin-left: 6px; font-size: 0.72rem; opacity: 0.7;"></i>
+                            </button>
+
+                            <!-- Popover Dropdown -->
+                            <div class="logs-historical-popover" id="repHistoricalPopover"
+                                style="display: none;">
+                                <div class="popover-header">
+                                    <div class="popover-title">
+                                        <span class="period-icon-wrap"><i class="fa-solid fa-calendar-days"></i></span>
+                                        <span class="period-heading">Historical Filter</span>
+                                    </div>
+                                    <button type="button" class="popover-close-btn" id="btnRepHistoricalClose"
+                                        title="Close">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+
+                                <div class="popover-body">
+                                    <!-- Year Row -->
+                                    <div class="popover-filter-group">
+                                        <span class="side-filter-label">YEAR</span>
+                                        <div class="popover-year-list" id="repYearChips">
+                                            <!-- Dynamically populated year chips -->
+                                        </div>
+                                    </div>
+
+                                    <!-- Month Multi-Select Grid -->
+                                    <div class="popover-filter-group">
+                                        <span class="side-filter-label">MONTHS <span
+                                                class="side-filter-hint">(Multi-select)</span></span>
+                                        <div class="popover-month-grid" id="repMonthChips">
+                                            <!-- Dynamically populated Jan-Dec + All Months -->
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="popover-footer">
+                                    <button type="button" class="btn btn-sm btn-primary"
+                                        id="btnRepHistoricalApply">
+                                        <i class="fa-solid fa-check" style="margin-right: 4px;"></i> Apply Filter
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline"
+                                        id="btnRepHistoricalReset">
+                                        <i class="fa-solid fa-rotate-left" style="margin-right: 4px;"></i> Reset
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button class="btn btn-primary" id="btnGenerateReport"><i class="fa-solid fa-rotate-right"></i>
