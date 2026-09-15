@@ -348,6 +348,11 @@ const App = {
 
         if (data.source === "yolo") {
             status.connection_status = "Live (YOLO)";
+            const modelStatusEl = document.getElementById('ana-kpi-model-status');
+            if (modelStatusEl) {
+                modelStatusEl.className = 'ana-kpi-context-pill pill-emerald';
+                modelStatusEl.innerHTML = '<i class="fa-solid fa-circle-check" style="font-size: 8px;"></i> <span id="ana-kpi-model-status-text">Loaded &bull; Running</span>';
+            }
         } else if (data.source === "idle") {
             const camStatus = data.camera_status || "OFFLINE";
             status.connection_status = camStatus === "OFFLINE" ? "Camera Offline" : "Connected";
@@ -1103,12 +1108,9 @@ const App = {
                 if (isItAudit) {
                     // Consolidated status from 3 redundant columns
                     const isWarning = log.child_in_roi || this.isOn(log.warning_device_on ?? log.warning_on);
-                    const isFalse = log.false_warning;
 
-                    // Row class: false warning takes priority for amber accent
-                    let rowClass = 'it-row-clear';
-                    if (isFalse) rowClass = 'it-row-false-warning';
-                    else if (isWarning) rowClass = 'it-row-warning';
+                    // Row class
+                    let rowClass = isWarning ? 'it-row-warning' : 'it-row-clear';
 
                     // Status pill (same visual language as TMC)
                     const pillClass = isWarning ? 'warning' : 'clear';
@@ -1121,11 +1123,6 @@ const App = {
                     const conf = (log.confidence || 0).toFixed(2);
                     const confClass = log.confidence >= 0.65 ? 'it-mono-val it-conf-high' : 'it-mono-val';
 
-                    // False warning badge
-                    const falseHtml = isFalse
-                        ? '<span class="it-false-badge yes"><i class="fa-solid fa-flag"></i> YES</span>'
-                        : '<span class="it-false-badge no">NO</span>';
-
                     return `
                     <tr class="${rowClass}">
                         <td><span class="it-log-time">${dateTimeStr}</span></td>
@@ -1137,11 +1134,10 @@ const App = {
                         <td style="text-align: right;"><span class="${confClass}">${conf}</span></td>
                         <td style="text-align: right;"><span class="it-mono-val">${log.latency_ms}ms</span></td>
                         <td><span class="it-scenario-tag">${log.scenario}</span></td>
-                        <td style="text-align: center;">${falseHtml}</td>
                     </tr>`;
                 }
 
-                // Fallback: generic 8-column (should not normally be reached)
+                // Fallback: generic 7-column (should not normally be reached)
                 return `
                 <tr>
                     <td>${dateTimeStr}</td>
@@ -1151,7 +1147,6 @@ const App = {
                     <td>${(log.confidence || 0).toFixed(2)}</td>
                     <td>${log.latency_ms}ms</td>
                     <td>${log.scenario}</td>
-                    <td>${log.false_warning ? '<span style="color:red">YES</span>' : 'NO'}</td>
                 </tr>`;
             }).join('');
         }
@@ -1717,10 +1712,10 @@ const App = {
             this.state.charts.reliability = new Chart(ctxR, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Verified Alerts', 'False Warnings'],
+                    labels: ['Verified Alerts'],
                     datasets: [{
-                        data: [0, 0],
-                        backgroundColor: ['#10b981', '#FF2400'],
+                        data: [0],
+                        backgroundColor: ['#10b981'],
                         borderColor: isDark ? '#1e293b' : '#ffffff',
                         borderWidth: 3,
                         hoverOffset: 8
@@ -1746,9 +1741,7 @@ const App = {
                         tooltip: {
                             callbacks: {
                                 label: ctx => {
-                                    const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-                                    const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : '0.0';
-                                    return ` ${ctx.label}: ${ctx.parsed.toLocaleString()} (${pct}%)`;
+                                    return ` ${ctx.label}: ${ctx.parsed.toLocaleString()}`;
                                 }
                             }
                         }
@@ -1760,8 +1753,6 @@ const App = {
                         const { ctx, chartArea } = chart;
                         const dataset = chart.data.datasets[0];
                         const total = dataset.data.reduce((a, b) => a + b, 0);
-                        const verified = dataset.data[0] || 0;
-                        const pct = total > 0 ? ((verified / total) * 100).toFixed(1) : '—';
 
                         const centerX = (chartArea.left + chartArea.right) / 2;
                         const centerY = (chartArea.top + chartArea.bottom) / 2;
@@ -1778,10 +1769,10 @@ const App = {
                         // Sub-label
                         ctx.font = '600 12px Satoshi, -apple-system, sans-serif';
                         ctx.fillStyle = total > 0
-                            ? (verified === total ? '#10b981' : '#FF2400')
+                            ? '#10b981'
                             : (dark ? '#64748b' : '#94a3b8');
                         ctx.textBaseline = 'top';
-                        const label = total > 0 ? `${pct}% Reliable` : 'No Data';
+                        const label = total > 0 ? 'Verified Alerts' : 'No Data';
                         ctx.fillText(label, centerX, centerY + 4);
                         ctx.restore();
                     }
@@ -2662,9 +2653,6 @@ const App = {
         const detEl = document.getElementById('ana-kpi-detections');
         if (detEl) detEl.textContent = agg.total_detections;
 
-        const falseEl = document.getElementById('ana-kpi-false');
-        if (falseEl) falseEl.textContent = agg.false_warnings;
-
         const peakEl = document.getElementById('ana-kpi-peak');
         if (peakEl) peakEl.textContent = agg.peak_hour || '--';
 
@@ -2689,21 +2677,12 @@ const App = {
             }
         }
 
-        const falseSub = document.getElementById('ana-kpi-false-sub');
-        if (falseSub) {
-            const fwr = agg.false_warning_rate !== undefined ? agg.false_warning_rate.toFixed(1) : '0.0';
-            falseSub.textContent = `${fwr}% False Alarm Rate`;
-        }
-
         const peakSub = document.getElementById('ana-kpi-peak-sub');
         if (peakSub) {
             peakSub.textContent = agg.top_scenario || '—';
         }
 
         // Shared KPI bindings (exist on both or IT-only)
-        const fwrEl = document.getElementById('ana-kpi-fwr');
-        if (fwrEl) fwrEl.textContent = (agg.false_warning_rate !== undefined ? agg.false_warning_rate.toFixed(1) : '0.0') + '%';
-
         const latEl = document.getElementById('ana-kpi-latency');
         if (latEl) latEl.textContent = (agg.avg_latency || 0) + 'ms';
 
@@ -2713,7 +2692,7 @@ const App = {
 
         console.debug(
             `[Analytics KPIs] warnings=${agg.total_warnings}, detections=${agg.total_detections},` +
-            ` false=${agg.false_warnings}, fwr=${agg.false_warning_rate}%, avg_lat=${agg.avg_latency}ms, peak_lat=${agg.peak_latency}ms`
+            ` avg_lat=${agg.avg_latency}ms, peak_lat=${agg.peak_latency}ms`
         );
 
         // Update Confidence Hero Stat & Summary Stats (IT Specialist Accuracy Page)
@@ -2827,10 +2806,8 @@ const App = {
         // E) Alert Activation Reliability (Donut)
         if (this.state.charts.reliability) {
             const totalW = agg.total_warnings || 0;
-            const falseW = agg.false_warnings || 0;
-            const verifiedW = Math.max(0, totalW - falseW);
             const chart = this.state.charts.reliability;
-            chart.data.datasets[0].data = [verifiedW, falseW];
+            chart.data.datasets[0].data = [totalW];
             chart.update('none');
         }
     },
@@ -3419,9 +3396,6 @@ const App = {
         const detEl = document.getElementById('rep-total-detections');
         if (detEl) detEl.textContent = '\u2014';
 
-        const falseEl = document.getElementById('rep-false-warnings');
-        if (falseEl) falseEl.textContent = '\u2014';
-
         const latEl = document.getElementById('rep-avg-latency');
         if (latEl) latEl.textContent = '\u2014';
 
@@ -3461,14 +3435,13 @@ const App = {
         // All metrics come from server-side aggregate — accurate for ALL rows, not a limited subset.
         const totalWarnings = agg.total_warnings ?? 0;
         const totalDetections = agg.total_detections ?? 0;
-        const falseWarnings = agg.false_warnings ?? 0;
         const avgLatency = Math.round(agg.avg_latency || 0);
         const peakHour = agg.peak_hour || '--';
         const topScenario = agg.top_scenario || '--';
 
         console.debug(
             `[Report] range=${range} | events=${agg.total_events} | warnings=${totalWarnings}` +
-            ` | detections=${totalDetections} | false=${falseWarnings}` +
+            ` | detections=${totalDetections}` +
             ` | avg_lat=${avgLatency}ms | peak=${peakHour} | window=${agg.range_start} → ${agg.range_end}`
         );
 
@@ -3501,16 +3474,6 @@ const App = {
                 insights.push('No warning activations were recorded during this period, indicating no child pedestrian entries were detected within the active ROI zone.');
             }
 
-            // Accuracy / false warning rate
-            if (totalWarnings > 0) {
-                const falseRate = agg.false_warning_rate !== undefined ? agg.false_warning_rate.toFixed(1) : ((falseWarnings / totalWarnings) * 100).toFixed(1);
-                if (parseFloat(falseRate) <= 10) {
-                    insights.push(`System classification reliability is <strong>high</strong> — false warning rate stands at ${falseRate}%, well within acceptable prototype operating parameters.`);
-                } else {
-                    insights.push(`A false warning rate of <strong>${falseRate}%</strong> was recorded. This is within standard prototype operating variance; continued dataset refinement is recommended for production deployment.`);
-                }
-            }
-
             // Peak risk interval
             if (peakHour !== '--') {
                 insights.push(`A <strong>Critical Risk Interval</strong> was identified at <strong>${peakHour}</strong> — representing the period of highest crosswalk utilization requiring the greatest driver and pedestrian vigilance.`);
@@ -3525,7 +3488,6 @@ const App = {
             }),
             totalWarnings,
             totalDetections,
-            falseWarnings,
             avgLatency,
             peakHour,
             metrics: { mostCommonScenario: topScenario },
@@ -3549,9 +3511,6 @@ const App = {
 
         const detEl = document.getElementById('rep-total-detections');
         if (detEl) detEl.textContent = summary.totalDetections;
-
-        const falseEl = document.getElementById('rep-false-warnings');
-        if (falseEl) falseEl.textContent = summary.falseWarnings;
 
         const latEl = document.getElementById('rep-avg-latency');
         if (latEl) latEl.textContent = summary.avgLatency + 'ms';
@@ -3579,8 +3538,8 @@ const App = {
             content = JSON.stringify(exportable, null, 2);
         } else {
             // CSV — summary row
-            const header = 'Generated At,Range,Total Warnings,Total Detections,False Warnings,Avg Latency,Peak Hour,Most Common Scenario,Location,Client,Title\n';
-            const row = `${s.generatedAt},${s.rangeLabel},${s.totalWarnings},${s.totalDetections},${s.falseWarnings},${s.avgLatency}ms,${s.peakHour},${s.metrics.mostCommonScenario},"Casisang Central School","TMC","IoT-Based Smart Crosswalk Alert System Using CNN for Real-Time Child Pedestrian Detection"`;
+            const header = 'Generated At,Range,Total Warnings,Total Detections,Avg Latency,Peak Hour,Most Common Scenario,Location,Client,Title\n';
+            const row = `${s.generatedAt},${s.rangeLabel},${s.totalWarnings},${s.totalDetections},${s.avgLatency}ms,${s.peakHour},${s.metrics.mostCommonScenario},"Casisang Central School","TMC","IoT-Based Smart Crosswalk Alert System Using CNN for Real-Time Child Pedestrian Detection"`;
             content = header + row;
         }
 
@@ -4773,6 +4732,22 @@ const App = {
         setChip('sysStatusCamera', data.camera_online, 'Online', 'Offline');
         setChip('sysStatusStream', data.stream_connected, 'Connected', 'Disconnected');
         setChip('sysStatusAI', data.ai_running, 'Running', data.ai_error ? 'Not Loaded' : 'Stopped');
+
+        // Active Model KPI Card (IT Specialist Accuracy & Diagnostics Page)
+        const modelStatusEl = document.getElementById('ana-kpi-model-status');
+        if (modelStatusEl) {
+            const isAiRunning = Boolean(data.ai_running);
+            if (isAiRunning) {
+                modelStatusEl.className = 'ana-kpi-context-pill pill-emerald';
+                modelStatusEl.innerHTML = '<i class="fa-solid fa-circle-check" style="font-size: 8px;"></i> <span id="ana-kpi-model-status-text">Loaded &bull; Running</span>';
+            } else if (data.ai_error) {
+                modelStatusEl.className = 'ana-kpi-context-pill pill-amber';
+                modelStatusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="font-size: 8px;"></i> <span id="ana-kpi-model-status-text">Error &bull; Not Loaded</span>';
+            } else {
+                modelStatusEl.className = 'ana-kpi-context-pill pill-purple';
+                modelStatusEl.innerHTML = '<i class="fa-solid fa-circle-pause" style="font-size: 8px;"></i> <span id="ana-kpi-model-status-text">Standby &bull; Stopped</span>';
+            }
+        }
 
         // Relay Controller & Heartbeat
         if (data.relay_status) {

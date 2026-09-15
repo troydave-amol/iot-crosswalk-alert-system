@@ -294,12 +294,6 @@
                                     style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
                             </div>
                             <div class="card">
-                                <div class="card-title">False Warnings</div>
-                                <div class="card-value" id="ana-kpi-false">0</div>
-                                <div class="card-footer" id="ana-kpi-false-sub"
-                                    style="font-family: var(--font-mono); font-size: 0.78rem;">—</div>
-                            </div>
-                            <div class="card">
                                 <div class="card-title">Peak Hour</div>
                                 <div class="card-value" id="ana-kpi-peak">--</div>
                                 <div class="card-footer" id="ana-kpi-peak-sub"
@@ -326,7 +320,7 @@
                                 <div class="card-title">Alert Activation Reliability</div>
                                 <div class="chart-container" style="position: relative; height: 260px;">
                                     <canvas id="chartReliability" role="img"
-                                        aria-label="Donut chart showing the ratio of verified child warnings to false warnings"></canvas>
+                                        aria-label="Donut chart showing verified child warning activations"></canvas>
                                 </div>
                             </div>
                             <div class="card chart-card">
@@ -532,10 +526,6 @@
                         <div class="report-kpi-card">
                             <div class="kpi-label"><i class="fa-solid fa-child"></i> Detections</div>
                             <div class="kpi-value" id="rep-total-detections">0</div>
-                        </div>
-                        <div class="report-kpi-card">
-                            <div class="kpi-label"><i class="fa-solid fa-ban"></i> False Warnings</div>
-                            <div class="kpi-value" id="rep-false-warnings">0</div>
                         </div>
                         <div class="report-kpi-card">
                             <div class="kpi-label"><i class="fa-solid fa-clock"></i> Peak Hour</div>

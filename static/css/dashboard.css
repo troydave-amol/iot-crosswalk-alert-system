@@ -5120,6 +5120,8 @@ body.dark-mode .telemetry-metric-val {
 .sparkline-cyan span { background: rgba(6, 182, 212, 0.35); }
 .sparkline-purple span { background: rgba(139, 92, 246, 0.35); }
 .sparkline-amber span { background: rgba(245, 158, 11, 0.35); }
+.sparkline-emerald span { background: rgba(16, 185, 129, 0.35); }
+.sparkline-blue span { background: rgba(59, 130, 246, 0.35); }
 
 /* ── Chart Card ─────────────────────────────────────────────── */
 .ana-chart-card {
@@ -5411,6 +5413,8 @@ body.dark-mode .ana-kpi-bottom {
 body.dark-mode .sparkline-cyan span { background: rgba(6, 182, 212, 0.5); }
 body.dark-mode .sparkline-purple span { background: rgba(139, 92, 246, 0.5); }
 body.dark-mode .sparkline-amber span { background: rgba(245, 158, 11, 0.5); }
+body.dark-mode .sparkline-emerald span { background: rgba(16, 185, 129, 0.5); }
+body.dark-mode .sparkline-blue span { background: rgba(59, 130, 246, 0.5); }
 
 /* Dark pills */
 body.dark-mode .pill-cyan { color: #22d3ee; background: rgba(6, 182, 212, 0.12); }

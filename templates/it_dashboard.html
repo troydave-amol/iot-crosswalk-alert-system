@@ -511,7 +511,6 @@
                                 <th style="width: 110px; text-align: right;">Confidence</th>
                                 <th style="width: 110px; text-align: right;">Latency</th>
                                 <th style="width: 200px;">Scenario</th>
-                                <th style="width: 130px; text-align: center;">False Warning</th>
                             </tr>
                         </thead>
                         <tbody id="logsTableBody">
@@ -692,36 +691,36 @@
                         </div>
                     </div>
 
-                    <!-- False Warning Rate -->
+                    <!-- Active Model / Deployment Status -->
                     <div class="ana-kpi-card">
                         <div class="ana-kpi-top">
-                            <div class="ana-icon-badge badge-amber">
-                                <i class="fa-solid fa-shield-halved"></i>
+                            <div class="ana-icon-badge badge-emerald">
+                                <i class="fa-solid fa-microchip"></i>
                             </div>
                             <div class="ana-kpi-label-group">
                                 <span class="ana-kpi-label">
-                                    False Warning Rate
+                                    Active Model
                                     <i class="fa-solid fa-circle-info kpi-info-icon"
-                                        title="Warnings triggered when no child was in the ROI — lower is better"></i>
+                                        title="Currently loaded and active YOLOv8 neural network checkpoint running real-time inference"></i>
                                 </span>
                             </div>
                         </div>
                         <div class="ana-kpi-value-row">
-                            <span class="ana-kpi-value color-amber" id="ana-kpi-fwr">0.0%</span>
+                            <span class="ana-kpi-value color-emerald" id="ana-kpi-model-name" style="font-size: 1.15rem; word-break: break-all; line-height: 1.3;" title="{{ model_name or 'yolov8n_1500_frames.pt' }}">{{ model_name or 'yolov8n_1500_frames.pt' }}</span>
                         </div>
                         <div class="ana-kpi-bottom">
-                            <span class="ana-kpi-context-pill pill-emerald">
-                                <i class="fa-solid fa-shield-check" style="font-size: 9px;"></i>
-                                Target &lt; 5.0%
+                            <span class="ana-kpi-context-pill pill-emerald" id="ana-kpi-model-status">
+                                <i class="fa-solid fa-circle-check" style="font-size: 8px;"></i>
+                                <span id="ana-kpi-model-status-text">Loaded &bull; Running</span>
                             </span>
-                            <div class="ana-micro-sparkline sparkline-amber">
-                                <span style="height: 20%;"></span>
-                                <span style="height: 15%;"></span>
-                                <span style="height: 25%;"></span>
-                                <span style="height: 18%;"></span>
-                                <span style="height: 22%;"></span>
-                                <span style="height: 12%;"></span>
-                                <span style="height: 16%;"></span>
+                            <div class="ana-micro-sparkline sparkline-emerald">
+                                <span style="height: 55%;"></span>
+                                <span style="height: 75%;"></span>
+                                <span style="height: 65%;"></span>
+                                <span style="height: 85%;"></span>
+                                <span style="height: 70%;"></span>
+                                <span style="height: 80%;"></span>
+                                <span style="height: 90%;"></span>
                             </div>
                         </div>
                     </div>
