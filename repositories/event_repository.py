@@ -1932,6 +1932,27 @@ class EventRepository:
 
 
 
+                # ── 3c. DAILY WARNINGS (for Calendar Heatmap) ────────────────────
+                # Session-based warning activations aggregated by day (Asia/Manila time)
+                daily_warn_sql = f"""
+                    {cte_base}
+                    SELECT
+                        DATE_FORMAT(DATE_ADD(timestamp_iso, INTERVAL 8 HOUR), '%%Y-%%m-%%d') AS day_date,
+                        SUM(warn_start) AS warnings
+                    FROM enriched
+                    {where_sql}
+                    GROUP BY day_date
+                    ORDER BY day_date
+                """
+                cursor.execute(daily_warn_sql, params)
+                daily_rows = cursor.fetchall()
+                daily_warnings = {
+                    str(r["day_date"]): int(r["warnings"] or 0)
+                    for r in daily_rows if r.get("day_date")
+                }
+
+
+
                 # ── 4. CONFIDENCE HISTOGRAM & METRICS (10 fine-grained bins, atomic calculation) ──
                 # Counts individual detection rows for distribution analysis across 10 decile bins.
                 warning_threshold = float(os.getenv("LIVE_CHILD_CONF", "0.65"))
@@ -2114,6 +2135,7 @@ class EventRepository:
                     "peak_hour":              peak_hour,
 
                     "time_series":            time_series,
+                    "daily_warnings":         daily_warnings,
 
                     "confidence_bins":            confidence_bins,
                     "confidence_cleared_pct":     cleared_pct,

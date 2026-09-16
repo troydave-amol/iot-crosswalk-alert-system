@@ -316,11 +316,32 @@
                                     <canvas id="chartDetections"></canvas>
                                 </div>
                             </div>
-                            <div class="card chart-card">
-                                <div class="card-title">Alert Activation Reliability</div>
-                                <div class="chart-container" style="position: relative; height: 260px;">
-                                    <canvas id="chartReliability" role="img"
-                                        aria-label="Donut chart showing verified child warning activations"></canvas>
+                            <div class="card chart-card heatmap-card" id="cardWarningHeatmap">
+                                <div class="card-title heatmap-header">
+                                    <div class="heatmap-title-left">
+                                        <i class="fa-solid fa-calendar-days heatmap-title-icon"></i>
+                                        <span>Daily Warning Activity</span>
+                                    </div>
+                                    <div class="heatmap-legend" aria-label="Warning activity level legend">
+                                        <span class="heatmap-legend-label">Less</span>
+                                        <div class="heatmap-legend-swatches">
+                                            <span class="heatmap-legend-cell level-0" title="0 warnings"></span>
+                                            <span class="heatmap-legend-cell level-1" title="Low activity"></span>
+                                            <span class="heatmap-legend-cell level-2" title="Moderate activity"></span>
+                                            <span class="heatmap-legend-cell level-3" title="Elevated activity"></span>
+                                            <span class="heatmap-legend-cell level-4" title="Peak activity"></span>
+                                        </div>
+                                        <span class="heatmap-legend-label">More</span>
+                                    </div>
+                                </div>
+                                <div class="heatmap-container" id="heatmapContainer">
+                                    <div class="heatmap-months-grid" id="heatmapMonthsGrid" role="region" aria-label="Daily warning activity calendar grid">
+                                        <!-- Dynamically populated month grids -->
+                                    </div>
+                                </div>
+                                <div class="heatmap-hover-readout" id="heatmapHoverReadout">
+                                    <span class="heatmap-hover-date" id="heatmapHoverDate">Hover over a day to view activity</span>
+                                    <span class="heatmap-hover-count" id="heatmapHoverCount">—</span>
                                 </div>
                             </div>
                             <div class="card chart-card">
@@ -526,6 +547,10 @@
                         <div class="report-kpi-card">
                             <div class="kpi-label"><i class="fa-solid fa-child"></i> Detections</div>
                             <div class="kpi-value" id="rep-total-detections">0</div>
+                        </div>
+                        <div class="report-kpi-card">
+                            <div class="kpi-label"><i class="fa-solid fa-calendar-day"></i> Peak Activity Day</div>
+                            <div class="kpi-value" id="rep-peak-day" style="font-size: 1.05rem; line-height: 1.25;">--</div>
                         </div>
                         <div class="report-kpi-card">
                             <div class="kpi-label"><i class="fa-solid fa-clock"></i> Peak Hour</div>

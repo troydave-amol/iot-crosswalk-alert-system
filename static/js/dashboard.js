@@ -1255,7 +1255,6 @@ const App = {
             }
             if (this.state.charts.warnings) this.state.charts.warnings.resize();
             if (this.state.charts.detections) this.state.charts.detections.resize();
-            if (this.state.charts.reliability) this.state.charts.reliability.resize();
             if (this.state.charts.scenario) this.state.charts.scenario.resize();
             if (this.state.charts.confidence) this.state.charts.confidence.resize();
         });
@@ -1328,7 +1327,6 @@ const App = {
             if (hash === 'analytics') {
                 if (this.state.charts.warnings) this.state.charts.warnings.resize();
                 if (this.state.charts.detections) this.state.charts.detections.resize();
-                if (this.state.charts.reliability) this.state.charts.reliability.resize();
                 if (this.state.charts.scenario) this.state.charts.scenario.resize();
                 if (this.state.charts.confidence) this.state.charts.confidence.resize();
 
@@ -1700,80 +1698,6 @@ const App = {
                                 ctx.fillText(val.toLocaleString(), bar.x + 6, bar.y);
                             }
                         });
-                        ctx.restore();
-                    }
-                }]
-            });
-        }
-
-        // E) Alert Activation Reliability (Donut with center cutout text)
-        const ctxR = document.getElementById('chartReliability')?.getContext('2d');
-        if (ctxR) {
-            this.state.charts.reliability = new Chart(ctxR, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Verified Alerts'],
-                    datasets: [{
-                        data: [0],
-                        backgroundColor: ['#10b981'],
-                        borderColor: isDark ? '#1e293b' : '#ffffff',
-                        borderWidth: 3,
-                        hoverOffset: 8
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '72%',
-                    animation: { duration: 800 },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'bottom',
-                            labels: {
-                                color: textColor,
-                                padding: 16,
-                                usePointStyle: true,
-                                pointStyle: 'circle',
-                                font: { family: 'Satoshi, sans-serif', size: 12, weight: '600' }
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: ctx => {
-                                    return ` ${ctx.label}: ${ctx.parsed.toLocaleString()}`;
-                                }
-                            }
-                        }
-                    }
-                },
-                plugins: [{
-                    id: 'donutCenterText',
-                    afterDraw(chart) {
-                        const { ctx, chartArea } = chart;
-                        const dataset = chart.data.datasets[0];
-                        const total = dataset.data.reduce((a, b) => a + b, 0);
-
-                        const centerX = (chartArea.left + chartArea.right) / 2;
-                        const centerY = (chartArea.top + chartArea.bottom) / 2;
-                        const dark = document.body.classList.contains('dark-mode');
-
-                        ctx.save();
-                        // Main number
-                        ctx.font = '700 28px JetBrains Mono, monospace';
-                        ctx.fillStyle = dark ? '#f1f5f9' : '#1e293b';
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'bottom';
-                        ctx.fillText(total.toLocaleString(), centerX, centerY - 2);
-
-                        // Sub-label
-                        ctx.font = '600 12px Satoshi, -apple-system, sans-serif';
-                        ctx.fillStyle = total > 0
-                            ? '#10b981'
-                            : (dark ? '#64748b' : '#94a3b8');
-                        ctx.textBaseline = 'top';
-                        const label = total > 0 ? 'Verified Alerts' : 'No Data';
-                        ctx.fillText(label, centerX, centerY + 4);
                         ctx.restore();
                     }
                 }]
@@ -2803,12 +2727,218 @@ const App = {
             chart.update('none');
         }
 
-        // E) Alert Activation Reliability (Donut)
-        if (this.state.charts.reliability) {
-            const totalW = agg.total_warnings || 0;
-            const chart = this.state.charts.reliability;
-            chart.data.datasets[0].data = [totalW];
-            chart.update('none');
+        // E) Calendar Heatmap of Daily Warning Activity
+        this.renderWarningHeatmap(agg);
+    },
+
+    renderWarningHeatmap(agg) {
+        const container = document.getElementById('heatmapMonthsGrid');
+        if (!container) return;
+
+        const dateReadout = document.getElementById('heatmapHoverDate');
+        const countReadout = document.getElementById('heatmapHoverCount');
+
+        if (!agg) {
+            container.innerHTML = '<div class="heatmap-empty-state"><i class="fa-solid fa-calendar-xmark" style="font-size: 1.5rem; opacity: 0.4;"></i><span>No activity data available</span></div>';
+            return;
+        }
+
+        const dailyWarnings = agg.daily_warnings || {};
+        const monthNames = [
+            'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+        ];
+        const fullMonthNames = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+        // Determine which months and year to render
+        let targetYear = this.state.analytics?.selectedYear || null;
+        let targetMonths = [];
+
+        if (this.state.analytics?.selectedMonths) {
+            const sm = this.state.analytics.selectedMonths;
+            if (sm.has('all')) {
+                // If All Months is selected, render full calendar year
+                targetMonths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+            } else {
+                targetMonths = Array.from(sm)
+                    .map(m => parseInt(m, 10))
+                    .filter(m => !isNaN(m) && m >= 1 && m <= 12)
+                    .sort((a, b) => a - b);
+            }
+        }
+
+        // If targetYear or targetMonths is not set (e.g. Preset mode: today, 15m, 1h, all)
+        if (!targetYear || targetMonths.length === 0) {
+            const datesWithData = Object.keys(dailyWarnings).sort();
+            if (datesWithData.length > 0) {
+                const ymSet = new Set();
+                datesWithData.forEach(dStr => {
+                    const parts = dStr.split('-');
+                    if (parts.length >= 2) ymSet.add(`${parts[0]}-${parseInt(parts[1], 10)}`);
+                });
+                const ymList = Array.from(ymSet).map(s => {
+                    const [y, m] = s.split('-');
+                    return { year: parseInt(y, 10), month: parseInt(m, 10) };
+                });
+                if (ymList.length > 0) {
+                    targetYear = ymList[0].year;
+                    targetMonths = ymList.filter(item => item.year === targetYear).map(item => item.month);
+                }
+            }
+            if (!targetYear) {
+                const now = new Date();
+                targetYear = now.getFullYear();
+                targetMonths = [now.getMonth() + 1];
+            }
+        }
+
+        if (targetMonths.length === 0) {
+            targetMonths = [new Date().getMonth() + 1];
+        }
+
+        // Build array of all day data for the selected months
+        const monthRenderPlans = [];
+        const allCounts = [];
+
+        targetMonths.forEach(mNum => {
+            const daysInMonth = new Date(targetYear, mNum, 0).getDate();
+            const firstDayOfWeek = new Date(targetYear, mNum - 1, 1).getDay(); // 0 = Sunday
+            let monthWarnTotal = 0;
+            const days = [];
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dStr = `${targetYear}-${String(mNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const count = dailyWarnings[dStr] || 0;
+                monthWarnTotal += count;
+                allCounts.push(count);
+                days.push({
+                    day: d,
+                    dateStr: dStr,
+                    count: count,
+                    dayOfWeek: new Date(targetYear, mNum - 1, d).getDay()
+                });
+            }
+
+            monthRenderPlans.push({
+                year: targetYear,
+                monthNum: mNum,
+                monthName: monthNames[mNum - 1],
+                fullMonthName: fullMonthNames[mNum - 1],
+                firstDayOfWeek: firstDayOfWeek,
+                daysInMonth: daysInMonth,
+                monthWarnTotal: monthWarnTotal,
+                days: days
+            });
+        });
+
+        // Dynamic bucketing calculation (quantiles on positive daily counts)
+        const posCounts = allCounts.filter(c => c > 0).sort((a, b) => a - b);
+        const maxCount = posCounts.length > 0 ? posCounts[posCounts.length - 1] : 0;
+
+        let q1 = 1, q2 = 2, q3 = 3;
+        if (posCounts.length >= 4) {
+            q1 = posCounts[Math.floor(posCounts.length * 0.25)];
+            q2 = posCounts[Math.floor(posCounts.length * 0.50)];
+            q3 = posCounts[Math.floor(posCounts.length * 0.75)];
+        } else if (maxCount > 0) {
+            q1 = Math.max(1, Math.round(maxCount * 0.25));
+            q2 = Math.max(2, Math.round(maxCount * 0.50));
+            q3 = Math.max(3, Math.round(maxCount * 0.75));
+        }
+
+        const getLevel = (count) => {
+            if (count === 0) return 'level-0';
+            if (count <= q1) return 'level-1';
+            if (count <= q2) return 'level-2';
+            if (count <= q3) return 'level-3';
+            return 'level-4';
+        };
+
+        // Render Month Blocks into Grid
+        container.innerHTML = '';
+        monthRenderPlans.forEach(mPlan => {
+            const block = document.createElement('div');
+            block.className = 'heatmap-month-block';
+
+            const header = document.createElement('div');
+            header.className = 'heatmap-month-header';
+            header.innerHTML = `
+                <span class="heatmap-month-title">${mPlan.monthName} ${mPlan.year}</span>
+                <span class="heatmap-month-total">${mPlan.monthWarnTotal.toLocaleString()} warns</span>
+            `;
+            block.appendChild(header);
+
+            const weekdays = document.createElement('div');
+            weekdays.className = 'heatmap-weekdays';
+            weekdays.innerHTML = '<span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>';
+            block.appendChild(weekdays);
+
+            const daysGrid = document.createElement('div');
+            daysGrid.className = 'heatmap-days-grid';
+
+            // Leading empty cells for day of week offset
+            for (let i = 0; i < mPlan.firstDayOfWeek; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'heatmap-cell empty';
+                emptyCell.setAttribute('aria-hidden', 'true');
+                daysGrid.appendChild(emptyCell);
+            }
+
+            // Actual day cells
+            mPlan.days.forEach(dObj => {
+                const cell = document.createElement('div');
+                const lvlClass = getLevel(dObj.count);
+                cell.className = `heatmap-cell ${lvlClass}`;
+                cell.dataset.date = dObj.dateStr;
+                cell.dataset.count = dObj.count;
+                cell.tabIndex = 0;
+                cell.setAttribute('role', 'gridcell');
+                cell.setAttribute('aria-label', `${weekdayNames[dObj.dayOfWeek]}, ${mPlan.fullMonthName} ${dObj.day}, ${mPlan.year}: ${dObj.count.toLocaleString()} warning activations`);
+
+                // Event Listeners for Hover and Keyboard Focus
+                const onEnter = () => {
+                    if (dateReadout) {
+                        dateReadout.textContent = `${weekdayNames[dObj.dayOfWeek]}, ${mPlan.fullMonthName} ${dObj.day}, ${mPlan.year}`;
+                    }
+                    if (countReadout) {
+                        countReadout.textContent = `${dObj.count.toLocaleString()} warning${dObj.count === 1 ? '' : 's'}`;
+                        if (dObj.count > 0) {
+                            countReadout.classList.add('highlight');
+                        } else {
+                            countReadout.classList.remove('highlight');
+                        }
+                    }
+                };
+
+                const onLeave = () => {
+                    if (dateReadout) dateReadout.textContent = 'Hover over a day to view activity';
+                    if (countReadout) {
+                        countReadout.textContent = '—';
+                        countReadout.classList.remove('highlight');
+                    }
+                };
+
+                cell.addEventListener('mouseenter', onEnter);
+                cell.addEventListener('mouseleave', onLeave);
+                cell.addEventListener('focus', onEnter);
+                cell.addEventListener('blur', onLeave);
+
+                daysGrid.appendChild(cell);
+            });
+
+            block.appendChild(daysGrid);
+            container.appendChild(block);
+        });
+
+        // Reset default hover readout
+        if (dateReadout) dateReadout.textContent = 'Hover over a day to view activity';
+        if (countReadout) {
+            countReadout.textContent = '—';
+            countReadout.classList.remove('highlight');
         }
     },
 
@@ -3396,6 +3526,9 @@ const App = {
         const detEl = document.getElementById('rep-total-detections');
         if (detEl) detEl.textContent = '\u2014';
 
+        const peakDayEl = document.getElementById('rep-peak-day');
+        if (peakDayEl) peakDayEl.textContent = '\u2014';
+
         const latEl = document.getElementById('rep-avg-latency');
         if (latEl) latEl.textContent = '\u2014';
 
@@ -3462,6 +3595,43 @@ const App = {
             rangeLabel = document.querySelector(`.btn-preset[data-rep-range="${range}"]`)?.textContent?.trim() || range;
         }
 
+        // Peak Activity Day computation from daily_warnings (exact same source as Analytics heatmap)
+        const dailyWarnings = agg.daily_warnings || {};
+        let peakDayDate = null;
+        let peakDayCount = 0;
+
+        // Sort dates chronologically for deterministic tie-breaking (earliest date wins ties)
+        const sortedDates = Object.keys(dailyWarnings).sort();
+        for (const dStr of sortedDates) {
+            const count = dailyWarnings[dStr] || 0;
+            if (count > peakDayCount) {
+                peakDayCount = count;
+                peakDayDate = dStr;
+            }
+        }
+
+        const monthNamesFull = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        const monthNamesShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        let peakDayFormatted = 'No activity recorded';
+        let peakDayFormattedShort = '—';
+        let peakDayCardHtml = '<span style="font-size: 0.85rem; font-weight: 500; color: var(--text-muted);">No activity recorded</span>';
+
+        if (peakDayDate && peakDayCount > 0) {
+            const parts = peakDayDate.split('-');
+            if (parts.length === 3) {
+                const yrVal = parseInt(parts[0], 10);
+                const moVal = parseInt(parts[1], 10);
+                const dayVal = parseInt(parts[2], 10);
+                peakDayFormattedShort = `${monthNamesShort[moVal - 1]} ${dayVal}, ${yrVal}`;
+                peakDayFormatted = `${monthNamesFull[moVal - 1]} ${dayVal}, ${yrVal}`;
+                peakDayCardHtml = `<span style="font-weight: 700; font-size: 1.05rem; display: block;">${peakDayFormattedShort}</span><span style="font-size: 0.76rem; font-weight: 600; color: var(--text-muted); font-family: var(--font-mono);">${peakDayCount.toLocaleString()} warning${peakDayCount === 1 ? '' : 's'}</span>`;
+            }
+        }
+
         // Professional qualitative insights
         const insights = [];
         if (agg.total_events === 0) {
@@ -3472,6 +3642,11 @@ const App = {
                 insights.push(`The system successfully facilitated <strong>${totalWarnings}</strong> active safety intervention${totalWarnings > 1 ? 's' : ''}, triggering visual alerts for child pedestrians detected in the crosswalk zone.`);
             } else {
                 insights.push('No warning activations were recorded during this period, indicating no child pedestrian entries were detected within the active ROI zone.');
+            }
+
+            // Peak Activity Day insight
+            if (peakDayDate && peakDayCount > 0) {
+                insights.push(`The busiest single day was <strong>${peakDayFormatted}</strong>, with <strong>${peakDayCount.toLocaleString()}</strong> recorded warning${peakDayCount !== 1 ? 's' : ''} — the highest concentration of activity in the reporting period.`);
             }
 
             // Peak risk interval
@@ -3488,6 +3663,11 @@ const App = {
             }),
             totalWarnings,
             totalDetections,
+            peakDayDate,
+            peakDayCount,
+            peakDayFormatted,
+            peakDayFormattedShort,
+            peakDayCardHtml,
             avgLatency,
             peakHour,
             metrics: { mostCommonScenario: topScenario },
@@ -3511,6 +3691,9 @@ const App = {
 
         const detEl = document.getElementById('rep-total-detections');
         if (detEl) detEl.textContent = summary.totalDetections;
+
+        const peakDayEl = document.getElementById('rep-peak-day');
+        if (peakDayEl) peakDayEl.innerHTML = summary.peakDayCardHtml || summary.peakDayFormatted || '\u2014';
 
         const latEl = document.getElementById('rep-avg-latency');
         if (latEl) latEl.textContent = summary.avgLatency + 'ms';
@@ -3538,8 +3721,8 @@ const App = {
             content = JSON.stringify(exportable, null, 2);
         } else {
             // CSV — summary row
-            const header = 'Generated At,Range,Total Warnings,Total Detections,Avg Latency,Peak Hour,Most Common Scenario,Location,Client,Title\n';
-            const row = `${s.generatedAt},${s.rangeLabel},${s.totalWarnings},${s.totalDetections},${s.avgLatency}ms,${s.peakHour},${s.metrics.mostCommonScenario},"Casisang Central School","TMC","IoT-Based Smart Crosswalk Alert System Using CNN for Real-Time Child Pedestrian Detection"`;
+            const header = 'Generated At,Range,Total Warnings,Total Detections,Peak Activity Day,Peak Day Warnings,Avg Latency,Peak Hour,Most Common Scenario,Location,Client,Title\n';
+            const row = `${s.generatedAt},${s.rangeLabel},${s.totalWarnings},${s.totalDetections},"${s.peakDayFormatted || 'N/A'}",${s.peakDayCount || 0},${s.avgLatency}ms,${s.peakHour},${s.metrics.mostCommonScenario},"Casisang Central School","TMC","IoT-Based Smart Crosswalk Alert System Using CNN for Real-Time Child Pedestrian Detection"`;
             content = header + row;
         }
 

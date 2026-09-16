@@ -260,7 +260,8 @@ def api_analytics_route():
             "confidence_mean": agg.get("confidence_mean", 0.0),
             "warning_threshold": agg.get("warning_threshold", 0.65),
             "scenario_distribution": agg.get("scenario_distribution", []),
-            "time_series": agg["time_series"]
+            "time_series": agg["time_series"],
+            "daily_warnings": agg.get("daily_warnings", {})
         }
         return jsonify(response)
 
