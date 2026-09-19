@@ -42,7 +42,7 @@ High-level rule:
 
 `ChildLikeDetector.infer_frame()` currently calls Ultralytics with:
 
-- `conf=0.50`
+- `conf=0.65` (matching LIVE_CHILD_CONF for both classes)
 - `iou=0.45`
 - `agnostic_nms=True`
 - `imgsz=<LIVE_YOLO_IMGSZ>`

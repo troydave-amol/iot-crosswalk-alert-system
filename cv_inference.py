@@ -115,7 +115,7 @@ class ChildLikeDetector:
     def __init__(
         self,
         model_path: str,
-        conf_child: float = 0.75,
+        conf_child: float = 0.65,
         device: Optional[str] = None,
         min_child_bbox_ratio: float = 0.22,
         dominance_iou: float = 0.70,
@@ -140,7 +140,7 @@ class ChildLikeDetector:
         # Ultralytics expects BGR numpy image; we keep it as-is.
         results = self.model.predict(
             source=frame_bgr,
-            conf=0.50,  # raised stringency to reduce background false positives
+            conf=self.conf_child,  # base inference threshold (0.65) for both adult and child classes
             iou=0.45,   # lowered NMS threshold to aggressively merge duplicate boxes
             agnostic_nms=True,
             imgsz=self.imgsz,

@@ -68,7 +68,7 @@ This section defines the discrete boxes (components) and arrows (interfaces/prot
 - **`ChildLikeDetector` Class**:
   - Wraps the Ultralytics YOLOv8 nano model (`yolov8n_1500_frames.pt`).
   - Canonical Class Mapping: `Class 0 = adult`, `Class 1 = child` (visually classified based on school-age appearance and body proportions).
-  - First-pass execution: `conf = 0.50`, `iou = 0.45`, `agnostic_nms = True`, `imgsz = 640`.
+  - First-pass execution: `conf = 0.65`, `iou = 0.45`, `agnostic_nms = True`, `imgsz = 640`.
   - Dominance Filtering: Suppresses duplicate overlapping child boxes with $\text{IoU} \ge 0.70$.
 
 #### Component 4: Anti-Flicker Detection Tracker (`detection_tracker.py`)
