@@ -25,7 +25,7 @@ load_dotenv()
 # ────────────────────────────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "yolov8n_1500_frames.pt"
+DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "yolov8n_3300_frames.pt"
 ROI_PATH = Path("roi_config.json")
 
 
@@ -110,6 +110,13 @@ TEST_VIDEO_FPS          = _env_float("TEST_VIDEO_FPS", 0)
 TEST_VIDEO_MAX_UPLOAD_MB = _env_int("TEST_VIDEO_MAX_UPLOAD_MB", 500)
 TEST_VIDEOS_DIR         = PROJECT_ROOT / "test_videos"
 TEST_VIDEOS_DIR.mkdir(exist_ok=True)
+
+# Test Video Folder Mapping (filename -> folder name)
+# Categorizes videos in Video Simulation Mode: "Morning", "Early Afternoon", "Late Afternoon", or "Other"
+TEST_VIDEO_FOLDER_MAPPING = {
+    "Afternoon V2.mp4": "Early Afternoon",
+    "Afternoon V1.mp4": "Late Afternoon",
+}
 
 # ────────────────────────────────────────────────────────────────────────────
 # Hikvision CCTV — single fixed camera source (auto-connect on boot)

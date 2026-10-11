@@ -78,6 +78,7 @@ window.AppMode = {
     testVideoFile: null,       // currently playing filename
     availableVideos: [],       // from /api/test_videos
     switching: false,          // prevent double-clicks during mode switch
+    currentFolder: null,       // null = root folder grid view, or string name (e.g. 'Morning')
 };
 
 const App = {
@@ -4576,12 +4577,64 @@ const App = {
         }
     },
 
+    categorizeVideo(v) {
+        if (v && v.folder) return v.folder;
+        const name = (v && v.filename ? v.filename : '').trim();
+        if (name === 'Afternoon V2.mp4') return 'Early Afternoon';
+        if (name === 'Afternoon V1.mp4') return 'Late Afternoon';
+        const lower = name.toLowerCase();
+        if (lower.startsWith('morning')) return 'Morning';
+        if (lower.startsWith('early afternoon') || lower.startsWith('early_afternoon') || lower.startsWith('early-afternoon')) return 'Early Afternoon';
+        if (lower.startsWith('late afternoon') || lower.startsWith('late_afternoon') || lower.startsWith('late-afternoon')) return 'Late Afternoon';
+        return 'Other';
+    },
+
+    openVideoFolder(folderName) {
+        window.AppMode.currentFolder = folderName;
+        this.renderVideoGrid();
+    },
+
+    navigateToRootFolder() {
+        window.AppMode.currentFolder = null;
+        this.renderVideoGrid();
+    },
+
+    updateBreadcrumbs(folderName, count) {
+        const breadcrumbs = document.getElementById('videoBreadcrumbs');
+        const backBtn = document.getElementById('btnFolderBack');
+        if (!breadcrumbs) return;
+
+        if (!folderName) {
+            if (backBtn) backBtn.style.display = 'none';
+            breadcrumbs.innerHTML = `
+                <span class="breadcrumb-current">
+                    <i class="fa-solid fa-folder-open"></i> Available Test Videos
+                </span>
+            `;
+        } else {
+            if (backBtn) backBtn.style.display = 'inline-flex';
+            const countText = count !== undefined ? `(${count} video${count === 1 ? '' : 's'})` : '';
+            breadcrumbs.innerHTML = `
+                <span class="breadcrumb-item breadcrumb-link" onclick="App.navigateToRootFolder()" onkeydown="if(event.key==='Enter'||event.key===' '){App.navigateToRootFolder();event.preventDefault();}" role="button" tabindex="0" title="Back to folders">
+                    <i class="fa-solid fa-folder-open"></i> Available Test Videos
+                </span>
+                <span class="breadcrumb-separator"><i class="fa-solid fa-chevron-right"></i></span>
+                <span class="breadcrumb-current">
+                    <i class="fa-solid fa-folder"></i> ${folderName}
+                </span>
+                ${countText ? `<span class="breadcrumb-count">${countText}</span>` : ''}
+            `;
+        }
+    },
+
     renderVideoGrid() {
         const grid = document.getElementById('videoGrid');
         if (!grid) return;
 
-        const videos = window.AppMode.availableVideos;
+        const videos = window.AppMode.availableVideos || [];
         if (videos.length === 0) {
+            window.AppMode.currentFolder = null;
+            this.updateBreadcrumbs(null);
             grid.innerHTML = `
                 <div class="video-empty-state">
                     <i class="fa-solid fa-video-slash"></i>
@@ -4591,28 +4644,96 @@ const App = {
             return;
         }
 
-        grid.innerHTML = videos.map(v => {
-            const isActive = window.AppMode.current === 'video_test' && window.AppMode.testVideoFile === v.filename;
-            const dur = v.duration_sec ? `${Math.floor(v.duration_sec / 60)}m ${Math.floor(v.duration_sec % 60)}s` : '—';
+        const folderOrder = ['Morning', 'Early Afternoon', 'Late Afternoon', 'Other'];
+        const groups = {};
+        folderOrder.forEach(f => { groups[f] = []; });
 
-            return `
-                <div class="video-card ${isActive ? 'active' : ''}" data-filename="${v.filename}">
-                    <div class="video-card-name">
-                        <i class="fa-solid fa-file-video"></i>
-                        ${v.filename}
-                    </div>
-                    <div class="video-card-meta">
-                        <span><i class="fa-solid fa-clock"></i> ${dur}</span>
-                        <span><i class="fa-solid fa-weight-hanging"></i> ${v.size_mb} MB</span>
-                        ${v.resolution ? `<span><i class="fa-solid fa-expand"></i> ${v.resolution}</span>` : ''}
-                        ${v.fps ? `<span><i class="fa-solid fa-gauge-high"></i> ${v.fps} fps</span>` : ''}
-                    </div>
-                    <button class="btn-play" onclick="App.switchMode('video_test', '${v.filename}')">
-                        ${isActive ? '<i class="fa-solid fa-circle-play"></i> Playing' : '<i class="fa-solid fa-play"></i> Play'}
-                    </button>
+        videos.forEach(v => {
+            const folder = this.categorizeVideo(v);
+            if (!groups[folder]) {
+                groups[folder] = [];
+            }
+            groups[folder].push(v);
+        });
+
+        // Determine which folders have videos (hide folders with 0 videos)
+        const visibleFolders = folderOrder.filter(f => groups[f] && groups[f].length > 0);
+        Object.keys(groups).forEach(f => {
+            if (!visibleFolders.includes(f) && groups[f].length > 0) {
+                visibleFolders.push(f);
+            }
+        });
+
+        // If currently open folder was emptied or removed, return to root view
+        if (window.AppMode.currentFolder && (!groups[window.AppMode.currentFolder] || groups[window.AppMode.currentFolder].length === 0)) {
+            window.AppMode.currentFolder = null;
+        }
+
+        const activeFile = window.AppMode.current === 'video_test' ? window.AppMode.testVideoFile : null;
+        const currentFolder = window.AppMode.currentFolder;
+
+        if (!currentFolder) {
+            // ROOT VIEW: Render square folder cards in a responsive grid
+            this.updateBreadcrumbs(null);
+
+            grid.innerHTML = `
+                <div class="folder-grid">
+                    ${visibleFolders.map(folderName => {
+                        const count = groups[folderName].length;
+                        const hasActive = activeFile && groups[folderName].some(v => v.filename === activeFile);
+                        const countLabel = count === 1 ? '1 video' : `${count} videos`;
+
+                        return `
+                            <div class="folder-card ${hasActive ? 'has-active' : ''}"
+                                 onclick="App.openVideoFolder('${folderName}')"
+                                 onkeydown="if(event.key==='Enter'||event.key===' '){App.openVideoFolder('${folderName}');event.preventDefault();}"
+                                 role="button"
+                                 tabindex="0"
+                                 aria-label="${folderName} folder, ${countLabel}"
+                                 data-folder="${folderName}">
+                                ${hasActive ? '<span class="folder-playing-pill"><i class="fa-solid fa-circle-play"></i> Playing</span>' : ''}
+                                <i class="fa-solid fa-folder folder-card-icon"></i>
+                                <div class="folder-card-name">${folderName}</div>
+                                <div class="folder-card-count">${countLabel}</div>
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
             `;
-        }).join('');
+        } else {
+            // FOLDER VIEW: Render that folder's video cards immediately
+            const folderVideos = groups[currentFolder] || [];
+            this.updateBreadcrumbs(currentFolder, folderVideos.length);
+
+            const cardsHtml = folderVideos.map(v => {
+                const isActive = window.AppMode.current === 'video_test' && window.AppMode.testVideoFile === v.filename;
+                const dur = v.duration_sec ? `${Math.floor(v.duration_sec / 60)}m ${Math.floor(v.duration_sec % 60)}s` : '—';
+
+                return `
+                    <div class="video-card ${isActive ? 'active' : ''}" data-filename="${v.filename}">
+                        <div class="video-card-name">
+                            <i class="fa-solid fa-file-video"></i>
+                            ${v.filename}
+                        </div>
+                        <div class="video-card-meta">
+                            <span><i class="fa-solid fa-clock"></i> ${dur}</span>
+                            <span><i class="fa-solid fa-weight-hanging"></i> ${v.size_mb} MB</span>
+                            ${v.resolution ? `<span><i class="fa-solid fa-expand"></i> ${v.resolution}</span>` : ''}
+                            ${v.fps ? `<span><i class="fa-solid fa-gauge-high"></i> ${v.fps} fps</span>` : ''}
+                        </div>
+                        <button class="btn-play" onclick="App.switchMode('video_test', '${v.filename}')">
+                            ${isActive ? '<i class="fa-solid fa-circle-play"></i> Playing' : '<i class="fa-solid fa-play"></i> Play'}
+                        </button>
+                    </div>
+                `;
+            }).join('');
+
+            grid.innerHTML = `
+                <div class="video-cards-grid">
+                    ${cardsHtml}
+                </div>
+            `;
+        }
     },
 
     async uploadTestVideo(file) {

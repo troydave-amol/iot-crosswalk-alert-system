@@ -16,7 +16,7 @@ import cv2
 from flask import Blueprint, request, jsonify
 
 from auth.decorators import login_required, role_required
-from config import TEST_VIDEOS_DIR
+from config import TEST_VIDEOS_DIR, TEST_VIDEO_FOLDER_MAPPING
 from extensions import socketio
 from services.session_manager import session_mgr
 
@@ -66,6 +66,29 @@ def api_switch_to_video_test():
     return jsonify({"ok": False, "error": "Video file not found"}), 404
 
 
+def get_test_video_folder(filename: str) -> str:
+    """Categorize video into folders: Morning, Early Afternoon, Late Afternoon, or Other."""
+    # 1. Config mapping check (explicit filename match)
+    if filename in TEST_VIDEO_FOLDER_MAPPING:
+        return TEST_VIDEO_FOLDER_MAPPING[filename]
+
+    clean = filename.strip()
+    lower = clean.lower()
+
+    # 2. Morning prefix
+    if lower.startswith("morning"):
+        return "Morning"
+
+    # 3. Early/Late afternoon prefix
+    if lower.startswith("early afternoon") or lower.startswith("early_afternoon") or lower.startswith("early-afternoon"):
+        return "Early Afternoon"
+    if lower.startswith("late afternoon") or lower.startswith("late_afternoon") or lower.startswith("late-afternoon"):
+        return "Late Afternoon"
+
+    # 4. Fallback
+    return "Other"
+
+
 @mode_bp.get("/api/test_videos")
 @role_required("tmc_officer")
 def api_list_test_videos():
@@ -87,9 +110,14 @@ def api_list_test_videos():
                 "fps": round(fps, 1),
                 "resolution": f"{w}x{h}" if w > 0 else "unknown",
                 "total_frames": total,
+                "folder": get_test_video_folder(f.name),
             })
         except Exception:
-            videos.append({"filename": f.name, "size_mb": round(f.stat().st_size / (1024 * 1024), 1)})
+            videos.append({
+                "filename": f.name,
+                "size_mb": round(f.stat().st_size / (1024 * 1024), 1),
+                "folder": get_test_video_folder(f.name),
+            })
     return jsonify({"ok": True, "videos": videos})
 
 
@@ -118,7 +146,12 @@ def api_upload_test_video():
         file.save(str(dest))
         size_mb = round(dest.stat().st_size / (1024 * 1024), 1)
         print(f"[UPLOAD] Saved test video: {safe_name} ({size_mb} MB)")
-        return jsonify({"ok": True, "filename": safe_name, "size_mb": size_mb})
+        return jsonify({
+            "ok": True,
+            "filename": safe_name,
+            "size_mb": size_mb,
+            "folder": get_test_video_folder(safe_name),
+        })
     except Exception as e:
         # Clean up partial file
         if dest.exists():

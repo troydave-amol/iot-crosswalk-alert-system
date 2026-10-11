@@ -162,8 +162,15 @@
 
                         <!-- Video Library -->
                         <div class="video-library" id="videoLibrary">
-                            <div class="video-library-header">
-                                <h5><i class="fa-solid fa-folder-open"></i> Available Test Videos</h5>
+                            <div class="video-library-header" id="videoLibraryHeader">
+                                <div class="video-nav-controls" id="videoNavControls">
+                                    <button class="btn-folder-back" id="btnFolderBack" onclick="App.navigateToRootFolder()" title="Back to folders" aria-label="Back to folders" style="display: none;">
+                                        <i class="fa-solid fa-arrow-left"></i>
+                                    </button>
+                                    <div class="video-breadcrumbs" id="videoBreadcrumbs">
+                                        <span class="breadcrumb-current"><i class="fa-solid fa-folder-open"></i> Available Test Videos</span>
+                                    </div>
+                                </div>
                                 <button class="btn btn-outline btn-sm" id="btnRefreshVideos">
                                     <i class="fa-solid fa-rotate-right"></i> Refresh
                                 </button>

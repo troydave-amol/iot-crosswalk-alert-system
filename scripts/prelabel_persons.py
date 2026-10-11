@@ -17,7 +17,7 @@ from ultralytics import YOLO
 PROJECT_ROOT = Path(r"C:\Users\Acer\Documents\CAPSTONE\web_dashboard_analytics")
 BASE_DATASET_DIR = PROJECT_ROOT / "datasets" / "August 11, 2026 Frames"
 EXPORTS_DIR = BASE_DATASET_DIR / "annotation_exports"
-MODEL_PATH = PROJECT_ROOT / "models" / "yolov8n_1500_frames.pt"
+MODEL_PATH = PROJECT_ROOT / "models" / "yolov8n_3300_frames.pt"
 
 CONFIDENCE_THRESHOLD = 0.50  # Matches cv_inference.py stringency
 IOU_THRESHOLD = 0.45         # Aggressive NMS to eliminate duplicate boxes
@@ -105,7 +105,7 @@ def prelabel_batch(model: YOLO, batch_dir: Path, output_json: Path):
             },
             "predictions": [
                 {
-                    "model_version": "yolov8n_1500_frames",
+                    "model_version": "yolov8n_3300_frames",
                     "score": round(
                         sum(a["score"] for a in annotations) / max(len(annotations), 1), 4
                     ) if annotations else 0.0,
