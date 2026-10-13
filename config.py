@@ -90,12 +90,22 @@ STREAM_SCALE            = max(0.1, min(1.0, _env_float("LIVE_STREAM_SCALE", 0.5)
 CAM_WIDTH               = _env_int("LIVE_CAM_WIDTH", 640)
 CAM_HEIGHT              = _env_int("LIVE_CAM_HEIGHT", 360)
 
-# Anti-Flicker Tracker Settings
+# Anti-Flicker & ByteTrack Tracker Settings
 TRACKER_IOU_THRESHOLD      = _env_float("TRACKER_IOU_THRESHOLD", 0.25)
 TRACKER_MAX_MISSES         = _env_int("TRACKER_MAX_MISSES", 25)
 TRACKER_SMOOTH_ALPHA       = _env_float("TRACKER_SMOOTH_ALPHA", 0.6)
 TRACKER_CONF_SMOOTH_ALPHA  = _env_float("TRACKER_CONF_SMOOTH_ALPHA", 0.4)
-CLASS_SWITCH_FRAMES        = _env_int("CLASS_SWITCH_FRAMES", 15)  # consecutive opposing frames to switch label
+CLASS_SWITCH_FRAMES        = _env_int("CLASS_SWITCH_FRAMES", 15)  # backward-compatible fallback
+
+# ByteTrack Two-Stage Association & Kalman Parameters
+TRACKER_HIGH_CONF_THRESH   = _env_float("TRACKER_HIGH_CONF_THRESH", 0.50)
+TRACKER_LOW_CONF_THRESH    = _env_float("TRACKER_LOW_CONF_THRESH", 0.20)
+TRACKER_MATCH_THRESH_1     = _env_float("TRACKER_MATCH_THRESH_1", 0.30)
+TRACKER_MATCH_THRESH_2     = _env_float("TRACKER_MATCH_THRESH_2", 0.40)
+TRACKER_PROB_EMA_BETA      = _env_float("TRACKER_PROB_EMA_BETA", 0.80)
+TRACKER_CHILD_ENTER_THRESH = _env_float("TRACKER_CHILD_ENTER_THRESH", 0.60)
+TRACKER_CHILD_EXIT_THRESH  = _env_float("TRACKER_CHILD_EXIT_THRESH", 0.35)
+TRACKER_MIN_HITS           = _env_int("TRACKER_MIN_HITS", 2)
 
 # Feet-zone detection — only the bottom portion of the child bbox is checked against ROI
 FEET_HEIGHT_RATIO = _env_float("FEET_HEIGHT_RATIO", 0.15)

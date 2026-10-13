@@ -20,7 +20,7 @@ from warning_controller import TemporalVoteStabilizer, WarningController
 
 FRAME_W = 1280
 FRAME_H = 720
-ROI_TEST = ROI(x1=300, y1=180, x2=980, y2=700)
+ROI_TEST = ROI.from_rect(x1=300, y1=180, x2=980, y2=700, frame_w=FRAME_W, frame_h=FRAME_H)
 
 
 class _FakeTensor:
@@ -93,6 +93,7 @@ def _build_detector(fake_model) -> ChildLikeDetector:
     detector.device = None
     detector.min_child_bbox_ratio = 0.18
     detector.dominance_iou = 0.70
+    detector.feet_height_ratio = 0.15
     detector.imgsz = 640
     return detector
 
@@ -159,7 +160,7 @@ def _first_index(rows: Iterable[Dict], key: str, value: bool) -> Optional[int]:
 
 
 def _case_1_adult_enters_roi() -> CaseResult:
-    adult = _det(cls=1, x1=510, y1=260, x2=680, y2=680, conf=0.95)
+    adult = _det(cls=0, x1=510, y1=260, x2=680, y2=680, conf=0.95)
     seq = [[] for _ in range(5)] + [[adult] for _ in range(12)]
     rows = _run_sequence(seq)
 
@@ -174,7 +175,7 @@ def _case_1_adult_enters_roi() -> CaseResult:
 
 
 def _case_2_child_enters_full_body() -> CaseResult:
-    child = _det(cls=0, x1=560, y1=330, x2=660, y2=690, conf=0.88)
+    child = _det(cls=1, x1=560, y1=330, x2=660, y2=690, conf=0.88)
     seq = (
         [[] for _ in range(3)]
         + [[child], [], [child], [child], [child]]
@@ -202,7 +203,7 @@ def _case_2_child_enters_full_body() -> CaseResult:
 
 
 def _case_3_child_exits_roi() -> CaseResult:
-    child = _det(cls=0, x1=560, y1=330, x2=660, y2=690, conf=0.87)
+    child = _det(cls=1, x1=560, y1=330, x2=660, y2=690, conf=0.87)
     seq = [[child] for _ in range(8)] + [[] for _ in range(20)]
     rows = _run_sequence(seq)
 
@@ -246,12 +247,12 @@ def _case_3_child_exits_roi() -> CaseResult:
 
 def _case_4_group_of_children() -> CaseResult:
     # valid child (full body in ROI)
-    child_a = _det(cls=0, x1=520, y1=320, x2=620, y2=690, conf=0.90)
+    child_a = _det(cls=1, x1=520, y1=320, x2=620, y2=690, conf=0.90)
     # near-duplicate child (dominance IoU should remove as trigger duplicate)
-    child_b = _det(cls=0, x1=530, y1=330, x2=630, y2=700, conf=0.83)
-    adult = _det(cls=1, x1=700, y1=260, x2=860, y2=690, conf=0.96)
+    child_b = _det(cls=1, x1=530, y1=330, x2=630, y2=700, conf=0.83)
+    adult = _det(cls=0, x1=700, y1=260, x2=860, y2=690, conf=0.96)
     # leg-only / too small: height=80 (< 0.18 * 720 = 129.6)
-    child_leg_only = _det(cls=0, x1=600, y1=600, x2=680, y2=680, conf=0.91)
+    child_leg_only = _det(cls=1, x1=600, y1=600, x2=680, y2=680, conf=0.91)
 
     seq = (
         [[] for _ in range(4)]
@@ -278,8 +279,8 @@ def _case_4_group_of_children() -> CaseResult:
 
 
 def _case_5_adult_plus_child_together() -> CaseResult:
-    adult = _det(cls=1, x1=710, y1=260, x2=860, y2=690, conf=0.97)
-    child = _det(cls=0, x1=540, y1=330, x2=640, y2=690, conf=0.89)
+    adult = _det(cls=0, x1=710, y1=260, x2=860, y2=690, conf=0.97)
+    child = _det(cls=1, x1=540, y1=330, x2=640, y2=690, conf=0.89)
 
     adult_only_frames = 8
     seq = [[adult] for _ in range(adult_only_frames)] + [[adult, child] for _ in range(10)]

@@ -14,3 +14,4 @@ def register_blueprints(app):
     app.register_blueprint(events_bp)
     app.register_blueprint(camera_bp)
     app.register_blueprint(mode_bp)
+    
