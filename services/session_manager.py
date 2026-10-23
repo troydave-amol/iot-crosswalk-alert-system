@@ -70,17 +70,19 @@ class SessionManager:
             return True
 
     def start_video_test(self, filename: str) -> bool:
-        """Start a new VideoTestSession with the given .mp4 file."""
+        """Start a new VideoTestSession with the given .mp4 file (supports relative subpaths)."""
         with self._lock:
-            video_path = TEST_VIDEOS_DIR / filename
+            rel_str = filename.replace("\\", "/").strip().lstrip("/")
+            video_path = (TEST_VIDEOS_DIR / rel_str).resolve()
             if not video_path.exists() or not video_path.is_file():
                 print(f"[MODE] Video not found: {video_path}")
                 return False
             self._stop_unlocked()
             self._active = VideoTestSession(video_path=str(video_path))
+            self._active._video_filename = rel_str
             self._active.start()
             self._mode = "video_test"
-            print(f"[MODE] Switched to VIDEO TEST mode: {filename}")
+            print(f"[MODE] Switched to VIDEO TEST mode: {rel_str}")
             return True
 
     def auto_start_live(self):
