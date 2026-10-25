@@ -1,0 +1,139 @@
+{
+  "evaluation_timestamp": "2026-10-23T15:53:49.616786",
+  "dataset_source": "C:\\Users\\Acer\\Documents\\CAPSTONE\\web_dashboard_analytics\\test_videos\\March, 2026",
+  "videos_evaluated": [
+    "March, 2026/Early Afternoon/1.mp4",
+    "March, 2026/Early Afternoon/2.mp4",
+    "March, 2026/Late Afternoon/1.mp4",
+    "March, 2026/Late Afternoon/2.mp4",
+    "March, 2026/Morning/1.mp4",
+    "March, 2026/Morning/2.mp4",
+    "March, 2026/Morning/3.mp4",
+    "March, 2026/Morning/4.mp4",
+    "March, 2026/Morning/5.mp4",
+    "March, 2026/Morning/6.mp4"
+  ],
+  "operational_performance": {
+    "stats_lat": {
+      "min": 40.68,
+      "max": 312.74,
+      "mean": 66.5,
+      "std": 26.37,
+      "count": 768
+    },
+    "stats_e2e": {
+      "min": 40.91,
+      "max": 313.35,
+      "mean": 67.06,
+      "std": 26.48,
+      "count": 768
+    },
+    "stats_active": {
+      "min": 42.14,
+      "max": 266.83,
+      "mean": 66.1,
+      "std": 23.87,
+      "count": 348
+    },
+    "stats_fps_inst": {
+      "min": 3.2,
+      "max": 24.58,
+      "mean": 16.45,
+      "std": 4.08,
+      "count": 768
+    },
+    "stats_fps_consec": {
+      "min": 0.45,
+      "max": 5.98,
+      "mean": 3.94,
+      "std": 0.87,
+      "count": 767
+    },
+    "total_inferences": 768,
+    "total_warning_on_frames": 348,
+    "warning_toggle_events": 31
+  },
+  "condition_based_detection": {
+    "by_condition": {
+      "Bright Morning Glare / Arrival": {
+        "frames": 100,
+        "precision": 86.17,
+        "recall": 82.65,
+        "f1": 84.37,
+        "map50": 83.11,
+        "missed": 17,
+        "tp": 81,
+        "fp": 13,
+        "fn": 17,
+        "gt": 89
+      },
+      "Early Afternoon Direct Sunlight": {
+        "frames": 100,
+        "precision": 81.08,
+        "recall": 78.95,
+        "f1": 80.0,
+        "map50": 78.8,
+        "missed": 16,
+        "tp": 60,
+        "fp": 14,
+        "fn": 16,
+        "gt": 71
+      },
+      "Late Afternoon Shadows / Dismissal": {
+        "frames": 100,
+        "precision": 83.61,
+        "recall": 80.95,
+        "f1": 82.26,
+        "map50": 81.02,
+        "missed": 12,
+        "tp": 51,
+        "fp": 10,
+        "fn": 12,
+        "gt": 57
+      },
+      "Crowded Crosswalk Scenes": {
+        "frames": 80,
+        "precision": 86.84,
+        "recall": 82.5,
+        "f1": 84.62,
+        "map50": 83.35,
+        "missed": 14,
+        "tp": 66,
+        "fp": 10,
+        "fn": 14,
+        "gt": 73
+      },
+      "Partial Pedestrian Occlusion": {
+        "frames": 80,
+        "precision": 87.65,
+        "recall": 84.52,
+        "f1": 86.06,
+        "map50": 84.77,
+        "missed": 13,
+        "tp": 71,
+        "fp": 10,
+        "fn": 13,
+        "gt": 77
+      },
+      "Fast / Unpredictable Movement": {
+        "frames": 70,
+        "precision": 85.51,
+        "recall": 80.82,
+        "f1": 83.1,
+        "map50": 81.85,
+        "missed": 14,
+        "tp": 59,
+        "fp": 10,
+        "fn": 14,
+        "gt": 66
+      }
+    },
+    "overall": {
+      "precision": 85.27,
+      "recall": 81.86,
+      "f1": 83.53,
+      "map50": 82.28,
+      "total_missed": 86
+    }
+  }
+}
