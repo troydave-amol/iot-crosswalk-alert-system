@@ -45,6 +45,7 @@ if __name__ == "__main__":
     from db import init_db
     from extensions import socketio
     from services.session_manager import session_mgr
+    from services.camera_health import camera_health_monitor
 
     # Create the Flask app
     app = create_app()
@@ -57,6 +58,9 @@ if __name__ == "__main__":
 
     # Auto-start Hikvision CCTV session on boot
     session_mgr.auto_start_live()
+
+    # Start camera health monitor (independent TCP probe + stream watchdog)
+    camera_health_monitor.start()
 
     # Run the Flask-SocketIO server
     socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)

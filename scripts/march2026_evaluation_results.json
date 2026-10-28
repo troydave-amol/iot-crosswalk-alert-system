@@ -1,5 +1,5 @@
 {
-  "evaluation_timestamp": "2026-10-23T15:53:49.616786",
+  "evaluation_timestamp": "2026-10-25T16:58:22.829709",
   "dataset_source": "C:\\Users\\Acer\\Documents\\CAPSTONE\\web_dashboard_analytics\\test_videos\\March, 2026",
   "videos_evaluated": [
     "March, 2026/Early Afternoon/1.mp4",
@@ -15,43 +15,43 @@
   ],
   "operational_performance": {
     "stats_lat": {
-      "min": 40.68,
-      "max": 312.74,
-      "mean": 66.5,
-      "std": 26.37,
+      "min": 48.45,
+      "max": 2012.35,
+      "mean": 71.33,
+      "std": 74.21,
       "count": 768
     },
     "stats_e2e": {
-      "min": 40.91,
-      "max": 313.35,
-      "mean": 67.06,
-      "std": 26.48,
+      "min": 48.9,
+      "max": 2013.03,
+      "mean": 71.89,
+      "std": 74.23,
       "count": 768
     },
     "stats_active": {
-      "min": 42.14,
-      "max": 266.83,
-      "mean": 66.1,
-      "std": 23.87,
-      "count": 348
+      "min": 48.9,
+      "max": 274.86,
+      "mean": 67.6,
+      "std": 21.0,
+      "count": 329
     },
     "stats_fps_inst": {
-      "min": 3.2,
-      "max": 24.58,
-      "mean": 16.45,
-      "std": 4.08,
+      "min": 0.5,
+      "max": 20.64,
+      "mean": 15.54,
+      "std": 3.29,
       "count": 768
     },
     "stats_fps_consec": {
-      "min": 0.45,
-      "max": 5.98,
-      "mean": 3.94,
-      "std": 0.87,
+      "min": 0.4,
+      "max": 5.18,
+      "mean": 3.7,
+      "std": 0.76,
       "count": 767
     },
     "total_inferences": 768,
-    "total_warning_on_frames": 348,
-    "warning_toggle_events": 31
+    "total_warning_on_frames": 329,
+    "warning_toggle_events": 35
   },
   "condition_based_detection": {
     "by_condition": {

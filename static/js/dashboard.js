@@ -71,6 +71,15 @@ window.CameraState = {
 };
 
 // ---------------------------------------------------------
+// CAMERA HEALTH STATE (source-aware, from camera_health event)
+// ---------------------------------------------------------
+window.CameraHealth = {
+    last: null,         // last payload from camera_health socket event
+    lastTs: 0,          // Date.now() of last received update
+    stalenessTimer: null,
+};
+
+// ---------------------------------------------------------
 // APP MODE STATE (Live Camera vs Video Test)
 // ---------------------------------------------------------
 window.AppMode = {
@@ -196,6 +205,14 @@ const App = {
                 this.setWarningUI(false, {});
             }
         }, 500);
+
+        // Camera Health Staleness Watchdog — show Unknown if no camera_health emit for 12s
+        window.CameraHealth.stalenessTimer = setInterval(() => {
+            const age = Date.now() - window.CameraHealth.lastTs;
+            if (window.CameraHealth.lastTs > 0 && age > 12000) {
+                this.updateCameraHealthUI({ stale: true });
+            }
+        }, 3000);
     },
 
     setupTick() {
@@ -252,6 +269,11 @@ const App = {
             });
             this.socket.on('mode_update', (data) => {
                 this.handleModeUpdate(data);
+            });
+            this.socket.on('camera_health', (data) => {
+                window.CameraHealth.last = data;
+                window.CameraHealth.lastTs = Date.now();
+                this.updateCameraHealthUI(data);
             });
         } catch (e) {
             console.log("Socket.IO not initialized.");
@@ -350,25 +372,17 @@ const App = {
         status.last_update_str = new Date().toLocaleTimeString();
 
         if (data.source === "yolo") {
-            status.connection_status = "Live (YOLO)";
+            // Update Active Model KPI pill (AI is confirmed running)
             const modelStatusEl = document.getElementById('ana-kpi-model-status');
             if (modelStatusEl) {
                 modelStatusEl.className = 'ana-kpi-context-pill pill-emerald';
                 modelStatusEl.innerHTML = '<i class="fa-solid fa-circle-check" style="font-size: 8px;"></i> <span id="ana-kpi-model-status-text">Loaded &bull; Running</span>';
             }
-        } else if (data.source === "idle") {
-            const camStatus = data.camera_status || "OFFLINE";
-            status.connection_status = camStatus === "OFFLINE" ? "Camera Offline" : "Connected";
-        } else {
-            status.connection_status = "Connected";
         }
 
-        // Update connection chip
-        const connChip = document.getElementById('connection-chip');
-        if (connChip) {
-            connChip.innerHTML = `<div class="status-indicator"></div> ${status.connection_status}`;
-            connChip.className = `status-chip connected`;
-        }
+        // Top-bar connection chip is driven by camera_health events (updateCameraHealthUI),
+        // NOT by status_update source. If camera_health hasn't arrived yet, keep last label.
+        status.last_update_str = new Date().toLocaleTimeString();
 
         this.logEvent(status, data.scenario || "Live Feed");
         this.updateUI();
@@ -5109,6 +5123,12 @@ const App = {
                 const data = await res.json();
                 window.CameraState.lastStatus = data;
                 this.updateSystemStatusPanel(data);
+                // If the API response includes health (added by camera_routes), apply it
+                if (data.health) {
+                    window.CameraHealth.last = data.health;
+                    window.CameraHealth.lastTs = Date.now();
+                    this.updateCameraHealthUI(data.health);
+                }
             }
         } catch (e) {
             // Server offline — show disconnected
@@ -5120,6 +5140,7 @@ const App = {
                 reconnect_attempts: 0,
                 last_frame_time: 0,
             });
+            this.updateCameraHealthUI({ stale: true });
         }
     },
 
@@ -5133,8 +5154,9 @@ const App = {
             chip.innerHTML = `<div class="status-indicator"></div> ${isGood ? textOn : textOff}`;
         };
 
-        setChip('sysStatusCamera', data.camera_online, 'Online', 'Offline');
-        setChip('sysStatusStream', data.stream_connected, 'Connected', 'Disconnected');
+        // NOTE: sysStatusCamera / sysStatusStream / tmcCameraFeed are now driven by
+        // updateCameraHealthUI() via the camera_health Socket.IO event.
+        // updateSystemStatusPanel only handles AI, relay, heartbeat, FPS, edge compute.
         setChip('sysStatusAI', data.ai_running, 'Running', data.ai_error ? 'Not Loaded' : 'Stopped');
 
         // Active Model KPI Card (IT Specialist Accuracy & Diagnostics Page)
@@ -5222,6 +5244,100 @@ const App = {
                 lastFrame.textContent = '---';
             }
         }
+    },
+
+    // ---------------------------------------------------------
+    // Camera Health UI — driven by camera_health Socket.IO event
+    // Single source of truth for top-bar chip, TMC chip, IT rows.
+    // ---------------------------------------------------------
+    updateCameraHealthUI(data) {
+        const UNKNOWN = '\u2014 Unknown';
+
+        // ── Resolve display labels ───────────────────────────────────────────
+        let topBarLabel, topBarClass, topBarIcon;
+        let tmcLabel, tmcClass, tmcIcon;
+        let itCameraLabel, itCameraClass;
+        let itStreamLabel, itStreamClass;
+        let itSourceLabel;
+
+        if (data.stale) {
+            // Backend emits stopped — show Unknown across the board
+            topBarLabel = 'Unknown';   topBarClass = 'disconnected'; topBarIcon = 'fa-circle-question';
+            tmcLabel    = 'Unknown';   tmcClass    = 'disconnected'; tmcIcon    = 'fa-circle-question';
+            itCameraLabel = 'Unknown'; itCameraClass = 'disconnected';
+            itStreamLabel = 'Unknown'; itStreamClass = 'disconnected';
+            itSourceLabel = 'Unknown';
+        } else {
+            const src    = data.source_mode  || 'none';
+            const cam    = data.camera_state || 'Unknown';
+            const stream = data.stream_state || 'Unknown';
+
+            // IT Source row
+            itSourceLabel = src === 'live' ? 'Live Camera' : src === 'video_test' ? 'Video Test' : 'None';
+
+            // IT Camera row (physical device)
+            itCameraClass = (cam === 'Online') ? 'connected' : 'disconnected';
+            itCameraLabel = cam;   // Online / Offline / Not configured / Unknown
+
+            // IT Stream row (feed)
+            const streamGood = (stream === 'Receiving' || stream === 'Simulation');
+            itStreamClass = streamGood ? 'connected' : 'disconnected';
+            itStreamLabel = stream;  // Receiving / Stalled / No Signal / Simulation / Idle / Unknown
+            // Amber for Simulation — add a CSS modifier class
+            if (stream === 'Simulation') itStreamClass = 'disconnected simulation';
+
+            // TMC chip (simple: one label)
+            if (src === 'video_test') {
+                tmcLabel = 'Simulation'; tmcClass = 'simulation'; tmcIcon = 'fa-film';
+            } else if (cam === 'Online' && stream === 'Receiving') {
+                tmcLabel = 'Live';       tmcClass = 'connected';   tmcIcon = 'fa-circle';
+            } else if (cam === 'Not configured') {
+                tmcLabel = 'Not Configured'; tmcClass = 'disconnected'; tmcIcon = 'fa-circle-xmark';
+            } else {
+                tmcLabel = 'Offline';    tmcClass = 'disconnected'; tmcIcon = 'fa-circle-xmark';
+            }
+
+            // Top-bar pill
+            if (src === 'video_test') {
+                topBarLabel = 'Simulation (YOLO)'; topBarClass = 'simulation'; topBarIcon = 'fa-film';
+            } else if (cam === 'Online' && stream === 'Receiving') {
+                topBarLabel = 'Live (YOLO)';       topBarClass = 'connected';  topBarIcon = 'fa-circle';
+            } else if (cam === 'Not configured') {
+                topBarLabel = 'Not Configured';    topBarClass = 'disconnected'; topBarIcon = 'fa-circle-xmark';
+            } else {
+                topBarLabel = 'Camera Offline';    topBarClass = 'disconnected'; topBarIcon = 'fa-circle-xmark';
+            }
+        }
+
+        // ── Top-bar connection chip ──────────────────────────────────────────
+        const connChip = document.getElementById('connection-chip');
+        if (connChip) {
+            connChip.className = `status-chip ${topBarClass}`;
+            connChip.innerHTML = `<div class="status-indicator"></div><span class="status-text">${topBarLabel}</span>`;
+        }
+        // Sync to EventStore for updateUI()
+        window.EventStore.systemStatus.connection_status = topBarLabel;
+
+        // ── TMC Camera Feed chip ─────────────────────────────────────────────
+        const tmcChip = document.getElementById('tmcCameraFeed');
+        if (tmcChip) {
+            tmcChip.className = `status-chip ${tmcClass}`;
+            tmcChip.innerHTML = `<div class="status-indicator"></div> ${tmcLabel}`;
+        }
+
+        // ── IT Diagnostics rows ──────────────────────────────────────────────
+        const itCamChip = document.getElementById('itDiagCamera');
+        if (itCamChip) {
+            itCamChip.className = `status-chip ${itCameraClass}`;
+            itCamChip.innerHTML = `<div class="status-indicator"></div> ${itCameraLabel}`;
+        }
+        const itStreamChip = document.getElementById('itDiagStream');
+        if (itStreamChip) {
+            itStreamChip.className = `status-chip ${itStreamClass}`;
+            itStreamChip.innerHTML = `<div class="status-indicator"></div> ${itStreamLabel}`;
+        }
+        const itSourceEl = document.getElementById('itDiagSource');
+        if (itSourceEl) itSourceEl.textContent = itSourceLabel;
     },
 
     // ---------------------------------------------------------

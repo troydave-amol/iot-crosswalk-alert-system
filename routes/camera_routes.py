@@ -17,6 +17,7 @@ from flask import Blueprint, request, jsonify, Response
 from auth.decorators import login_required
 from config import STREAM_FPS, STREAM_SCALE
 from services.session_manager import session_mgr
+from services.camera_health import camera_health_monitor
 
 camera_bp = Blueprint("camera", __name__)
 
@@ -130,9 +131,10 @@ def gen_frames(session_obj, overlay: bool = True):
 @camera_bp.get("/api/camera/status")
 @login_required
 def api_camera_status():
-    """Returns the current active session / AI pipeline status."""
+    """Returns the current active session / AI pipeline status plus camera health."""
     active = session_mgr.get_active()
     mode = session_mgr.get_mode()
+    health = camera_health_monitor.get_health()
     if active is None:
         return jsonify({
             "ok": True,
@@ -144,8 +146,9 @@ def api_camera_status():
             "last_frame_time": 0,
             "rtsp_url_masked": "",
             "mode": mode,
+            "health": health,
         })
-    return jsonify({"ok": True, "mode": mode, **active.get_status()})
+    return jsonify({"ok": True, "mode": mode, **active.get_status(), "health": health})
 
 
 @camera_bp.post("/api/camera/reconnect")
@@ -159,6 +162,7 @@ def api_camera_reconnect():
     # If camera is already online and streaming, don't destroy the connection.
     if active.camera_online and active.stream_connected:
         print("[LIVE] Reconnect requested but session is already online — skipping")
+        camera_health_monitor.trigger_check()  # still refresh the health state
         return jsonify({"ok": True, "action": "already_online"})
 
     # Session is genuinely offline/broken — force reconnect
@@ -171,4 +175,5 @@ def api_camera_reconnect():
     active.camera_online = False
     active.stream_connected = False
     print("[LIVE] Manual reconnect requested — forcing capture reset")
+    camera_health_monitor.trigger_check()  # immediate fresh probe
     return jsonify({"ok": True, "action": "reconnecting"})

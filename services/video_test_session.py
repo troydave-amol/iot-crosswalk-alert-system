@@ -209,7 +209,7 @@ class VideoTestSession(LiveSession):
             "battery_percent": 0.0,
             "solar_status": "N/A",
             "scenario": get_time_scenario(),
-            "camera_status": "OK",
+            "camera_status": "Simulation",
             "edge_status": "OK",
             "led_driver_status": "Ready",
         }

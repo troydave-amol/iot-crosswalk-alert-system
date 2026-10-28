@@ -423,6 +423,12 @@ body.dark-mode .topbar-action-btn:hover {
     color: #2e7d32;
 }
 
+/* Amber state: Video Test / Simulation feed (not Online, not Offline) */
+.status-chip.simulation {
+    background-color: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+}
+
 .status-chip.critical {
     background-color: rgba(255, 36, 0, 0.1);
     color: var(--critical-alert);
@@ -3056,6 +3062,11 @@ body.dark-mode .status-chip.eval-chip {
     color: #64b5f6;
 }
 
+body.dark-mode .status-chip.simulation {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+}
+
 body.dark-mode .status-chip.critical {
     background-color: rgba(255, 36, 0, 0.15);
     color: var(--critical-alert);
@@ -5514,8 +5525,7 @@ body.dark-mode .telemetry-metric-val {
     transition: transform 0.15s ease;
 }
 
-.ana-kpi-card:hover .ana-icon-badge,
-.ana-bench-card:hover .ana-icon-badge {
+.ana-kpi-card:hover .ana-icon-badge {
     transform: scale(1.06);
 }
 
@@ -5745,145 +5755,6 @@ body.dark-mode .telemetry-metric-val {
     border: 1px solid rgba(100, 116, 139, 0.12);
 }
 
-/* ── Evaluation Card ────────────────────────────────────────── */
-.ana-eval-card {
-    background: var(--white);
-    border-radius: 14px;
-    padding: 22px 24px;
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 8px 20px -4px rgba(0, 0, 0, 0.03);
-    margin-bottom: 24px;
-}
-
-.ana-eval-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 14px;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.ana-eval-header-left {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.ana-eval-badges {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.ana-eval-context-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    background: rgba(100, 116, 139, 0.04);
-    border: 1px solid rgba(100, 116, 139, 0.1);
-    border-radius: 8px;
-    margin-bottom: 18px;
-    font-size: 0.76rem;
-    color: #64748b;
-    font-weight: 500;
-}
-
-.ana-eval-context-bar i {
-    color: #94a3b8;
-    font-size: 0.78rem;
-    flex-shrink: 0;
-}
-
-/* ── Benchmark Metric Cards Grid ────────────────────────────── */
-.ana-bench-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
-    margin-bottom: 18px;
-}
-
-.ana-bench-card {
-    background: var(--white);
-    border-radius: 12px;
-    padding: 16px 18px;
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
-}
-
-.ana-bench-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04), 0 12px 28px -4px rgba(0, 0, 0, 0.06);
-    border-color: rgba(0, 0, 0, 0.1);
-}
-
-.ana-bench-top {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 2px;
-}
-
-.ana-bench-top .ana-icon-badge {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    font-size: 0.85rem;
-}
-
-.ana-bench-label {
-    font-size: 0.74rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #64748b;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.ana-bench-value {
-    font-family: var(--font-mono);
-    font-size: 1.7rem;
-    font-weight: 800;
-    letter-spacing: -0.5px;
-    line-height: 1.15;
-}
-
-/* ── Progress Track ─────────────────────────────────────────── */
-.ana-bench-progress {
-    margin: 2px 0 4px;
-}
-
-.ana-progress-track {
-    width: 100%;
-    height: 4px;
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-.ana-progress-fill {
-    height: 100%;
-    border-radius: 4px;
-    transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.fill-emerald { background: linear-gradient(90deg, #34d399, #059669); }
-.fill-blue { background: linear-gradient(90deg, #60a5fa, #2563eb); }
-.fill-violet { background: linear-gradient(90deg, #c084fc, #9333ea); }
-.fill-cyan { background: linear-gradient(90deg, #22d3ee, #0891b2); }
-
-.ana-bench-foot {
-    margin-top: auto;
-}
-
 /* ── KPI Info Icon (inline tooltip trigger) ──────────────────── */
 .kpi-info-icon {
     font-size: 0.72rem;
@@ -5898,28 +5769,6 @@ body.dark-mode .telemetry-metric-val {
     color: var(--primary-accent);
 }
 
-/* ── Offline Evaluation Notice Banner ────────────────────────── */
-.eval-note-box {
-    margin-top: 18px;
-    padding: 12px 16px;
-    font-size: 0.78rem;
-    color: #475569;
-    background: rgba(100, 116, 139, 0.05);
-    border-left: 3px solid var(--primary-accent);
-    border-radius: 0 8px 8px 0;
-    line-height: 1.5;
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-}
-
-.eval-note-box i {
-    color: var(--primary-accent);
-    font-size: 0.9rem;
-    margin-top: 2px;
-    flex-shrink: 0;
-}
-
 /* ═══════════════════════════════════════════════════════════════
    DARK MODE OVERRIDES FOR MODEL ACCURACY & DIAGNOSTICS
    ═══════════════════════════════════════════════════════════════ */
@@ -5931,26 +5780,21 @@ body.dark-mode .ana-main-desc {
     color: var(--text-muted);
 }
 
-/* KPI Cards & Benchmark Cards — Consistent #1e1e1e dark surface */
+/* KPI Cards & Chart Cards — Consistent #1e1e1e dark surface */
 body.dark-mode .ana-kpi-card,
-body.dark-mode .ana-bench-card,
-body.dark-mode .ana-chart-card,
-body.dark-mode .ana-eval-card {
+body.dark-mode .ana-chart-card {
     background-color: var(--white);
     border-color: var(--border-color);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 body.dark-mode .ana-kpi-card:hover,
-body.dark-mode .ana-bench-card:hover,
-body.dark-mode .ana-chart-card:hover,
-body.dark-mode .ana-eval-card:hover {
+body.dark-mode .ana-chart-card:hover {
     border-color: #444444;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
-body.dark-mode .ana-kpi-label,
-body.dark-mode .ana-bench-label {
+body.dark-mode .ana-kpi-label {
     color: var(--text-muted);
 }
 
@@ -5993,24 +5837,6 @@ body.dark-mode .pill-badge-muted {
     border-color: #3d3d3d;
 }
 
-/* Eval context bar */
-body.dark-mode .ana-eval-context-bar {
-    background: #252525;
-    border-color: var(--border-color);
-    color: var(--text-muted);
-}
-
-/* Progress track */
-body.dark-mode .ana-progress-track {
-    background: #2d2d2d;
-}
-
-/* Note box */
-body.dark-mode .eval-note-box {
-    background: #252525;
-    border-left-color: var(--primary-accent);
-    color: #ccc;
-}
 
 /* Badge dark mode — brighter pastel */
 body.dark-mode .badge-cyan { background: rgba(6, 182, 212, 0.15); border-color: rgba(6, 182, 212, 0.3); color: #22d3ee; }
@@ -6686,7 +6512,7 @@ body.dark-mode .confidence-hover-readout .pill-below {
     box-sizing: border-box;
 }
 
-.ana-kpi-card, .ana-chart-card, .ana-eval-card {
+.ana-kpi-card, .ana-chart-card {
     min-width: 0;
     box-sizing: border-box;
     width: 100%;

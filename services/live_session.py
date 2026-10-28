@@ -201,6 +201,14 @@ class LiveSession:
                 return prefix[:scheme_end + 3] + "***:***@" + rest
         return url
 
+    def _get_camera_status_for_log(self) -> str:
+        """Return truthful camera state string for DB logging (lazy import avoids circular dependency)."""
+        try:
+            from services.camera_health import camera_health_monitor
+            return camera_health_monitor.get_health().get("camera_state", "OK")
+        except Exception:
+            return "OK"
+
     def start(self):
         self.capture_thread = threading.Thread(
             target=self._capture_loop, name="capture-hikvision", daemon=True
@@ -384,7 +392,7 @@ class LiveSession:
             "battery_percent": 0.0,
             "solar_status": "N/A",
             "scenario": get_time_scenario(),
-            "camera_status": "OK",
+            "camera_status": self._get_camera_status_for_log(),
             "edge_status": "OK",
             "led_driver_status": esp32_relay.status,
         }

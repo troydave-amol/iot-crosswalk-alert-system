@@ -172,8 +172,20 @@
                                 style="margin-right: 6px;"></i>System Diagnostics</div>
                         <div class="cam-controls">
                             <div class="control-group">
-                                <div class="control-label">Camera Stream</div>
-                                <div class="status-chip disconnected" id="sysStatusCamera">
+                                <div class="control-label">Source</div>
+                                <small id="itDiagSource" class="lv-last-frame" style="font-size:0.78rem; font-weight:600;">---</small>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">Camera (Device)</div>
+                                <div class="status-chip disconnected" id="itDiagCamera">
+                                    <div class="status-indicator"></div> Checking...
+                                </div>
+                            </div>
+
+                            <div class="control-group">
+                                <div class="control-label">Stream (Feed)</div>
+                                <div class="status-chip disconnected" id="itDiagStream">
                                     <div class="status-indicator"></div> Checking...
                                 </div>
                             </div>
@@ -799,150 +811,6 @@
                             <span class="hover-idle-prompt"><i class="fa-solid fa-arrow-pointer"
                                     style="font-size: 0.75rem; margin-right: 4px; opacity: 0.7;"></i> Hover over bins
                                 for exact count and percentage</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- D) Offline Evaluation Report — Test Dataset -->
-                <div class="ana-eval-card">
-                    <div class="ana-eval-header">
-                        <div class="ana-eval-header-left">
-                            <div class="ana-icon-badge badge-coral"
-                                style="width: 34px; height: 34px; font-size: 0.82rem;">
-                                <i class="fa-solid fa-flask-vial"></i>
-                            </div>
-                            <div class="ana-chart-title-group">
-                                <h3 class="ana-chart-title">Model Accuracy Check</h3>
-                                <p class="ana-chart-subtitle">These numbers are from AI training results during
-                                    development</p>
-                            </div>
-                        </div>
-                        <div class="ana-eval-badges">
-                            <span class="ana-pill-badge pill-badge-muted" style="margin-right: 6px;">
-                                <i class="fa-solid fa-lock" style="font-size: 8px;"></i>
-                                Fixed Benchmark (Static)
-                            </span>
-                            <span class="ana-pill-badge pill-badge-muted">
-                                {{ model_name or 'yolov8n_3300_frames.pt' }}
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- 4 Benchmark Metric Cards -->
-                    <div class="ana-bench-grid">
-                        <!-- Precision -->
-                        <div class="ana-bench-card">
-                            <div class="ana-bench-top">
-                                <div class="ana-icon-badge badge-emerald">
-                                    <i class="fa-solid fa-bullseye"></i>
-                                </div>
-                                <span class="ana-bench-label">
-                                    Precision
-                                    <i class="fa-solid fa-circle-info kpi-info-icon"
-                                        title="Of all predicted child detections, what fraction were truly children"></i>
-                                </span>
-                            </div>
-                            <div class="ana-bench-value color-emerald">0.936</div>
-                            <div class="ana-bench-progress">
-                                <div class="ana-progress-track">
-                                    <div class="ana-progress-fill fill-emerald" style="width: 93.6%;"></div>
-                                </div>
-                            </div>
-                            <div class="ana-bench-foot">
-                                <span class="ana-kpi-context-pill pill-emerald">
-                                    <i class="fa-solid fa-check" style="font-size: 8px;"></i>
-                                    93.6% alert accuracy
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- Recall -->
-                        <div class="ana-bench-card">
-                            <div class="ana-bench-top">
-                                <div class="ana-icon-badge badge-blue">
-                                    <i class="fa-solid fa-crosshairs"></i>
-                                </div>
-                                <span class="ana-bench-label">
-                                    Recall
-                                    <i class="fa-solid fa-circle-info kpi-info-icon"
-                                        title="Of all actual children in the test set, what fraction were successfully detected"></i>
-                                </span>
-                            </div>
-                            <div class="ana-bench-value color-blue">0.910</div>
-                            <div class="ana-bench-progress">
-                                <div class="ana-progress-track">
-                                    <div class="ana-progress-fill fill-blue" style="width: 91.0%;"></div>
-                                </div>
-                            </div>
-                            <div class="ana-bench-foot">
-                                <span class="ana-kpi-context-pill pill-blue">
-                                    <i class="fa-solid fa-person-walking" style="font-size: 8px;"></i>
-                                    91.0% child capture rate
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- F1-Score -->
-                        <div class="ana-bench-card">
-                            <div class="ana-bench-top">
-                                <div class="ana-icon-badge badge-violet">
-                                    <i class="fa-solid fa-scale-balanced"></i>
-                                </div>
-                                <span class="ana-bench-label">
-                                    F1-Score
-                                    <i class="fa-solid fa-circle-info kpi-info-icon"
-                                        title="Harmonic mean of Precision and Recall — single balanced accuracy measure"></i>
-                                </span>
-                            </div>
-                            <div class="ana-bench-value color-violet">0.923</div>
-                            <div class="ana-bench-progress">
-                                <div class="ana-progress-track">
-                                    <div class="ana-progress-fill fill-violet" style="width: 92.3%;"></div>
-                                </div>
-                            </div>
-                            <div class="ana-bench-foot">
-                                <span class="ana-kpi-context-pill pill-violet">
-                                    <i class="fa-solid fa-sliders" style="font-size: 8px;"></i>
-                                    Harmonic balance (P &amp; R)
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- mAP@50 -->
-                        <div class="ana-bench-card">
-                            <div class="ana-bench-top">
-                                <div class="ana-icon-badge badge-cyan">
-                                    <i class="fa-solid fa-award"></i>
-                                </div>
-                                <span class="ana-bench-label">
-                                    mAP@50
-                                    <i class="fa-solid fa-circle-info kpi-info-icon"
-                                        title="Mean Average Precision at 50% IoU threshold — standard YOLO detection accuracy metric"></i>
-                                </span>
-                            </div>
-                            <div class="ana-bench-value color-cyan">0.962</div>
-                            <div class="ana-bench-progress">
-                                <div class="ana-progress-track">
-                                    <div class="ana-progress-fill fill-cyan" style="width: 96.2%;"></div>
-                                </div>
-                            </div>
-                            <div class="ana-bench-foot">
-                                <span class="ana-kpi-context-pill pill-cyan">
-                                    <i class="fa-solid fa-layer-group" style="font-size: 8px;"></i>
-                                    Detection score @ 0.5 IoU
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Eval Note -->
-                    <div class="eval-note-box">
-                        <i class="fa-solid fa-circle-info"></i>
-                        <div>
-                            <strong>Offline Benchmark Context:</strong> These metrics reflect fixed offline evaluation
-                            on 1,497 labeled test samples from the 1,500-frame training evaluation run — not dynamic
-                            real-time traffic data. They are updated when a new model weights checkpoint is trained,
-                            validated, and deployed.
                         </div>
                     </div>
                 </div>

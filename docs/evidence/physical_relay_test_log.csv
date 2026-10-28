@@ -1,0 +1,11 @@
+Trial,Timestamp,Command Sent,Expected LED State,Observed LED State,Result,ESP32 Serial Response
+1,2026-10-28 17:23:02,ON,Illuminated,Illuminated,Pass,ACK:ON
+2,2026-10-28 17:23:11,OFF,Off,Off,Pass,ACK:OFF
+3,2026-10-28 17:23:21,ON,Illuminated,Illuminated,Pass,ACK:ON
+4,2026-10-28 17:23:29,OFF,Off,Off,Pass,ACK:OFF
+5,2026-10-28 17:23:37,ON,Illuminated,Illuminated,Pass,ACK:ON
+6,2026-10-28 17:23:42,OFF,Off,Off,Pass,ACK:OFF
+7,2026-10-28 17:23:47,ON,Illuminated,Illuminated,Pass,ACK:ON
+8,2026-10-28 17:23:51,OFF,Off,Off,Pass,ACK:OFF
+9,2026-10-28 17:23:56,ON,Illuminated,Illuminated,Pass,ACK:ON
+10,2026-10-28 17:24:00,OFF,Off,Off,Pass,ACK:OFF
