@@ -1,0 +1,224 @@
+{
+  "evaluation_timestamp": "2026-10-31T14:17:09.304414",
+  "model_checkpoint": "yolov8n_3300_frames.pt",
+  "source_dataset": "C:\\Users\\Acer\\Documents\\CAPSTONE\\Condition Evaluation",
+  "evaluation_protocol": "Greedy IoU >= 0.50 matching against manual Label Studio ground truth",
+  "results": {
+    "conf_0.65": {
+      "confidence_threshold": 0.65,
+      "mode": "OPERATIONAL (conf=0.65)",
+      "total_frames": 135,
+      "total_gt_child_instances": 437,
+      "total_gt_adult_instances": 596,
+      "composite": {
+        "tp": 242,
+        "fp": 11,
+        "fn": 195,
+        "precision": 95.65,
+        "recall": 55.38,
+        "f1_score": 70.14
+      },
+      "by_category": [
+        {
+          "id": "01_crowded",
+          "display_name": "1. Crowded Crosswalk Scenes",
+          "frames": 25,
+          "gt_child_instances": 89,
+          "gt_adult_instances": 232,
+          "tp": 49,
+          "fp": 0,
+          "fn": 40,
+          "precision": 100.0,
+          "recall": 55.06,
+          "f1_score": 71.01
+        },
+        {
+          "id": "02_occlusion",
+          "display_name": "2. Partial Occlusion",
+          "frames": 25,
+          "gt_child_instances": 41,
+          "gt_adult_instances": 88,
+          "tp": 30,
+          "fp": 0,
+          "fn": 11,
+          "precision": 100.0,
+          "recall": 73.17,
+          "f1_score": 84.51
+        },
+        {
+          "id": "03_rapid_movement",
+          "display_name": "3. Unpredictable Child Movement",
+          "frames": 25,
+          "gt_child_instances": 159,
+          "gt_adult_instances": 53,
+          "tp": 102,
+          "fp": 1,
+          "fn": 57,
+          "precision": 99.03,
+          "recall": 64.15,
+          "f1_score": 77.86
+        },
+        {
+          "id": "04_overcast",
+          "display_name": "4. Overcast / Diffused Lighting",
+          "frames": 15,
+          "gt_child_instances": 20,
+          "gt_adult_instances": 76,
+          "tp": 12,
+          "fp": 4,
+          "fn": 8,
+          "precision": 75.0,
+          "recall": 60.0,
+          "f1_score": 66.67
+        },
+        {
+          "id": "05_daylight",
+          "display_name": "5. Normal Daylight",
+          "frames": 15,
+          "gt_child_instances": 30,
+          "gt_adult_instances": 61,
+          "tp": 17,
+          "fp": 4,
+          "fn": 13,
+          "precision": 80.95,
+          "recall": 56.67,
+          "f1_score": 66.67
+        },
+        {
+          "id": "06_glare",
+          "display_name": "6. Morning Glare (Lens Flare)",
+          "frames": 15,
+          "gt_child_instances": 41,
+          "gt_adult_instances": 31,
+          "tp": 24,
+          "fp": 0,
+          "fn": 17,
+          "precision": 100.0,
+          "recall": 58.54,
+          "f1_score": 73.85
+        },
+        {
+          "id": "07_shadows",
+          "display_name": "7. Strong Shadows (High Contrast)",
+          "frames": 15,
+          "gt_child_instances": 57,
+          "gt_adult_instances": 55,
+          "tp": 8,
+          "fp": 2,
+          "fn": 49,
+          "precision": 80.0,
+          "recall": 14.04,
+          "f1_score": 23.88
+        }
+      ]
+    },
+    "conf_0.5": {
+      "confidence_threshold": 0.5,
+      "mode": "BASELINE (conf=0.50)",
+      "total_frames": 135,
+      "total_gt_child_instances": 437,
+      "total_gt_adult_instances": 596,
+      "composite": {
+        "tp": 267,
+        "fp": 18,
+        "fn": 170,
+        "precision": 93.68,
+        "recall": 61.1,
+        "f1_score": 73.96
+      },
+      "by_category": [
+        {
+          "id": "01_crowded",
+          "display_name": "1. Crowded Crosswalk Scenes",
+          "frames": 25,
+          "gt_child_instances": 89,
+          "gt_adult_instances": 232,
+          "tp": 55,
+          "fp": 2,
+          "fn": 34,
+          "precision": 96.49,
+          "recall": 61.8,
+          "f1_score": 75.34
+        },
+        {
+          "id": "02_occlusion",
+          "display_name": "2. Partial Occlusion",
+          "frames": 25,
+          "gt_child_instances": 41,
+          "gt_adult_instances": 88,
+          "tp": 35,
+          "fp": 1,
+          "fn": 6,
+          "precision": 97.22,
+          "recall": 85.37,
+          "f1_score": 90.91
+        },
+        {
+          "id": "03_rapid_movement",
+          "display_name": "3. Unpredictable Child Movement",
+          "frames": 25,
+          "gt_child_instances": 159,
+          "gt_adult_instances": 53,
+          "tp": 110,
+          "fp": 2,
+          "fn": 49,
+          "precision": 98.21,
+          "recall": 69.18,
+          "f1_score": 81.18
+        },
+        {
+          "id": "04_overcast",
+          "display_name": "4. Overcast / Diffused Lighting",
+          "frames": 15,
+          "gt_child_instances": 20,
+          "gt_adult_instances": 76,
+          "tp": 12,
+          "fp": 7,
+          "fn": 8,
+          "precision": 63.16,
+          "recall": 60.0,
+          "f1_score": 61.54
+        },
+        {
+          "id": "05_daylight",
+          "display_name": "5. Normal Daylight",
+          "frames": 15,
+          "gt_child_instances": 30,
+          "gt_adult_instances": 61,
+          "tp": 19,
+          "fp": 4,
+          "fn": 11,
+          "precision": 82.61,
+          "recall": 63.33,
+          "f1_score": 71.7
+        },
+        {
+          "id": "06_glare",
+          "display_name": "6. Morning Glare (Lens Flare)",
+          "frames": 15,
+          "gt_child_instances": 41,
+          "gt_adult_instances": 31,
+          "tp": 26,
+          "fp": 0,
+          "fn": 15,
+          "precision": 100.0,
+          "recall": 63.41,
+          "f1_score": 77.61
+        },
+        {
+          "id": "07_shadows",
+          "display_name": "7. Strong Shadows (High Contrast)",
+          "frames": 15,
+          "gt_child_instances": 57,
+          "gt_adult_instances": 55,
+          "tp": 10,
+          "fp": 2,
+          "fn": 47,
+          "precision": 83.33,
+          "recall": 17.54,
+          "f1_score": 28.99
+        }
+      ]
+    }
+  }
+}
